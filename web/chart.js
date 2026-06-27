@@ -95,7 +95,8 @@ window.CandleChart = (function () {
   };
 
   function asset(sym) {
-    var k = sym.replace(/^[A-Z]+:/, '').replace(/_/g, '/');
+    // Strip OTC suffix and exchange prefix, then look up
+    var k = sym.replace(/^[A-Z]+:/, '').replace(/_OTC$/i, '').replace(/_/g, '/');
     return ASSETS[k] || ASSETS['EUR/USD'];
   }
 
@@ -108,6 +109,18 @@ window.CandleChart = (function () {
   }
 
   function decimals(sym) { return asset(sym).d; }
+
+  /* Auto-detect decimal places from actual price magnitude — never truncate */
+  function autoDec(price) {
+    var abs = Math.abs(price);
+    if (!isFinite(abs) || abs === 0) return 5;
+    if (abs >= 10000) return 0;   // BTC, indices
+    if (abs >= 1000)  return 2;   // Gold, Palladium
+    if (abs >= 100)   return 2;   // Oil, JPY crosses, EGP
+    if (abs >= 10)    return 3;   // USD/JPY, CAD/JPY
+    if (abs >= 1)     return 5;   // EUR/USD, GBP/USD, major forex
+    return 6;                      // sub-dollar pairs
+  }
 
   function fmtShort(t, iv) {
     var d = new Date(t * 1000);
@@ -153,11 +166,22 @@ window.CandleChart = (function () {
     return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
   }
 
+  /* How many initial sim candles to show per interval (time-window ~1-2 hours) */
+  function simCandleCount(iv) {
+    switch(iv) {
+      case '5m':  return 48;   // 4 hours
+      case '15m': return 24;   // 6 hours
+      case '1h':  return 24;   // 24 hours
+      case '1D':  return 30;   // 30 days
+      default:    return 60;   // 1m: 1 hour
+    }
+  }
+
   /* ── Generate realistic history ──────────────────────────────── */
-  function buildHistory(sym, iv) {
+  function buildHistory(sym, iv, count) {
     var a     = asset(sym);
     var cs    = candleSec(iv);
-    var count = MAX_CANDLES;
+    count = count || MAX_CANDLES;
     var sigma = a.s * Math.sqrt(cs / 60);  // scale volatility by candle size
     var now   = Math.floor(Date.now() / 1000);
     var t0    = Math.floor(now / cs) * cs - count * cs;
@@ -218,13 +242,15 @@ window.CandleChart = (function () {
     this.dragging   = false;
     this.dragX      = 0;
     this.dragScroll = 0;
-    this._tickTimer   = null;
-    this._tvTimer     = null;
-    this._lastTVPrice = 0;
-    this._destroyed   = false;
-    this._ws          = null;
-    this._wsTimer     = null;
-    this._trade       = null; // { direction, entryPrice, secondsLeft, gwin }
+    this._tickTimer      = null;
+    this._tvTimer        = null;
+    this._simFallbackTimer = null;
+    this._lastTVPrice    = 0;
+    this._lastTVTickTime = 0;
+    this._destroyed      = false;
+    this._ws             = null;
+    this._wsTimer        = null;
+    this._trade          = null; // { direction, entryPrice, secondsLeft, gwin }
 
     this.canvas = document.createElement('canvas');
     this.canvas.style.cssText = 'display:block;width:100%;height:100%;cursor:crosshair;';
@@ -255,11 +281,11 @@ window.CandleChart = (function () {
   }
 
   Chart.prototype._init = function() {
-    if (this.mode === 'tv') {
+    if (this.mode === 'tv' && !isOTC(this.symbol)) {
       this._resize();
       this._fetchTVCandles();
     } else {
-      this.candles = buildHistory(this.symbol, this.interval);
+      this.candles = buildHistory(this.symbol, this.interval, simCandleCount(this.interval));
       this._resize();
       this._startTick();
     }
@@ -279,11 +305,12 @@ window.CandleChart = (function () {
 
   /* ── TradingView data mode ───────────────────────────────────── */
 
-  Chart.prototype._fetchTVCandles = function() {
-    var self = this;
-    var sym  = this.symbol;
-    var broker = encodeURIComponent(window.userBroker || 'Pocket Option');
-    var url  = isOTC(sym)
+  Chart.prototype._fetchTVCandles = function(retries) {
+    var self    = this;
+    var sym     = this.symbol;
+    var attempt = (retries || 0) + 1;
+    var broker  = encodeURIComponent(window.userBroker || 'Pocket Option');
+    var url = isOTC(sym)
       ? PROXY + '/api/otc/candles?broker=' + broker + '&symbol=' + encodeURIComponent(sym) + '&interval=' + this.interval
       : PROXY + '/api/tv/candles?symbol=' + encodeURIComponent(toTVSym(sym)) + '&interval=' + this.interval;
 
@@ -295,7 +322,6 @@ window.CandleChart = (function () {
       try {
         var d = JSON.parse(xhr.responseText);
         if (d.candles && d.candles.length) {
-          /* Keep only the last MAX_CANDLES — trim on client side */
           var all = d.candles;
           self.candles = all.length > MAX_CANDLES ? all.slice(all.length - MAX_CANDLES) : all;
           self._lastTVPrice = self.candles[self.candles.length - 1].c;
@@ -304,12 +330,25 @@ window.CandleChart = (function () {
           return;
         }
       } catch(_) {}
-      /* Retry every 2 s until real data arrives — never fall back to sim */
-      if (!self._destroyed) setTimeout(function() { self._fetchTVCandles(); }, 2000);
+      /* After 8 retries (~16s) fall back to sim — symbol likely not on this exchange */
+      if (attempt >= 8) {
+        self.candles = buildHistory(self.symbol, self.interval);
+        self._startTick();
+        self._draw();
+        return;
+      }
+      if (!self._destroyed) setTimeout(function() { self._fetchTVCandles(attempt); }, 2000);
     };
 
     xhr.onerror = xhr.ontimeout = function() {
-      if (!self._destroyed) setTimeout(function() { self._fetchTVCandles(); }, 2000);
+      if (self._destroyed) return;
+      if (attempt >= 8) {
+        self.candles = buildHistory(self.symbol, self.interval);
+        self._startTick();
+        self._draw();
+        return;
+      }
+      setTimeout(function() { self._fetchTVCandles(attempt); }, 2000);
     };
     xhr.send();
     self._drawLoading();
@@ -444,7 +483,8 @@ window.CandleChart = (function () {
     ctx.fillText('جاري الاتصال بالسوق...', W / 2, H / 2 - 10);
     ctx.font = '11px Outfit,sans-serif';
     ctx.fillStyle = GRID;
-    ctx.fillText(toTVSym(this.symbol), W / 2, H / 2 + 14);
+    var displaySym = this.symbol.replace(/^[A-Z]+:/, '').replace(/_/g, '/');
+    ctx.fillText(displaySym, W / 2, H / 2 + 14);
   };
 
   /* ── Draw ────────────────────────────────────────────────────── */
@@ -487,7 +527,19 @@ window.CandleChart = (function () {
     this._cl = cl; this._cr = cr; this._ct = ct; this._cb = cb;
     this._lo = lo; this._hi = hi; this._ch = ch; this._step = step;
 
-    var dec = decimals(this.symbol);
+    var last = this.candles[this.candles.length - 1];
+    var dec = last ? autoDec(last.c) : decimals(this.symbol);
+
+    /* Candle countdown timer */
+    var cs2 = candleSec(this.interval);
+    var nowSec2 = Math.floor(Date.now() / 1000);
+    var candleEndSec = last ? (Math.floor(last.t / cs2) + 1) * cs2 : 0;
+    var secsLeft = Math.max(0, candleEndSec - nowSec2);
+    var minsLeft = Math.floor(secsLeft / 60);
+    var secsPart = secsLeft % 60;
+    var countdownStr = minsLeft > 0
+      ? minsLeft + ':' + (secsPart < 10 ? '0' : '') + secsPart
+      : secsPart + 's';
 
     /* Grid + Y labels */
     ctx.font = '11px Outfit,sans-serif';
@@ -529,7 +581,6 @@ window.CandleChart = (function () {
     }
 
     /* Current price line */
-    var last = this.candles[this.candles.length - 1];
     if (last) {
       var lpy = py(last.c);
       if (lpy >= ct && lpy <= cb) {
@@ -540,6 +591,13 @@ window.CandleChart = (function () {
         ctx.fillRect(cr, lpy - 10, RM, 20);
         ctx.fillStyle = BG; ctx.textAlign = 'center'; ctx.font = '11px Outfit,sans-serif';
         ctx.fillText(last.c.toFixed(dec), cr + RM / 2, lpy + 4);
+        /* Countdown timer badge above price tag */
+        if (secsLeft > 0 && secsLeft <= cs2) {
+          ctx.fillStyle = 'rgba(30,20,60,0.85)';
+          ctx.fillRect(cr, lpy - 28, RM, 16);
+          ctx.fillStyle = CROSS; ctx.font = 'bold 10px Outfit,monospace';
+          ctx.fillText(countdownStr, cr + RM / 2, lpy - 17);
+        }
       }
     }
 
@@ -550,7 +608,8 @@ window.CandleChart = (function () {
     if (this.mouse) this._crosshair(vis, dec, py, cx, cl, cr, ct, cb, lo, hi, ch);
   };
 
-  Chart.prototype._crosshair = function(vis, dec, py, cx, cl, cr, ct, cb, lo, hi, ch) {
+  Chart.prototype._crosshair = function(vis, _dec, py, cx, cl, cr, ct, cb, lo, hi, ch) {
+    var dec = _dec; // passed from _draw (autoDec-based)
     var ctx = this.ctx;
     var mx  = this.mouse.x, my = this.mouse.y;
     var step = this._step;
@@ -632,10 +691,10 @@ window.CandleChart = (function () {
     if (this._ws)        { try { this._ws.close(); } catch(_) {} this._ws = null; }
     clearTimeout(this._wsTimer); this._wsTimer = null;
 
-    if (this.mode === 'tv') {
+    if (this.mode === 'tv' && !isOTC(this.symbol)) {
       this._fetchTVCandles();
     } else {
-      this.candles = buildHistory(symbol, interval);
+      this.candles = buildHistory(symbol, interval, simCandleCount(interval));
       this._startTick();
       this._draw();
     }
@@ -676,7 +735,7 @@ window.CandleChart = (function () {
     ctx.fillRect(cr, epy - 10, RM, 20);
     ctx.fillStyle = BG; ctx.textAlign = 'center';
     ctx.font = 'bold 10px Outfit,sans-serif';
-    ctx.fillText(ep.toFixed(dec), cr + RM / 2, epy + 4);
+    ctx.fillText(ep.toFixed(autoDec(ep)), cr + RM / 2, epy + 4);
   };
 
   Chart.prototype._setTradeState = function(active, direction, entryPrice, secondsLeft, gwin) {
