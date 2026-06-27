@@ -247,6 +247,7 @@ window.CandleChart = (function () {
     this._simFallbackTimer = null;
     this._lastTVPrice    = 0;
     this._lastTVTickTime = 0;
+    this._resolvedSym    = null;
     this._destroyed      = false;
     this._ws             = null;
     this._wsTimer        = null;
@@ -305,14 +306,37 @@ window.CandleChart = (function () {
 
   /* ── TradingView data mode ───────────────────────────────────── */
 
-  Chart.prototype._fetchTVCandles = function(retries) {
-    var self    = this;
-    var sym     = this.symbol;
+  /* Build ordered list of symbols to try: user symbol → OANDA fallback */
+  Chart.prototype._buildSymbolChain = function() {
+    var sym = this.symbol;
+    if (isOTC(sym)) return [sym];
+    var base = sym.replace(/^[A-Z]+:/, '').replace(/_/g, ''); // strip prefix + underscores
+    var chain = [sym]; // always try original first
+    // If has non-OANDA exchange prefix, add OANDA as fallback
+    if (/^[A-Z]{2,}:/.test(sym) && !/^OANDA:/.test(sym)) {
+      chain.push('OANDA:' + base);
+    }
+    return chain;
+  };
+
+  Chart.prototype._fetchTVCandles = function(retries, chain) {
+    var self = this;
+    var cs   = candleSec(this.interval);
+
+    // Build chain on first call
+    if (!chain) chain = this._buildSymbolChain();
+    if (!chain.length) {
+      self.candles = buildHistory(self.symbol, self.interval, simCandleCount(self.interval));
+      self._startTick(); self._draw(); return;
+    }
+
+    var sym     = chain[0];
+    var rest    = chain.slice(1);
     var attempt = (retries || 0) + 1;
     var broker  = encodeURIComponent(window.userBroker || 'Pocket Option');
     var url = isOTC(sym)
       ? PROXY + '/api/otc/candles?broker=' + broker + '&symbol=' + encodeURIComponent(sym) + '&interval=' + this.interval
-      : PROXY + '/api/tv/candles?symbol=' + encodeURIComponent(toTVSym(sym)) + '&interval=' + this.interval;
+      : PROXY + '/api/tv/candles?symbol='  + encodeURIComponent(toTVSym(sym))              + '&interval=' + this.interval;
 
     var xhr = new XMLHttpRequest();
     xhr.open('GET', url); xhr.timeout = 10000;
@@ -322,36 +346,58 @@ window.CandleChart = (function () {
       try {
         var d = JSON.parse(xhr.responseText);
         if (d.candles && d.candles.length) {
-          var all = d.candles;
-          self.candles = all.length > MAX_CANDLES ? all.slice(all.length - MAX_CANDLES) : all;
-          self._lastTVPrice = self.candles[self.candles.length - 1].c;
-          self._draw();
-          self._startTVTick();
-          return;
+          var lastTs     = d.candles[d.candles.length - 1].t;
+          var ageCandles = (Date.now() / 1000 - lastTs) / cs;
+          var isLive     = ageCandles < 10; // within 10 candle-periods = live
+
+          if (isLive) {
+            var all = d.candles;
+            self.candles       = all.length > MAX_CANDLES ? all.slice(all.length - MAX_CANDLES) : all;
+            self._lastTVPrice  = self.candles[self.candles.length - 1].c;
+            self._resolvedSym  = sym;
+            // Bridge gap to current candle if needed
+            var nowSec = Math.floor(Date.now() / 1000);
+            var cT = Math.floor(nowSec / cs) * cs;
+            var lc = self.candles[self.candles.length - 1];
+            if (cT > lc.t) {
+              self.candles.push({ t: cT, o: lc.c, h: lc.c, l: lc.c, c: lc.c });
+              if (self.candles.length > MAX_CANDLES) self.candles.shift();
+            }
+            self._draw();
+            self._startTVTick();
+            return;
+          }
+          // Stale data → try next symbol immediately (no point retrying stale)
+          if (rest.length) { self._fetchTVCandles(0, rest); return; }
         }
       } catch(_) {}
-      /* After 8 retries (~16s) fall back to sim — symbol likely not on this exchange */
-      if (attempt >= 8) {
-        self.candles = buildHistory(self.symbol, self.interval);
-        self._startTick();
-        self._draw();
-        return;
+
+      // No data or stale and no more fallbacks
+      if (rest.length && attempt >= 3) {
+        // Gave this symbol 3 tries → move to next fallback
+        self._fetchTVCandles(0, rest); return;
       }
-      if (!self._destroyed) setTimeout(function() { self._fetchTVCandles(attempt); }, 2000);
+      if (attempt >= 8) {
+        // All options exhausted → sim
+        self.candles = buildHistory(self.symbol, self.interval, simCandleCount(self.interval));
+        self._startTick(); self._draw(); return;
+      }
+      if (!self._destroyed) setTimeout(function() { self._fetchTVCandles(attempt, chain); }, 2000);
     };
 
     xhr.onerror = xhr.ontimeout = function() {
       if (self._destroyed) return;
-      if (attempt >= 8) {
-        self.candles = buildHistory(self.symbol, self.interval);
-        self._startTick();
-        self._draw();
-        return;
+      var maxTries = rest.length ? 3 : 8;
+      if (attempt >= maxTries) {
+        if (rest.length) { self._fetchTVCandles(0, rest); return; }
+        self.candles = buildHistory(self.symbol, self.interval, simCandleCount(self.interval));
+        self._startTick(); self._draw(); return;
       }
-      setTimeout(function() { self._fetchTVCandles(attempt); }, 2000);
+      setTimeout(function() { self._fetchTVCandles(attempt, chain); }, 2000);
     };
+
     xhr.send();
-    self._drawLoading();
+    if (!self.candles.length) self._drawLoading();
   };
 
   Chart.prototype._startTVTick = function() {
@@ -368,7 +414,8 @@ window.CandleChart = (function () {
       self._ws = ws;
 
       ws.onopen = function() {
-        var subSym = isOTC(self.symbol) ? self.symbol : toTVSym(self.symbol);
+        var live   = self._resolvedSym || self.symbol;
+        var subSym = isOTC(live) ? live : toTVSym(live);
         ws.send(JSON.stringify({ sub: subSym }));
       };
 
@@ -683,8 +730,9 @@ window.CandleChart = (function () {
     if (mode !== undefined) this.mode = mode;
     this.symbol      = symbol;
     this.interval    = interval;
-    this.scrollRight = 0;
-    this.candles     = [];
+    this.scrollRight  = 0;
+    this.candles      = [];
+    this._resolvedSym = null;
 
     if (this._tickTimer) { clearInterval(this._tickTimer); this._tickTimer = null; }
     if (this._tvTimer)   { clearInterval(this._tvTimer);   this._tvTimer   = null; }
