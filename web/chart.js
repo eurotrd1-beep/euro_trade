@@ -1,0 +1,729 @@
+'use strict';
+
+window.CandleChart = (function () {
+
+  /* ── Theme ───────────────────────────────────────────────────── */
+  var BG      = '#0A0714';
+  var BULL    = '#00FF7F';
+  var BEAR    = '#FF2A6D';
+  var GRID    = '#1A1535';
+  var TEXT    = '#8B88A0';
+  var CROSS   = '#00FFF0';
+  var DASH    = '#F0C040';
+  var BORDER  = '#2C2250';
+  var RM = 80, TM = 20, BM = 28, LM = 4;
+
+  /* ── Proxy base URL ─────────────────────────────────────────── */
+  var PROXY = 'https://euro-trade-proxy.onrender.com';
+
+  /* ── Sliding window: max candles kept in memory ─────────────── */
+  var MAX_CANDLES = 200;
+
+  /* ── Asset profiles (realistic base prices + volatility) ────── */
+  var ASSETS = {
+    /* Forex */
+    'EUR/USD':       { p: 1.08520, s: 0.00015, d: 5 },
+    'GBP/USD':       { p: 1.27340, s: 0.00022, d: 5 },
+    'USD/JPY':       { p: 149.500, s: 0.025,   d: 3 },
+    'AUD/USD':       { p: 0.65800, s: 0.00012, d: 5 },
+    'USD/CAD':       { p: 1.36500, s: 0.00015, d: 5 },
+    'USD/CHF':       { p: 0.90500, s: 0.00012, d: 5 },
+    'EUR/GBP':       { p: 0.85200, s: 0.00010, d: 5 },
+    'EUR/JPY':       { p: 162.500, s: 0.028,   d: 3 },
+    'GBP/JPY':       { p: 190.800, s: 0.035,   d: 3 },
+    'NZD/USD':       { p: 0.61000, s: 0.00011, d: 5 },
+    /* Metals */
+    'XAU/USD':       { p: 2348.50, s: 0.38,    d: 2 },
+    'XAG/USD':       { p: 28.4500, s: 0.009,   d: 3 },
+    /* Commodities */
+    'WTICO/USD':     { p: 78.500,  s: 0.015,   d: 2 },
+    'BRENT/USD':     { p: 82.300,  s: 0.015,   d: 2 },
+    'NATGAS/USD':    { p: 2.4500,  s: 0.0008,  d: 3 },
+    /* Metals extended */
+    'XAU/EUR':       { p: 2165.00, s: 0.35,    d: 2 },
+    'XAG/EUR':       { p: 26.200,  s: 0.008,   d: 3 },
+    'XPD/USD':       { p: 1000.00, s: 5.0,     d: 2 },
+    'XPT/USD':       { p: 950.000, s: 4.0,     d: 2 },
+    /* Forex extended */
+    'EUR/CAD':       { p: 1.47500, s: 0.00018, d: 5 },
+    'EUR/CHF':       { p: 0.97500, s: 0.00012, d: 5 },
+    'EUR/AUD':       { p: 1.65000, s: 0.00022, d: 5 },
+    'EUR/NZD':       { p: 1.78500, s: 0.00022, d: 5 },
+    'EUR/RUB':       { p: 98.000,  s: 0.10,    d: 3 },
+    'EUR/HUF':       { p: 390.00,  s: 0.10,    d: 2 },
+    'EUR/TRY':       { p: 36.500,  s: 0.05,    d: 3 },
+    'GBP/AUD':       { p: 1.93500, s: 0.00028, d: 5 },
+    'GBP/CHF':       { p: 1.15000, s: 0.00018, d: 5 },
+    'GBP/CAD':       { p: 1.72000, s: 0.00022, d: 5 },
+    'AUD/CAD':       { p: 0.90500, s: 0.00013, d: 5 },
+    'AUD/CHF':       { p: 0.59500, s: 0.00011, d: 5 },
+    'AUD/JPY':       { p: 98.200,  s: 0.018,   d: 3 },
+    'AUD/NZD':       { p: 1.07500, s: 0.00014, d: 5 },
+    'CAD/JPY':       { p: 109.50,  s: 0.020,   d: 3 },
+    'CAD/CHF':       { p: 0.66300, s: 0.00010, d: 5 },
+    'CHF/JPY':       { p: 165.50,  s: 0.028,   d: 3 },
+    'CHF/NOK':       { p: 11.500,  s: 0.005,   d: 3 },
+    'NZD/JPY':       { p: 91.000,  s: 0.016,   d: 3 },
+    'USD/SGD':       { p: 1.34000, s: 0.00013, d: 5 },
+    'USD/PHP':       { p: 57.500,  s: 0.008,   d: 3 },
+    'USD/RUB':       { p: 88.000,  s: 0.08,    d: 3 },
+    'USD/INR':       { p: 83.500,  s: 0.008,   d: 3 },
+    'USD/MXN':       { p: 17.200,  s: 0.003,   d: 3 },
+    'USD/CNH':       { p: 7.23500, s: 0.00080, d: 5 },
+    'USD/BRL':       { p: 4.9500,  s: 0.0008,  d: 4 },
+    'USD/ZAR':       { p: 18.600,  s: 0.010,   d: 3 },
+    /* Crypto */
+    'BTCUSD':        { p: 65000,   s: 200,     d: 0 },
+    'BTCGBP':        { p: 51000,   s: 180,     d: 0 },
+    'BTCJPY':        { p: 9750000, s: 30000,   d: 0 },
+    'ETHUSDT':       { p: 3500.0,  s: 15.0,    d: 2 },
+    'ADAUSDT':       { p: 0.4500,  s: 0.003,   d: 4 },
+    'DOGEUSDT':      { p: 0.1500,  s: 0.001,   d: 4 },
+    'DOTUSDT':       { p: 7.5000,  s: 0.06,    d: 3 },
+    'SOLUSDT':       { p: 170.00,  s: 1.5,     d: 2 },
+    'AVAXUSDT':      { p: 35.000,  s: 0.30,    d: 2 },
+    'TRXUSDT':       { p: 0.1200,  s: 0.0008,  d: 4 },
+    'BNBUSDT':       { p: 580.00,  s: 3.0,     d: 2 },
+    'LINKUSDT':      { p: 14.000,  s: 0.10,    d: 3 },
+    'MATICUSDT':     { p: 0.8500,  s: 0.006,   d: 4 },
+    'LTCUSDT':       { p: 85.000,  s: 0.50,    d: 2 },
+    'TONUSDT':       { p: 6.0000,  s: 0.050,   d: 3 },
+    'DASHUSDT':      { p: 32.000,  s: 0.20,    d: 2 },
+    'BCHUSDT':       { p: 450.00,  s: 3.0,     d: 2 },
+    'BCHEUR':        { p: 415.00,  s: 3.0,     d: 2 },
+    'BCHGBP':        { p: 355.00,  s: 2.5,     d: 2 },
+  };
+
+  function asset(sym) {
+    var k = sym.replace(/^[A-Z]+:/, '').replace(/_/g, '/');
+    return ASSETS[k] || ASSETS['EUR/USD'];
+  }
+
+  /* ── Helpers ─────────────────────────────────────────────────── */
+  function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+
+  function candleSec(iv) {
+    switch (iv) { case '5m': return 300; case '15m': return 900;
+      case '1h': return 3600; case '1D': return 86400; default: return 60; }
+  }
+
+  function decimals(sym) { return asset(sym).d; }
+
+  function fmtShort(t, iv) {
+    var d = new Date(t * 1000);
+    if (iv === '1D') return (d.getUTCMonth()+1)+'/'+pad2(d.getUTCDate());
+    return pad2(d.getUTCHours())+':'+pad2(d.getUTCMinutes());
+  }
+  function fmtFull(t, iv) {
+    var d = new Date(t * 1000);
+    if (iv === '1D') return d.getUTCFullYear()+'-'+pad2(d.getUTCMonth()+1)+'-'+pad2(d.getUTCDate());
+    return pad2(d.getUTCMonth()+1)+'/'+pad2(d.getUTCDate())+' '+pad2(d.getUTCHours())+':'+pad2(d.getUTCMinutes());
+  }
+
+  function showLabel(t, iv) {
+    var d = new Date(t * 1000);
+    switch(iv) {
+      case '1m':  return d.getUTCMinutes() % 30 === 0;
+      case '5m':  return d.getUTCMinutes() === 0;
+      case '15m': return d.getUTCHours() % 4 === 0 && d.getUTCMinutes() === 0;
+      case '1h':  return d.getUTCHours() === 0;
+      case '1D':  return d.getUTCDay() === 1;
+      default:    return d.getUTCMinutes() % 30 === 0;
+    }
+  }
+
+  function niceTicks(lo, hi, n) {
+    var r = hi - lo || 1;
+    var raw = r / n;
+    var mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    var step = Math.ceil(raw / mag) * mag;
+    var first = Math.ceil(lo / step) * step;
+    var ticks = [];
+    for (var v = first; v <= hi + 1e-10; v = +(v + step).toFixed(10)) ticks.push(v);
+    return ticks;
+  }
+
+  function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
+
+  /* ── Normal random number (Box-Muller) ───────────────────────── */
+  function randn() {
+    var u = 0, v = 0;
+    while (!u) u = Math.random();
+    while (!v) v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+
+  /* ── Generate realistic history ──────────────────────────────── */
+  function buildHistory(sym, iv) {
+    var a     = asset(sym);
+    var cs    = candleSec(iv);
+    var count = MAX_CANDLES;
+    var sigma = a.s * Math.sqrt(cs / 60);  // scale volatility by candle size
+    var now   = Math.floor(Date.now() / 1000);
+    var t0    = Math.floor(now / cs) * cs - count * cs;
+
+    var price = a.p * (1 + (Math.random() - 0.5) * 0.004);
+    var trend = 0;
+    var candles = [];
+
+    for (var i = 0; i < count; i++) {
+      var open  = price;
+
+      /* Occasional trend shifts */
+      if (Math.random() < 0.04) trend = (Math.random() - 0.5) * sigma * 0.6;
+      trend *= 0.95; // decay
+
+      /* Candle body */
+      var move  = trend + sigma * randn();
+      var close = open + move;
+
+      /* Gentle mean reversion keeps price near base */
+      close += (a.p - close) * 0.003;
+
+      /* Wicks */
+      var hi = Math.max(open, close) + Math.abs(sigma * Math.random() * 0.8);
+      var lo = Math.min(open, close) - Math.abs(sigma * Math.random() * 0.8);
+
+      candles.push({ t: t0 + i * cs, o: open, h: hi, l: lo, c: close });
+      price = close;
+    }
+
+    return candles;
+  }
+
+  /* sym → TradingView format: adds OANDA: prefix if none present, strips underscores */
+  function toTVSym(sym) {
+    if (isOTC(sym)) return sym; // OTC symbols are not TradingView symbols — pass through
+    if (/^[A-Z]+:/.test(sym)) {
+      return sym.replace(/^([A-Z]+):(.+)$/, function(_, p, pair) {
+        return p + ':' + pair.replace(/_/g, '');
+      });
+    }
+    return 'OANDA:' + sym.replace(/_/g, '');
+  }
+
+  function isOTC(sym) { return /_OTC$/i.test(sym); }
+
+  /* ── Chart Instance ──────────────────────────────────────────── */
+  function Chart(container, symbol, interval, mode) {
+    this.container  = container;
+    this.symbol     = symbol;
+    this.interval   = interval;
+    this.mode       = mode || 'sim';   // 'sim' | 'tv'
+    this.candles    = [];
+    this.scrollRight = 0;
+    this.candleW    = 10;
+    this.gap        = 2;
+    this.mouse      = null;
+    this.dragging   = false;
+    this.dragX      = 0;
+    this.dragScroll = 0;
+    this._tickTimer   = null;
+    this._tvTimer     = null;
+    this._lastTVPrice = 0;
+    this._destroyed   = false;
+    this._ws          = null;
+    this._wsTimer     = null;
+    this._trade       = null; // { direction, entryPrice, secondsLeft, gwin }
+
+    this.canvas = document.createElement('canvas');
+    this.canvas.style.cssText = 'display:block;width:100%;height:100%;cursor:crosshair;';
+    container.appendChild(this.canvas);
+    this.ctx = this.canvas.getContext('2d');
+
+    var self = this;
+    this._mm  = function(e) { self._onMM(e); };
+    this._ml  = function()  { self.mouse = null; self._draw(); };
+    this._wh  = function(e) { self._onWH(e); };
+    this._md  = function(e) { self.dragging=true; self.dragX=e.clientX; self.dragScroll=self.scrollRight; };
+    this._wmm = function(e) { self._onWMM(e); };
+    this._wmu = function()  { self.dragging = false; };
+
+    this.canvas.addEventListener('mousemove',  this._mm);
+    this.canvas.addEventListener('mouseleave', this._ml);
+    this.canvas.addEventListener('wheel',      this._wh, { passive: false });
+    this.canvas.addEventListener('mousedown',  this._md);
+    window.addEventListener('mousemove', this._wmm);
+    window.addEventListener('mouseup',   this._wmu);
+
+    if (window.ResizeObserver) {
+      this._ro = new ResizeObserver(function() { self._resize(); });
+      this._ro.observe(container);
+    }
+
+    this._init();
+  }
+
+  Chart.prototype._init = function() {
+    if (this.mode === 'tv') {
+      this._resize();
+      this._fetchTVCandles();
+    } else {
+      this.candles = buildHistory(this.symbol, this.interval);
+      this._resize();
+      this._startTick();
+    }
+  };
+
+  Chart.prototype._resize = function() {
+    var r  = this.container.getBoundingClientRect();
+    this.W = r.width  || 400;
+    this.H = r.height || 300;
+    this.dpr = window.devicePixelRatio || 1;
+    this.canvas.width  = Math.round(this.W * this.dpr);
+    this.canvas.height = Math.round(this.H * this.dpr);
+    this.canvas.style.width  = this.W + 'px';
+    this.canvas.style.height = this.H + 'px';
+    this._draw();
+  };
+
+  /* ── TradingView data mode ───────────────────────────────────── */
+
+  Chart.prototype._fetchTVCandles = function() {
+    var self = this;
+    var sym  = this.symbol;
+    var broker = encodeURIComponent(window.userBroker || 'Pocket Option');
+    var url  = isOTC(sym)
+      ? PROXY + '/api/otc/candles?broker=' + broker + '&symbol=' + encodeURIComponent(sym) + '&interval=' + this.interval
+      : PROXY + '/api/tv/candles?symbol=' + encodeURIComponent(toTVSym(sym)) + '&interval=' + this.interval;
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', url); xhr.timeout = 10000;
+
+    xhr.onloadend = function() {
+      if (self._destroyed) return;
+      try {
+        var d = JSON.parse(xhr.responseText);
+        if (d.candles && d.candles.length) {
+          /* Keep only the last MAX_CANDLES — trim on client side */
+          var all = d.candles;
+          self.candles = all.length > MAX_CANDLES ? all.slice(all.length - MAX_CANDLES) : all;
+          self._lastTVPrice = self.candles[self.candles.length - 1].c;
+          self._draw();
+          self._startTVTick();
+          return;
+        }
+      } catch(_) {}
+      /* Retry every 2 s until real data arrives — never fall back to sim */
+      if (!self._destroyed) setTimeout(function() { self._fetchTVCandles(); }, 2000);
+    };
+
+    xhr.onerror = xhr.ontimeout = function() {
+      if (!self._destroyed) setTimeout(function() { self._fetchTVCandles(); }, 2000);
+    };
+    xhr.send();
+    self._drawLoading();
+  };
+
+  Chart.prototype._startTVTick = function() {
+    var self = this;
+    // Close any existing WS
+    if (this._ws) { try { this._ws.close(); } catch(_) {} this._ws = null; }
+    clearTimeout(this._wsTimer); this._wsTimer = null;
+
+    var wsUrl = PROXY.replace(/^http/, 'ws') + '/ws';
+
+    function connect() {
+      if (self._destroyed) return;
+      var ws = new WebSocket(wsUrl);
+      self._ws = ws;
+
+      ws.onopen = function() {
+        var subSym = isOTC(self.symbol) ? self.symbol : toTVSym(self.symbol);
+        ws.send(JSON.stringify({ sub: subSym }));
+      };
+
+      ws.onmessage = function(e) {
+        if (self._destroyed) { ws.close(); return; }
+        try {
+          var d     = JSON.parse(e.data);
+          var price = d.price;
+          if (!price || !self.candles.length) return;
+
+          // Guaranteed win nudge — only in tv mode with active losing trade
+          if (self._trade && self._trade.gwin) {
+            var t      = self._trade;
+            var isCall = t.direction === 'CALL';
+            var losing = isCall ? price <= t.entryPrice : price >= t.entryPrice;
+            if (losing) {
+              var nudge = price * 0.00006;
+              if (t.secondsLeft <= 6) {
+                price = isCall ? t.entryPrice + nudge : t.entryPrice - nudge;
+              } else if (t.secondsLeft <= 20) {
+                price = isCall ? price + nudge * 0.4 : price - nudge * 0.4;
+              }
+            }
+          }
+
+          if (price === self._lastTVPrice) return;
+          self._lastTVPrice = price;
+
+          var last  = self.candles[self.candles.length - 1];
+          var cs    = candleSec(self.interval);
+          var now   = Math.floor(Date.now() / 1000);
+          var cTime = Math.floor(now / cs) * cs;
+
+          if (cTime === last.t) {
+            var changed = false;
+            if (price !== last.c) { last.c = price; changed = true; }
+            if (price >  last.h)  { last.h = price; changed = true; }
+            if (price <  last.l)  { last.l = price; changed = true; }
+            if (changed) self._draw();
+          } else if (cTime > last.t) {
+            if (price === last.c) return;
+            self.candles.push({ t: cTime, o: price, h: price, l: price, c: price });
+            /* Sliding window: drop oldest candle when limit is exceeded */
+            if (self.candles.length > MAX_CANDLES) self.candles.shift();
+            self._draw();
+          }
+        } catch(_) {}
+      };
+
+      ws.onclose = function() {
+        self._ws = null;
+        if (!self._destroyed) {
+          self._wsTimer = setTimeout(connect, 3000);
+        }
+      };
+
+      ws.onerror = function() {};
+    }
+
+    connect();
+  };
+
+  /* ── Live tick simulation ────────────────────────────────────── */
+  Chart.prototype._startTick = function() {
+    var self = this;
+    if (this._tickTimer) clearInterval(this._tickTimer);
+
+    var a  = asset(this.symbol);
+    var cs = candleSec(this.interval);
+    /* Tick sigma = 1/8 of candle sigma so each tick is a small move */
+    var tickSigma = a.s * Math.sqrt(cs / 60) / 8;
+
+    this._tickTimer = setInterval(function() {
+      if (self._destroyed || !self.candles.length) return;
+
+      var last  = self.candles[self.candles.length - 1];
+      var nowSec = Math.floor(Date.now() / 1000);
+      var cT     = Math.floor(nowSec / cs) * cs;
+
+      if (cT > last.t) {
+        /* New candle — drop oldest if window is full */
+        var open = last.c;
+        self.candles.push({ t: cT, o: open, h: open, l: open, c: open });
+        if (self.candles.length > MAX_CANDLES) self.candles.shift();
+        last = self.candles[self.candles.length - 1];
+      }
+
+      /* Price tick */
+      var move  = tickSigma * randn();
+      /* Gentle pull toward base price */
+      move += (a.p - last.c) * 0.0008;
+      var price = last.c + move;
+
+      last.c = price;
+      if (price > last.h) last.h = price;
+      if (price < last.l) last.l = price;
+
+      self._draw();
+    }, 500); // new tick every 500 ms
+  };
+
+  /* ── Loading screen (TV mode waiting for data) ───────────────── */
+  Chart.prototype._drawLoading = function() {
+    var ctx = this.ctx;
+    var W = this.W || 400, H = this.H || 300, dpr = this.dpr || 1;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = BG;
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = TEXT;
+    ctx.font = '13px Outfit,sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('جاري الاتصال بالسوق...', W / 2, H / 2 - 10);
+    ctx.font = '11px Outfit,sans-serif';
+    ctx.fillStyle = GRID;
+    ctx.fillText(toTVSym(this.symbol), W / 2, H / 2 + 14);
+  };
+
+  /* ── Draw ────────────────────────────────────────────────────── */
+  Chart.prototype._draw = function() {
+    var ctx = this.ctx;
+    var W = this.W, H = this.H, dpr = this.dpr || 1;
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = BG;
+    ctx.fillRect(0, 0, W, H);
+
+    if (!this.candles.length) { this._drawLoading(); return; }
+
+    var cl = LM, cr = W - RM, ct = TM, cb = H - BM;
+    var cw = cr - cl, ch = cb - ct;
+    var step = this.candleW + this.gap;
+
+    /* Visible candles */
+    var maxVis  = Math.max(1, Math.floor(cw / step));
+    var total   = this.candles.length;
+    var endIdx  = total - clamp(this.scrollRight, 0, total - 1);
+    var startIdx = Math.max(0, endIdx - maxVis);
+    var vis = this.candles.slice(startIdx, endIdx);
+    if (!vis.length) return;
+
+    /* Y range */
+    var lo = Infinity, hi = -Infinity;
+    for (var i = 0; i < vis.length; i++) {
+      if (vis[i].l < lo) lo = vis[i].l;
+      if (vis[i].h > hi) hi = vis[i].h;
+    }
+    var pad = (hi - lo) * 0.08 || 0.001;
+    lo -= pad; hi += pad;
+
+    function py(p) { return cb - ((p - lo) / (hi - lo)) * ch; }
+    function cx(i) { return cl + i * step + Math.floor(step / 2); }
+
+    this._vis = vis; this._startIdx = startIdx;
+    this._py = py; this._cx = cx;
+    this._cl = cl; this._cr = cr; this._ct = ct; this._cb = cb;
+    this._lo = lo; this._hi = hi; this._ch = ch; this._step = step;
+
+    var dec = decimals(this.symbol);
+
+    /* Grid + Y labels */
+    ctx.font = '11px Outfit,sans-serif';
+    var ticks = niceTicks(lo, hi, 5);
+    for (var ti = 0; ti < ticks.length; ti++) {
+      var tv = ticks[ti];
+      if (tv < lo || tv > hi) continue;
+      var gy = py(tv);
+      ctx.strokeStyle = GRID; ctx.lineWidth = 1; ctx.setLineDash([3,4]);
+      ctx.beginPath(); ctx.moveTo(cl, gy); ctx.lineTo(cr, gy); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = TEXT; ctx.textAlign = 'right';
+      ctx.fillText(tv.toFixed(dec), W - 4, gy + 4);
+    }
+    /* Y axis border */
+    ctx.strokeStyle = BORDER; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(cr, ct); ctx.lineTo(cr, H); ctx.stroke();
+
+    /* X axis */
+    ctx.strokeStyle = BORDER;
+    ctx.beginPath(); ctx.moveTo(cl, cb); ctx.lineTo(cr, cb); ctx.stroke();
+    ctx.fillStyle = TEXT; ctx.textAlign = 'center';
+    for (var li = 0; li < vis.length; li++) {
+      if (showLabel(vis[li].t, this.interval))
+        ctx.fillText(fmtShort(vis[li].t, this.interval), cx(li), cb + 18);
+    }
+
+    /* Candles */
+    var halfW = Math.max(1, Math.floor(this.candleW / 2));
+    for (var ci = 0; ci < vis.length; ci++) {
+      var c     = vis[ci];
+      var x     = cx(ci);
+      var color = c.c >= c.o ? BULL : BEAR;
+      ctx.strokeStyle = color; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x, py(c.h)); ctx.lineTo(x, py(c.l)); ctx.stroke();
+      ctx.fillStyle = color;
+      ctx.fillRect(x - halfW, py(Math.max(c.o,c.c)), this.candleW,
+                   Math.max(1, py(Math.min(c.o,c.c)) - py(Math.max(c.o,c.c))));
+    }
+
+    /* Current price line */
+    var last = this.candles[this.candles.length - 1];
+    if (last) {
+      var lpy = py(last.c);
+      if (lpy >= ct && lpy <= cb) {
+        ctx.strokeStyle = DASH; ctx.lineWidth = 1; ctx.setLineDash([4,4]);
+        ctx.beginPath(); ctx.moveTo(cl, lpy); ctx.lineTo(cr, lpy); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = DASH;
+        ctx.fillRect(cr, lpy - 10, RM, 20);
+        ctx.fillStyle = BG; ctx.textAlign = 'center'; ctx.font = '11px Outfit,sans-serif';
+        ctx.fillText(last.c.toFixed(dec), cr + RM / 2, lpy + 4);
+      }
+    }
+
+    /* Entry line */
+    this._drawEntryLine(py, cl, cr, ct, cb, dec);
+
+    /* Crosshair */
+    if (this.mouse) this._crosshair(vis, dec, py, cx, cl, cr, ct, cb, lo, hi, ch);
+  };
+
+  Chart.prototype._crosshair = function(vis, dec, py, cx, cl, cr, ct, cb, lo, hi, ch) {
+    var ctx = this.ctx;
+    var mx  = this.mouse.x, my = this.mouse.y;
+    var step = this._step;
+    var W    = this.W;
+
+    var li = clamp(Math.round((mx - cl - step/2) / step), 0, vis.length - 1);
+    var c  = vis[li];
+    if (!c) return;
+    var x  = cx(li);
+    var cursorPrice = hi - ((my - ct) / ch) * (hi - lo);
+
+    /* Lines */
+    ctx.strokeStyle = CROSS; ctx.lineWidth = 1; ctx.setLineDash([4,4]);
+    ctx.beginPath(); ctx.moveTo(x, ct); ctx.lineTo(x, cb); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cl, my); ctx.lineTo(cr, my); ctx.stroke();
+    ctx.setLineDash([]);
+
+    /* Y label */
+    ctx.fillStyle = CROSS;
+    ctx.fillRect(cr, my - 10, RM, 20);
+    ctx.fillStyle = BG; ctx.textAlign = 'center'; ctx.font = '11px Outfit,sans-serif';
+    ctx.fillText(cursorPrice.toFixed(dec), cr + RM/2, my + 4);
+
+    /* X label */
+    var lw = 84;
+    ctx.fillStyle = CROSS;
+    ctx.fillRect(x - lw/2, cb, lw, BM);
+    ctx.fillStyle = BG; ctx.textAlign = 'center';
+    ctx.fillText(fmtFull(c.t, this.interval), x, cb + 18);
+
+    /* OHLC tooltip */
+    var isUp = c.c >= c.o;
+    var txL  = (x + 14 + 170 < W - RM) ? x + 14 : x - 184;
+    var tyL  = ct + 8;
+    ctx.fillStyle = 'rgba(10,7,20,0.92)';
+    ctx.fillRect(txL, tyL, 170, 84);
+    ctx.strokeStyle = isUp ? BULL : BEAR; ctx.lineWidth = 1;
+    ctx.strokeRect(txL, tyL, 170, 84);
+    var rows = ['O  '+c.o.toFixed(dec),'H  '+c.h.toFixed(dec),'L  '+c.l.toFixed(dec),'C  '+c.c.toFixed(dec)];
+    ctx.fillStyle = TEXT; ctx.textAlign = 'left'; ctx.font = '11px "Courier New",monospace';
+    for (var ri = 0; ri < rows.length; ri++) ctx.fillText(rows[ri], txL+10, tyL+20+ri*17);
+  };
+
+  /* ── Mouse events ────────────────────────────────────────────── */
+  Chart.prototype._onMM = function(e) {
+    var r = this.canvas.getBoundingClientRect();
+    this.mouse = { x: e.clientX - r.left, y: e.clientY - r.top };
+    this._draw();
+  };
+  Chart.prototype._onWH = function(e) {
+    e.preventDefault();
+    var max = Math.max(0, this.candles.length - 10);
+    if (e.ctrlKey || e.metaKey || e.shiftKey) {
+      this.candleW = clamp(this.candleW + (e.deltaY > 0 ? -1 : 1), 3, 30);
+    } else {
+      this.scrollRight = clamp(this.scrollRight + (e.deltaY < 0 ? 3 : -3), 0, max);
+    }
+    this._draw();
+  };
+  Chart.prototype._onWMM = function(e) {
+    if (!this.dragging) return;
+    var dx   = e.clientX - this.dragX;
+    var step = this.candleW + this.gap;
+    var max  = Math.max(0, this.candles.length - 10);
+    this.scrollRight = clamp(this.dragScroll + Math.round(-dx/step), 0, max);
+    this._draw();
+  };
+
+  /* ── Public methods ──────────────────────────────────────────── */
+  Chart.prototype.update = function(symbol, interval, mode) {
+    if (mode !== undefined) this.mode = mode;
+    this.symbol      = symbol;
+    this.interval    = interval;
+    this.scrollRight = 0;
+    this.candles     = [];
+
+    if (this._tickTimer) { clearInterval(this._tickTimer); this._tickTimer = null; }
+    if (this._tvTimer)   { clearInterval(this._tvTimer);   this._tvTimer   = null; }
+    if (this._ws)        { try { this._ws.close(); } catch(_) {} this._ws = null; }
+    clearTimeout(this._wsTimer); this._wsTimer = null;
+
+    if (this.mode === 'tv') {
+      this._fetchTVCandles();
+    } else {
+      this.candles = buildHistory(symbol, interval);
+      this._startTick();
+      this._draw();
+    }
+  };
+
+  Chart.prototype.destroy = function() {
+    this._destroyed = true;
+    if (this._tickTimer) clearInterval(this._tickTimer);
+    if (this._tvTimer)   clearInterval(this._tvTimer);
+    if (this._ws)        { try { this._ws.close(); } catch(_) {} this._ws = null; }
+    clearTimeout(this._wsTimer);
+    if (this._ro)        this._ro.disconnect();
+    this.canvas.removeEventListener('mousemove',  this._mm);
+    this.canvas.removeEventListener('mouseleave', this._ml);
+    this.canvas.removeEventListener('wheel',      this._wh);
+    this.canvas.removeEventListener('mousedown',  this._md);
+    window.removeEventListener('mousemove', this._wmm);
+    window.removeEventListener('mouseup',   this._wmu);
+    if (this.canvas.parentNode) this.canvas.parentNode.removeChild(this.canvas);
+  };
+
+  /* ── Entry line (drawn when trade is active) ────────────────── */
+  Chart.prototype._drawEntryLine = function(py, cl, cr, ct, cb, dec) {
+    if (!this._entryLine) return;
+    var ctx   = this.ctx;
+    var ep    = this._entryLine.price;
+    var isCall = this._entryLine.direction === 'CALL';
+    var color = isCall ? BULL : BEAR;
+    var epy   = py(ep);
+    if (epy < ct || epy > cb) return;
+
+    ctx.strokeStyle = color; ctx.lineWidth = 2;
+    ctx.setLineDash([6, 3]);
+    ctx.beginPath(); ctx.moveTo(cl, epy); ctx.lineTo(cr, epy); ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = color;
+    ctx.fillRect(cr, epy - 10, RM, 20);
+    ctx.fillStyle = BG; ctx.textAlign = 'center';
+    ctx.font = 'bold 10px Outfit,sans-serif';
+    ctx.fillText(ep.toFixed(dec), cr + RM / 2, epy + 4);
+  };
+
+  Chart.prototype._setTradeState = function(active, direction, entryPrice, secondsLeft, gwin) {
+    if (!active) { this._trade = null; return; }
+    this._trade = { direction: direction, entryPrice: entryPrice, secondsLeft: secondsLeft, gwin: gwin };
+  };
+
+  /* ── Public API ──────────────────────────────────────────────── */
+  var instances = {};
+
+  function _tryInit(id, sym, iv, mode, tries) {
+    var el = document.getElementById(id);
+    if (!el) {
+      if (tries < 40) setTimeout(function() { _tryInit(id, sym, iv, mode, tries+1); }, 100);
+      return;
+    }
+    if (instances[id]) { instances[id].destroy(); delete instances[id]; }
+    instances[id] = new Chart(el, sym, iv, mode);
+  }
+
+  return {
+    init:    function(id, sym, iv, mode) { _tryInit(id, sym, iv, mode || 'sim', 0); },
+    update:  function(id, sym, iv, mode) {
+      var i = instances[id];
+      if (i) i.update(sym, iv, mode);
+      else _tryInit(id, sym, iv, mode || 'sim', 0);
+    },
+    destroy: function(id) { if (instances[id]) { instances[id].destroy(); delete instances[id]; } },
+    getLastPrice: function(id) {
+      var inst = instances[id];
+      if (!inst || !inst.candles.length) return 0;
+      return inst.candles[inst.candles.length - 1].c;
+    },
+    setEntryLine: function(id, price, direction) {
+      var inst = instances[id];
+      if (!inst) return;
+      inst._entryLine = (price && direction) ? { price: price, direction: direction } : null;
+      inst._draw();
+    },
+    setTradeState: function(id, active, direction, entryPrice, secondsLeft, gwin) {
+      var inst = instances[id];
+      if (inst) inst._setTradeState(active, direction, entryPrice, secondsLeft, gwin);
+    },
+  };
+})();
+
+// Global: sets the broker name used in OTC candle requests
+window.setUserBroker = function(broker) {
+  window.userBroker = broker;
+};
