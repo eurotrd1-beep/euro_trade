@@ -98,7 +98,7 @@ class _MainScreenState extends State<MainScreen> {
     if (_otcPairsLoading) return;
     setState(() => _otcPairsLoading = true);
     try {
-      final broker = Uri.encodeComponent(_userBroker);
+      const broker = 'Pocket%20Option';
       final res = await http
           .get(Uri.parse(
               'https://euro-trade-proxy.onrender.com/api/otc/pairs?broker=$broker'))
@@ -719,18 +719,6 @@ class _MainScreenState extends State<MainScreen> {
           'type':        data['type']        as String? ?? 'forex',
         };
       }).where((p) => (p['symbol'] as String).isNotEmpty).toList();
-
-      // TEST: add EURUSD_OTC if not already in list (for OTC scraper testing)
-      final hasEurUsdOtc = pairs.any((p) => p['chartSymbol'] == 'EURUSD_OTC');
-      if (!hasEurUsdOtc) {
-        pairs.add({
-          'id':          '__test_eurusd_otc',
-          'symbol':      'EUR/USD OTC',
-          'chartSymbol': 'EURUSD_OTC',
-          'category':    'otc',
-          'type':        'OTC',
-        });
-      }
 
       setState(() {
         AppConstants.currencyPairs = pairs;
