@@ -717,9 +717,20 @@ class _MainScreenState extends State<MainScreen> {
           'chartSymbol': data['chartSymbol'] as String? ?? '',
           'category':    data['category']    as String? ?? 'forex',
           'type':        data['type']        as String? ?? 'forex',
-          'label':       data['label']       as String? ?? '',
         };
       }).where((p) => (p['symbol'] as String).isNotEmpty).toList();
+
+      // TEST: add EURUSD_OTC if not already in list (for OTC scraper testing)
+      final hasEurUsdOtc = pairs.any((p) => p['chartSymbol'] == 'EURUSD_OTC');
+      if (!hasEurUsdOtc) {
+        pairs.add({
+          'id':          '__test_eurusd_otc',
+          'symbol':      'EUR/USD OTC',
+          'chartSymbol': 'EURUSD_OTC',
+          'category':    'otc',
+          'type':        'OTC',
+        });
+      }
 
       setState(() {
         AppConstants.currencyPairs = pairs;
@@ -837,7 +848,8 @@ class _MainScreenState extends State<MainScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _buildUserInfoSection(isVip),
+                    Expanded(child: _buildUserInfoSection(isVip)),
+                    const SizedBox(width: 8),
                     _buildHeaderActionsRow(),
                   ],
                 ),
@@ -848,7 +860,7 @@ class _MainScreenState extends State<MainScreen> {
           : Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _buildUserInfoSection(isVip),
+                Expanded(child: _buildUserInfoSection(isVip)),
                 _buildVipBannerSection(isVip),
                 _buildHeaderActionsRow(),
               ],
@@ -875,96 +887,104 @@ class _MainScreenState extends State<MainScreen> {
           ),
         ),
         const SizedBox(width: 12),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Text(
-                  isVip ? 'VIP USER: $_userAccountId' : 'USER: $_userAccountId',
-                  style: GoogleFonts.outfit(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    letterSpacing: 1,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isVip ? Colors.amber : Colors.grey.shade700,
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(
-                      color: isVip ? Colors.amberAccent : Colors.white.withAlpha(50),
-                    ),
-                    boxShadow: isVip
-                        ? [
-                            BoxShadow(
-                              color: Colors.amber.withAlpha(80),
-                              blurRadius: 4,
-                            )
-                          ]
-                        : null,
-                  ),
-                  child: Text(
-                    isVip ? 'VIP PREMIUM' : 'STANDARD',
-                    style: GoogleFonts.outfit(
-                      fontSize: 8,
-                      fontWeight: FontWeight.w900,
-                      color: isVip ? Colors.black : Colors.white70,
-                      letterSpacing: 1,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Container(
-                  width: 18,
-                  height: 18,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: AppConstants.borderGlow,
-                      width: 1.2,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withAlpha(40),
-                        blurRadius: 2,
+        Flexible(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      isVip ? 'VIP USER: $_userAccountId' : 'USER: $_userAccountId',
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.outfit(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: 1,
                       ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(9),
-                    child: Padding(
-                      padding: const EdgeInsets.all(1.0),
-                      child: _brokerLogoUrl.isNotEmpty
-                          ? Image.network(_brokerLogoUrl, fit: BoxFit.contain,
-                              errorBuilder: (ctx, err, stack) => _brokerLogoFallback())
-                          : _brokerLogoFallback(),
                     ),
                   ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  isVip ? 'منصة التداول: $_userBroker VIP' : 'منصة التداول: $_userBroker',
-                  style: GoogleFonts.outfit(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: AppConstants.accentCyan,
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isVip ? Colors.amber : Colors.grey.shade700,
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(
+                        color: isVip ? Colors.amberAccent : Colors.white.withAlpha(50),
+                      ),
+                      boxShadow: isVip
+                          ? [
+                              BoxShadow(
+                                color: Colors.amber.withAlpha(80),
+                                blurRadius: 4,
+                              )
+                            ]
+                          : null,
+                    ),
+                    child: Text(
+                      isVip ? 'VIP PREMIUM' : 'STANDARD',
+                      style: GoogleFonts.outfit(
+                        fontSize: 8,
+                        fontWeight: FontWeight.w900,
+                        color: isVip ? Colors.black : Colors.white70,
+                        letterSpacing: 1,
+                      ),
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Container(
+                    width: 18,
+                    height: 18,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: AppConstants.borderGlow,
+                        width: 1.2,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withAlpha(40),
+                          blurRadius: 2,
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(9),
+                      child: Padding(
+                        padding: const EdgeInsets.all(1.0),
+                        child: _brokerLogoUrl.isNotEmpty
+                            ? Image.network(_brokerLogoUrl, fit: BoxFit.contain,
+                                errorBuilder: (ctx, err, stack) => _brokerLogoFallback())
+                            : _brokerLogoFallback(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      isVip ? 'منصة التداول: $_userBroker VIP' : 'منصة التداول: $_userBroker',
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.outfit(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppConstants.accentCyan,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -1158,12 +1178,11 @@ class _MainScreenState extends State<MainScreen> {
                     'فوركس',
                     Icons.currency_exchange_rounded,
                   ),
-                  if (_chartMode != 'tv')
-                    _buildCategoryTab(
-                      'otc',
-                      'OTC',
-                      Icons.bolt_rounded,
-                    ),
+                  _buildCategoryTab(
+                    'otc',
+                    'OTC',
+                    Icons.bolt_rounded,
+                  ),
                   _buildCategoryTab(
                     'metals',
                     'معادن',
@@ -1272,13 +1291,21 @@ class _MainScreenState extends State<MainScreen> {
       builder: (BuildContext context) {
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setModalState) {
-            // OTC category: use server-fetched pairs; others: use Firestore pairs
-            final sourcePairs = _selectedCategory == 'otc'
-                ? _otcPairs.cast<Map<String, dynamic>>()
-                : AppConstants.currencyPairs
-                    .where((pair) => pair['category'] == _selectedCategory)
-                    .where((pair) => _chartMode != 'tv' || pair['type'] != 'OTC')
-                    .toList();
+            // OTC: Firestore pairs added by admin + server-scraped pairs
+            final List<Map<String, dynamic>> sourcePairs;
+            if (_selectedCategory == 'otc') {
+              final firestoreOtc = AppConstants.currencyPairs
+                  .where((p) => p['category'] == 'otc')
+                  .toList();
+              final serverOnly = _otcPairs.cast<Map<String, dynamic>>()
+                  .where((p) => !firestoreOtc.any((f) => f['chartSymbol'] == p['chartSymbol']))
+                  .toList();
+              sourcePairs = [...firestoreOtc, ...serverOnly];
+            } else {
+              sourcePairs = AppConstants.currencyPairs
+                  .where((pair) => pair['category'] == _selectedCategory)
+                  .toList();
+            }
 
             final filteredPairs = sourcePairs.where((pair) {
               if (_searchQuery.isEmpty) return true;
@@ -1400,7 +1427,7 @@ class _MainScreenState extends State<MainScreen> {
                         ? Center(
                             child: Text(
                               _selectedCategory == 'otc'
-                                  ? 'لا توجد أزواج OTC متاحة حالياً\nتأكد أن السيرفر شغال وفيه بيانات'
+                                  ? 'لا توجد أزواج OTC متاحة حالياً\nأضف أزواج OTC من لوحة الأدمن'
                                   : 'لا توجد أصول تطابق البحث',
                               textAlign: TextAlign.center,
                               style: GoogleFonts.outfit(
@@ -1525,25 +1552,6 @@ class _MainScreenState extends State<MainScreen> {
                                                     : AppConstants.textPrimary,
                                               ),
                                             ),
-                                            if ((pair['label'] as String? ?? '').isNotEmpty) ...[
-                                              const SizedBox(width: 6),
-                                              Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                                                decoration: BoxDecoration(
-                                                  color: AppConstants.accentBlue.withAlpha(30),
-                                                  borderRadius: BorderRadius.circular(4),
-                                                  border: Border.all(color: AppConstants.accentBlue.withAlpha(80)),
-                                                ),
-                                                child: Text(
-                                                  pair['label'] as String,
-                                                  style: GoogleFonts.outfit(
-                                                    fontSize: 9,
-                                                    fontWeight: FontWeight.w600,
-                                                    color: AppConstants.accentBlue,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
                                             const SizedBox(width: 10),
                                             Icon(
                                               Icons.currency_exchange_rounded,
@@ -1688,20 +1696,19 @@ class _MainScreenState extends State<MainScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(children: [
-                  Container(
-                    padding: const EdgeInsets.all(5),
-                    decoration: BoxDecoration(
-                      color: AppConstants.accentCyan.withAlpha(15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(Icons.candlestick_chart_rounded,
-                        color: AppConstants.accentCyan, size: 16),
+                Container(
+                  padding: const EdgeInsets.all(5),
+                  decoration: BoxDecoration(
+                    color: AppConstants.accentCyan.withAlpha(15),
+                    shape: BoxShape.circle,
                   ),
-                  const SizedBox(width: 8),
-                  Column(
+                  child: Icon(Icons.candlestick_chart_rounded,
+                      color: AppConstants.accentCyan, size: 16),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('LIVE CHART',
@@ -1710,18 +1717,26 @@ class _MainScreenState extends State<MainScreen> {
                               fontWeight: FontWeight.bold,
                               color: AppConstants.textSecondary,
                               letterSpacing: 1.5)),
-                      Text(chartSymbol,
+                      Text(
+                          chartSymbol
+                              .replaceFirst(RegExp(r'^[A-Z]+:'), '')
+                              .replaceAll('_', '/'),
+                          overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.outfit(
                               fontSize: 14,
                               fontWeight: FontWeight.w900,
                               color: Colors.white)),
                     ],
                   ),
-                ]),
-                Row(
-                  children: ['1m', '5m', '15m', '1h', '1D']
-                      .map(_buildTimeframeButton)
-                      .toList(),
+                ),
+                const SizedBox(width: 8),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: ['1m', '5m', '15m', '1h', '1D']
+                        .map(_buildTimeframeButton)
+                        .toList(),
+                  ),
                 ),
               ],
             ),
@@ -1729,6 +1744,7 @@ class _MainScreenState extends State<MainScreen> {
 
           // ── Chart ──
           TradingViewChart(
+            key: ValueKey('$chartSymbol-$_chartMode'),
             symbol: chartSymbol,
             interval: tf,
             mode: _chartMode,

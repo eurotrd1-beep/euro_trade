@@ -215,15 +215,9 @@ window.CandleChart = (function () {
     return candles;
   }
 
-  /* sym → TradingView format: adds OANDA: prefix if none present, strips underscores */
   function toTVSym(sym) {
-    if (isOTC(sym)) return sym; // OTC symbols are not TradingView symbols — pass through
-    if (/^[A-Z]+:/.test(sym)) {
-      return sym.replace(/^([A-Z]+):(.+)$/, function(_, p, pair) {
-        return p + ':' + pair.replace(/_/g, '');
-      });
-    }
-    return 'OANDA:' + sym.replace(/_/g, '');
+    if (isOTC(sym)) return sym;
+    return sym.replace(/^[A-Z]+:/, '').replace(/_/g, '');
   }
 
   function isOTC(sym) { return /_OTC$/i.test(sym); }
@@ -282,7 +276,7 @@ window.CandleChart = (function () {
   }
 
   Chart.prototype._init = function() {
-    if (this.mode === 'tv' && !isOTC(this.symbol)) {
+    if (this.mode === 'tv') {
       this._resize();
       this._fetchTVCandles();
     } else {
@@ -306,28 +300,15 @@ window.CandleChart = (function () {
 
   /* ── TradingView data mode ───────────────────────────────────── */
 
-  /* Build ordered list of symbols to try: user symbol → OANDA fallback */
-  Chart.prototype._buildSymbolChain = function() {
-    var sym = this.symbol;
-    if (isOTC(sym)) return [sym];
-    var base = sym.replace(/^[A-Z]+:/, '').replace(/_/g, ''); // strip prefix + underscores
-    var chain = [sym]; // always try original first
-    // If has non-OANDA exchange prefix, add OANDA as fallback
-    if (/^[A-Z]{2,}:/.test(sym) && !/^OANDA:/.test(sym)) {
-      chain.push('OANDA:' + base);
-    }
-    return chain;
-  };
-
   Chart.prototype._fetchTVCandles = function(retries, chain) {
     var self = this;
     var cs   = candleSec(this.interval);
 
-    // Build chain on first call
-    if (!chain) chain = this._buildSymbolChain();
+    if (!chain) chain = [this.symbol];
     if (!chain.length) {
-      self.candles = buildHistory(self.symbol, self.interval, simCandleCount(self.interval));
-      self._startTick(); self._draw(); return;
+      self._drawLoading();
+      setTimeout(function() { self._fetchTVCandles(0, [self.symbol]); }, 30000);
+      return;
     }
 
     var sym     = chain[0];
@@ -372,15 +353,18 @@ window.CandleChart = (function () {
         }
       } catch(_) {}
 
-      // No data or stale and no more fallbacks
+      // No live data from this symbol
       if (rest.length && attempt >= 3) {
-        // Gave this symbol 3 tries → move to next fallback
+        // Gave this symbol 3 tries → move to next in chain
         self._fetchTVCandles(0, rest); return;
       }
       if (attempt >= 8) {
-        // All options exhausted → sim
-        self.candles = buildHistory(self.symbol, self.interval, simCandleCount(self.interval));
-        self._startTick(); self._draw(); return;
+        // All options exhausted — restart full chain after 30s (no sim fallback)
+        if (!self._destroyed) {
+          self._drawLoading();
+          setTimeout(function() { self._fetchTVCandles(0, [self.symbol]); }, 30000);
+        }
+        return;
       }
       if (!self._destroyed) setTimeout(function() { self._fetchTVCandles(attempt, chain); }, 2000);
     };
@@ -390,8 +374,10 @@ window.CandleChart = (function () {
       var maxTries = rest.length ? 3 : 8;
       if (attempt >= maxTries) {
         if (rest.length) { self._fetchTVCandles(0, rest); return; }
-        self.candles = buildHistory(self.symbol, self.interval, simCandleCount(self.interval));
-        self._startTick(); self._draw(); return;
+        // All exhausted — restart chain after 30s
+        self._drawLoading();
+        setTimeout(function() { self._fetchTVCandles(0, [self.symbol]); }, 30000);
+        return;
       }
       setTimeout(function() { self._fetchTVCandles(attempt, chain); }, 2000);
     };
@@ -739,10 +725,10 @@ window.CandleChart = (function () {
     if (this._ws)        { try { this._ws.close(); } catch(_) {} this._ws = null; }
     clearTimeout(this._wsTimer); this._wsTimer = null;
 
-    if (this.mode === 'tv' && !isOTC(this.symbol)) {
+    if (this.mode === 'tv') {
       this._fetchTVCandles();
     } else {
-      this.candles = buildHistory(symbol, interval, simCandleCount(interval));
+      this.candles = buildHistory(this.symbol, this.interval, simCandleCount(this.interval));
       this._startTick();
       this._draw();
     }
