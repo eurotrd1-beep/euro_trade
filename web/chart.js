@@ -17,7 +17,7 @@ window.CandleChart = (function () {
   var PROXY = 'https://euro-trade-proxy.onrender.com';
 
   /* ── Sliding window: max candles kept in memory ─────────────── */
-  var MAX_CANDLES = 200;
+  var MAX_CANDLES = 150;
 
   /* ── Asset profiles (realistic base prices + volatility) ────── */
   var ASSETS = {
@@ -95,8 +95,7 @@ window.CandleChart = (function () {
   };
 
   function asset(sym) {
-    // Strip OTC suffix and exchange prefix, then look up
-    var k = sym.replace(/^[A-Z]+:/, '').replace(/_OTC$/i, '').replace(/_/g, '/');
+    var k = sym.replace(/^[A-Z]+:/, '').replace(/_/g, '/');
     return ASSETS[k] || ASSETS['EUR/USD'];
   }
 
@@ -124,24 +123,24 @@ window.CandleChart = (function () {
 
   function fmtShort(t, iv) {
     var d = new Date(t * 1000);
-    if (iv === '1D') return (d.getUTCMonth()+1)+'/'+pad2(d.getUTCDate());
-    return pad2(d.getUTCHours())+':'+pad2(d.getUTCMinutes());
+    if (iv === '1D') return (d.getMonth()+1)+'/'+pad2(d.getDate());
+    return pad2(d.getHours())+':'+pad2(d.getMinutes());
   }
   function fmtFull(t, iv) {
     var d = new Date(t * 1000);
-    if (iv === '1D') return d.getUTCFullYear()+'-'+pad2(d.getUTCMonth()+1)+'-'+pad2(d.getUTCDate());
-    return pad2(d.getUTCMonth()+1)+'/'+pad2(d.getUTCDate())+' '+pad2(d.getUTCHours())+':'+pad2(d.getUTCMinutes());
+    if (iv === '1D') return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate());
+    return pad2(d.getMonth()+1)+'/'+pad2(d.getDate())+' '+pad2(d.getHours())+':'+pad2(d.getMinutes());
   }
 
   function showLabel(t, iv) {
     var d = new Date(t * 1000);
     switch(iv) {
-      case '1m':  return d.getUTCMinutes() % 30 === 0;
-      case '5m':  return d.getUTCMinutes() === 0;
-      case '15m': return d.getUTCHours() % 4 === 0 && d.getUTCMinutes() === 0;
-      case '1h':  return d.getUTCHours() === 0;
-      case '1D':  return d.getUTCDay() === 1;
-      default:    return d.getUTCMinutes() % 30 === 0;
+      case '1m':  return d.getMinutes() % 30 === 0;
+      case '5m':  return d.getMinutes() === 0;
+      case '15m': return d.getHours() % 4 === 0 && d.getMinutes() === 0;
+      case '1h':  return d.getHours() === 0;
+      case '1D':  return d.getDay() === 1;
+      default:    return d.getMinutes() % 30 === 0;
     }
   }
 
@@ -216,11 +215,8 @@ window.CandleChart = (function () {
   }
 
   function toTVSym(sym) {
-    if (isOTC(sym)) return sym;
     return sym.replace(/^[A-Z]+:/, '').replace(/_/g, '');
   }
-
-  function isOTC(sym) { return /_OTC$/i.test(sym); }
 
   /* ── Chart Instance ──────────────────────────────────────────── */
   function Chart(container, symbol, interval, mode) {
@@ -235,12 +231,13 @@ window.CandleChart = (function () {
     this.mouse      = null;
     this.dragging   = false;
     this.dragX      = 0;
-    this.dragScroll = 0;
+    this.dragScroll = 0;  /* unused — interaction disabled */
     this._tickTimer      = null;
     this._tvTimer        = null;
     this._simFallbackTimer = null;
     this._lastTVPrice    = 0;
     this._lastTVTickTime = 0;
+    this._tvDistinctPrices = 0; /* count of distinct TV price changes received */
     this._resolvedSym    = null;
     this._destroyed      = false;
     this._ws             = null;
@@ -255,17 +252,9 @@ window.CandleChart = (function () {
     var self = this;
     this._mm  = function(e) { self._onMM(e); };
     this._ml  = function()  { self.mouse = null; self._draw(); };
-    this._wh  = function(e) { self._onWH(e); };
-    this._md  = function(e) { self.dragging=true; self.dragX=e.clientX; self.dragScroll=self.scrollRight; };
-    this._wmm = function(e) { self._onWMM(e); };
-    this._wmu = function()  { self.dragging = false; };
 
     this.canvas.addEventListener('mousemove',  this._mm);
     this.canvas.addEventListener('mouseleave', this._ml);
-    this.canvas.addEventListener('wheel',      this._wh, { passive: false });
-    this.canvas.addEventListener('mousedown',  this._md);
-    window.addEventListener('mousemove', this._wmm);
-    window.addEventListener('mouseup',   this._wmu);
 
     if (window.ResizeObserver) {
       this._ro = new ResizeObserver(function() { self._resize(); });
@@ -276,9 +265,18 @@ window.CandleChart = (function () {
   }
 
   Chart.prototype._init = function() {
+    var self = this;
     if (this.mode === 'tv') {
-      this._resize();
+      this._resize();          // draws loading screen (candles still empty)
       this._fetchTVCandles();
+      // Fallback: show sim data only if server hasn't responded after 5 s
+      this._simFallbackTimer = setTimeout(function() {
+        if (!self._destroyed && !self.candles.length) {
+          self.candles = buildHistory(self.symbol, self.interval, simCandleCount(self.interval));
+          self._startTick();
+          self._draw();
+        }
+      }, 5000);
     } else {
       this.candles = buildHistory(this.symbol, this.interval, simCandleCount(this.interval));
       this._resize();
@@ -314,10 +312,7 @@ window.CandleChart = (function () {
     var sym     = chain[0];
     var rest    = chain.slice(1);
     var attempt = (retries || 0) + 1;
-    var broker  = encodeURIComponent(window.userBroker || 'Pocket Option');
-    var url = isOTC(sym)
-      ? PROXY + '/api/otc/candles?broker=' + broker + '&symbol=' + encodeURIComponent(sym) + '&interval=' + this.interval
-      : PROXY + '/api/tv/candles?symbol='  + encodeURIComponent(toTVSym(sym))              + '&interval=' + this.interval;
+    var url = PROXY + '/api/tv/candles?symbol=' + encodeURIComponent(toTVSym(sym)) + '&interval=' + this.interval;
 
     var xhr = new XMLHttpRequest();
     xhr.open('GET', url); xhr.timeout = 10000;
@@ -327,15 +322,20 @@ window.CandleChart = (function () {
       try {
         var d = JSON.parse(xhr.responseText);
         if (d.candles && d.candles.length) {
-          var lastTs     = d.candles[d.candles.length - 1].t;
+          // Got stored candles — cancel sim fallback and display immediately
+          clearTimeout(self._simFallbackTimer);
+          if (self._tickTimer) { clearInterval(self._tickTimer); self._tickTimer = null; }
+
+          var all = d.candles;
+          self.candles      = all.length > MAX_CANDLES ? all.slice(all.length - MAX_CANDLES) : all;
+          self._lastTVPrice = self.candles[self.candles.length - 1].c;
+          self._resolvedSym = sym;
+
+          var lastTs     = self.candles[self.candles.length - 1].t;
           var ageCandles = (Date.now() / 1000 - lastTs) / cs;
-          var isLive     = ageCandles < 10; // within 10 candle-periods = live
+          var isLive     = ageCandles < 10;
 
           if (isLive) {
-            var all = d.candles;
-            self.candles       = all.length > MAX_CANDLES ? all.slice(all.length - MAX_CANDLES) : all;
-            self._lastTVPrice  = self.candles[self.candles.length - 1].c;
-            self._resolvedSym  = sym;
             // Bridge gap to current candle if needed
             var nowSec = Math.floor(Date.now() / 1000);
             var cT = Math.floor(nowSec / cs) * cs;
@@ -346,24 +346,23 @@ window.CandleChart = (function () {
             }
             self._draw();
             self._startTVTick();
-            return;
+          } else {
+            // Market closed — show stored history, retry in 60 s
+            self._draw();
+            setTimeout(function() {
+              if (!self._destroyed) self._fetchTVCandles(0, [self.symbol]);
+            }, 60000);
           }
-          // Stale data → try next symbol immediately (no point retrying stale)
-          if (rest.length) { self._fetchTVCandles(0, rest); return; }
+          return;
         }
       } catch(_) {}
 
-      // No live data from this symbol
+      // No candles yet from this symbol
       if (rest.length && attempt >= 3) {
-        // Gave this symbol 3 tries → move to next in chain
         self._fetchTVCandles(0, rest); return;
       }
       if (attempt >= 8) {
-        // All options exhausted — restart full chain after 30s (no sim fallback)
-        if (!self._destroyed) {
-          self._drawLoading();
-          setTimeout(function() { self._fetchTVCandles(0, [self.symbol]); }, 30000);
-        }
+        if (!self._destroyed) setTimeout(function() { self._fetchTVCandles(0, [self.symbol]); }, 10000);
         return;
       }
       if (!self._destroyed) setTimeout(function() { self._fetchTVCandles(attempt, chain); }, 2000);
@@ -375,15 +374,13 @@ window.CandleChart = (function () {
       if (attempt >= maxTries) {
         if (rest.length) { self._fetchTVCandles(0, rest); return; }
         // All exhausted — restart chain after 30s
-        self._drawLoading();
-        setTimeout(function() { self._fetchTVCandles(0, [self.symbol]); }, 30000);
+        setTimeout(function() { self._fetchTVCandles(0, [self.symbol]); }, 10000);
         return;
       }
       setTimeout(function() { self._fetchTVCandles(attempt, chain); }, 2000);
     };
 
     xhr.send();
-    if (!self.candles.length) self._drawLoading();
   };
 
   Chart.prototype._startTVTick = function() {
@@ -391,6 +388,20 @@ window.CandleChart = (function () {
     // Close any existing WS
     if (this._ws) { try { this._ws.close(); } catch(_) {} this._ws = null; }
     clearTimeout(this._wsTimer); this._wsTimer = null;
+
+    /* 1-second heartbeat: opens new candles at boundary + keeps countdown badge live */
+    if (this._tvTimer) clearInterval(this._tvTimer);
+    this._tvTimer = setInterval(function() {
+      if (self._destroyed || !self.candles.length) return;
+      var last = self.candles[self.candles.length - 1];
+      var cs   = candleSec(self.interval);
+      var cT   = Math.floor(Date.now() / 1000 / cs) * cs;
+      if (cT > last.t) {
+        self.candles.push({ t: cT, o: last.c, h: last.c, l: last.c, c: last.c });
+        if (self.candles.length > MAX_CANDLES) self.candles.shift();
+      }
+      self._draw();
+    }, 1000);
 
     var wsUrl = PROXY.replace(/^http/, 'ws') + '/ws';
 
@@ -401,8 +412,7 @@ window.CandleChart = (function () {
 
       ws.onopen = function() {
         var live   = self._resolvedSym || self.symbol;
-        var subSym = isOTC(live) ? live : toTVSym(live);
-        ws.send(JSON.stringify({ sub: subSym }));
+        ws.send(JSON.stringify({ sub: toTVSym(live) }));
       };
 
       ws.onmessage = function(e) {
@@ -428,7 +438,9 @@ window.CandleChart = (function () {
           }
 
           if (price === self._lastTVPrice) return;
+          self._tvDistinctPrices++;
           self._lastTVPrice = price;
+          self._lastTVTickTime = Date.now();
 
           var last  = self.candles[self.candles.length - 1];
           var cs    = candleSec(self.interval);
@@ -442,7 +454,6 @@ window.CandleChart = (function () {
             if (price <  last.l)  { last.l = price; changed = true; }
             if (changed) self._draw();
           } else if (cTime > last.t) {
-            if (price === last.c) return;
             self.candles.push({ t: cTime, o: price, h: price, l: price, c: price });
             /* Sliding window: drop oldest candle when limit is exceeded */
             if (self.candles.length > MAX_CANDLES) self.candles.shift();
@@ -563,11 +574,11 @@ window.CandleChart = (function () {
     var last = this.candles[this.candles.length - 1];
     var dec = last ? autoDec(last.c) : decimals(this.symbol);
 
-    /* Candle countdown timer */
+    /* Candle countdown timer — pure wall-clock, same formula as signal_engine.dart:
+       secsLeft = cs - (nowSec % cs)   → matches Flutter exactly */
     var cs2 = candleSec(this.interval);
     var nowSec2 = Math.floor(Date.now() / 1000);
-    var candleEndSec = last ? (Math.floor(last.t / cs2) + 1) * cs2 : 0;
-    var secsLeft = Math.max(0, candleEndSec - nowSec2);
+    var secsLeft = cs2 - (nowSec2 % cs2);
     var minsLeft = Math.floor(secsLeft / 60);
     var secsPart = secsLeft % 60;
     var countdownStr = minsLeft > 0
@@ -595,9 +606,32 @@ window.CandleChart = (function () {
     ctx.strokeStyle = BORDER;
     ctx.beginPath(); ctx.moveTo(cl, cb); ctx.lineTo(cr, cb); ctx.stroke();
     ctx.fillStyle = TEXT; ctx.textAlign = 'center';
+    var lastCX = vis.length > 0 ? cx(vis.length - 1) : -999;
     for (var li = 0; li < vis.length; li++) {
-      if (showLabel(vis[li].t, this.interval))
-        ctx.fillText(fmtShort(vis[li].t, this.interval), cx(li), cb + 18);
+      if (showLabel(vis[li].t, this.interval)) {
+        var lx = cx(li);
+        // Skip label if it overlaps the countdown badge slot at the last candle
+        if (secsLeft > 0 && Math.abs(lx - lastCX) < 28) continue;
+        ctx.fillText(fmtShort(vis[li].t, this.interval), lx, cb + 18);
+      }
+    }
+
+    /* ── Candle countdown badge on X axis (below last candle) ── */
+    /* noTickYet: TV mode and fewer than 2 distinct price changes received yet → don't show countdown */
+    var noTickYet    = this.mode === 'tv' && this._tvDistinctPrices < 2;
+    var marketClosed = this.mode === 'tv' && this._tvDistinctPrices >= 1 &&
+                       (Date.now() - this._lastTVTickTime) > 10000;
+    if (!noTickYet && last && lastCX >= cl && lastCX <= cr && (secsLeft > 0 || marketClosed)) {
+      var badgeLabel = marketClosed ? 'CLOSED' : countdownStr;
+      var bW = marketClosed ? 58 : 46, bH = 18, bX = lastCX - bW / 2, bY = cb + 4;
+      ctx.fillStyle = marketClosed ? 'rgba(255,60,60,0.15)' : 'rgba(0,255,240,0.15)';
+      ctx.fillRect(bX, bY, bW, bH);
+      ctx.strokeStyle = marketClosed ? 'rgba(255,60,60,0.5)' : 'rgba(0,255,240,0.45)';
+      ctx.lineWidth = 1; ctx.setLineDash([]);
+      ctx.strokeRect(bX, bY, bW, bH);
+      ctx.fillStyle = marketClosed ? 'rgba(255,100,100,0.9)' : CROSS;
+      ctx.font = 'bold 10px Outfit,monospace'; ctx.textAlign = 'center';
+      ctx.fillText(badgeLabel, lastCX, bY + 13);
     }
 
     /* Candles */
@@ -624,8 +658,8 @@ window.CandleChart = (function () {
         ctx.fillRect(cr, lpy - 10, RM, 20);
         ctx.fillStyle = BG; ctx.textAlign = 'center'; ctx.font = '11px Outfit,sans-serif';
         ctx.fillText(last.c.toFixed(dec), cr + RM / 2, lpy + 4);
-        /* Countdown timer badge above price tag */
-        if (secsLeft > 0 && secsLeft <= cs2) {
+        /* Countdown timer badge above price tag — hidden when no tick yet or market closed */
+        if (!noTickYet && !marketClosed && secsLeft > 0 && secsLeft <= cs2) {
           ctx.fillStyle = 'rgba(30,20,60,0.85)';
           ctx.fillRect(cr, lpy - 28, RM, 16);
           ctx.fillStyle = CROSS; ctx.font = 'bold 10px Outfit,monospace';
@@ -635,7 +669,7 @@ window.CandleChart = (function () {
     }
 
     /* Entry line */
-    this._drawEntryLine(py, cl, cr, ct, cb, dec);
+    this._drawEntryLine(py, cl, cr, ct, cb, dec, last ? last.c : null);
 
     /* Crosshair */
     if (this.mouse) this._crosshair(vis, dec, py, cx, cl, cr, ct, cb, lo, hi, ch);
@@ -692,24 +726,6 @@ window.CandleChart = (function () {
     this.mouse = { x: e.clientX - r.left, y: e.clientY - r.top };
     this._draw();
   };
-  Chart.prototype._onWH = function(e) {
-    e.preventDefault();
-    var max = Math.max(0, this.candles.length - 10);
-    if (e.ctrlKey || e.metaKey || e.shiftKey) {
-      this.candleW = clamp(this.candleW + (e.deltaY > 0 ? -1 : 1), 3, 30);
-    } else {
-      this.scrollRight = clamp(this.scrollRight + (e.deltaY < 0 ? 3 : -3), 0, max);
-    }
-    this._draw();
-  };
-  Chart.prototype._onWMM = function(e) {
-    if (!this.dragging) return;
-    var dx   = e.clientX - this.dragX;
-    var step = this.candleW + this.gap;
-    var max  = Math.max(0, this.candles.length - 10);
-    this.scrollRight = clamp(this.dragScroll + Math.round(-dx/step), 0, max);
-    this._draw();
-  };
 
   /* ── Public methods ──────────────────────────────────────────── */
   Chart.prototype.update = function(symbol, interval, mode) {
@@ -725,10 +741,20 @@ window.CandleChart = (function () {
     if (this._ws)        { try { this._ws.close(); } catch(_) {} this._ws = null; }
     clearTimeout(this._wsTimer); this._wsTimer = null;
 
+    var self = this;
     if (this.mode === 'tv') {
+      clearTimeout(this._simFallbackTimer);
+      this._simFallbackTimer = setTimeout(function() {
+        if (!self._destroyed && !self.candles.length) {
+          self.candles = buildHistory(self.symbol, self.interval, simCandleCount(self.interval));
+          self._startTick();
+          self._draw();
+        }
+      }, 5000);
+      this._draw();   // loading screen (candles are [])
       this._fetchTVCandles();
     } else {
-      this.candles = buildHistory(this.symbol, this.interval, simCandleCount(this.interval));
+      this.candles = buildHistory(this.symbol, this.interval, simCandleCount(self.interval));
       this._startTick();
       this._draw();
     }
@@ -740,28 +766,25 @@ window.CandleChart = (function () {
     if (this._tvTimer)   clearInterval(this._tvTimer);
     if (this._ws)        { try { this._ws.close(); } catch(_) {} this._ws = null; }
     clearTimeout(this._wsTimer);
+    clearTimeout(this._simFallbackTimer);
     if (this._ro)        this._ro.disconnect();
     this.canvas.removeEventListener('mousemove',  this._mm);
     this.canvas.removeEventListener('mouseleave', this._ml);
-    this.canvas.removeEventListener('wheel',      this._wh);
-    this.canvas.removeEventListener('mousedown',  this._md);
-    window.removeEventListener('mousemove', this._wmm);
-    window.removeEventListener('mouseup',   this._wmu);
     if (this.canvas.parentNode) this.canvas.parentNode.removeChild(this.canvas);
   };
 
   /* ── Entry line (drawn when trade is active) ────────────────── */
-  Chart.prototype._drawEntryLine = function(py, cl, cr, ct, cb, dec) {
+  Chart.prototype._drawEntryLine = function(py, cl, cr, ct, cb, dec, lastClose) {
     if (!this._entryLine) return;
-    var ctx   = this.ctx;
-    var ep    = this._entryLine.price;
+    var ctx    = this.ctx;
+    var ep     = this._entryLine.price;
     var isCall = this._entryLine.direction === 'CALL';
-    var color = isCall ? BULL : BEAR;
-    var epy   = py(ep);
+    var winning = lastClose != null ? (isCall ? lastClose > ep : lastClose < ep) : isCall;
+    var color  = winning ? BULL : BEAR;
+    var epy    = py(ep);
     if (epy < ct || epy > cb) return;
 
-    ctx.strokeStyle = color; ctx.lineWidth = 2;
-    ctx.setLineDash([6, 3]);
+    ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.setLineDash([8, 5]);
     ctx.beginPath(); ctx.moveTo(cl, epy); ctx.lineTo(cr, epy); ctx.stroke();
     ctx.setLineDash([]);
 
@@ -783,7 +806,7 @@ window.CandleChart = (function () {
   function _tryInit(id, sym, iv, mode, tries) {
     var el = document.getElementById(id);
     if (!el) {
-      if (tries < 40) setTimeout(function() { _tryInit(id, sym, iv, mode, tries+1); }, 100);
+      if (tries < 100) setTimeout(function() { _tryInit(id, sym, iv, mode, tries+1); }, 20);
       return;
     }
     if (instances[id]) { instances[id].destroy(); delete instances[id]; }
@@ -813,10 +836,33 @@ window.CandleChart = (function () {
       var inst = instances[id];
       if (inst) inst._setTradeState(active, direction, entryPrice, secondsLeft, gwin);
     },
+    /* Called directly from Dart signal engine — draws/clears entry line on ALL instances */
+    setGlobalEntryLine: function(price, direction) {
+      var hasLine = price != null && price !== 'null' && direction && direction !== 'null';
+      Object.keys(instances).forEach(function(id) {
+        var inst = instances[id];
+        if (!inst) return;
+        inst._entryLine = hasLine ? { price: Number(price), direction: String(direction) } : null;
+        inst._draw();
+      });
+    },
+    /* Sync a sim price to ALL sim-mode instances — used by guaranteed-win nudge */
+    updateAllSimPrice: function(price) {
+      var p = Number(price);
+      if (!p) return;
+      Object.keys(instances).forEach(function(id) {
+        var inst = instances[id];
+        if (!inst || inst.mode === 'tv' || !inst.candles.length) return;
+        var last = inst.candles[inst.candles.length - 1];
+        last.c = p;
+        if (p > last.h) last.h = p;
+        if (p < last.l) last.l = p;
+        inst._draw();
+      });
+    },
   };
 })();
 
-// Global: sets the broker name used in OTC candle requests
 window.setUserBroker = function(broker) {
   window.userBroker = broker;
 };
