@@ -1411,6 +1411,13 @@ class _MainScreenState extends State<MainScreen> {
             setState(() {
               AppConstants.currencyPairs = pairs;
 
+              // If the selected category now has no pairs, switch to the
+              // first category that does so the picker isn't stuck empty.
+              if (pairs.isNotEmpty && !_categoryHasPairs(_selectedCategory)) {
+                _selectedCategory =
+                    pairs.first['category'] as String? ?? _selectedCategory;
+              }
+
               // Verify active pair is still in the new list
               final activeExists = pairs.any(
                 (p) => p['symbol'] == _signalEngine.activePair,
@@ -1874,22 +1881,30 @@ class _MainScreenState extends State<MainScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Row(
                 children: [
-                  _buildCategoryTab(
-                    'forex',
-                    'فوركس',
-                    Icons.currency_exchange_rounded,
-                  ),
-                  _buildCategoryTab('metals', 'معادن', Icons.diamond_rounded),
-                  _buildCategoryTab(
-                    'commodities',
-                    'سلع',
-                    Icons.local_gas_station_rounded,
-                  ),
-                  _buildCategoryTab(
-                    'crypto',
-                    'كريبتو',
-                    Icons.currency_bitcoin_rounded,
-                  ),
+                  if (_categoryHasPairs('forex'))
+                    _buildCategoryTab(
+                      'forex',
+                      'فوركس',
+                      Icons.currency_exchange_rounded,
+                    ),
+                  if (_categoryHasPairs('metals'))
+                    _buildCategoryTab(
+                      'metals',
+                      'معادن',
+                      Icons.diamond_rounded,
+                    ),
+                  if (_categoryHasPairs('commodities'))
+                    _buildCategoryTab(
+                      'commodities',
+                      'سلع',
+                      Icons.local_gas_station_rounded,
+                    ),
+                  if (_categoryHasPairs('crypto'))
+                    _buildCategoryTab(
+                      'crypto',
+                      'كريبتو',
+                      Icons.currency_bitcoin_rounded,
+                    ),
                 ],
               ),
             ),
@@ -1957,10 +1972,23 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _showSearchableAssetBottomSheet() {
-    showModalBottomSheet(
+    // Defensive: if the active category has no pairs, jump to the first
+    // category that does so the picker doesn't open on an empty list.
+    if (!_categoryHasPairs(_selectedCategory)) {
+      final firstWithPairs = AppConstants.currencyPairs.isNotEmpty
+          ? (AppConstants.currencyPairs.first['category'] as String? ?? '')
+          : _selectedCategory;
+      _selectedCategory = firstWithPairs;
+    }
+
+    final screenWidth = MediaQuery.of(context).size.width;
+    final dialogWidth =
+        screenWidth * 0.92 < 420 ? screenWidth * 0.92 : 420.0;
+
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      barrierDismissible: true,
+      barrierColor: Colors.black.withAlpha(160),
       builder: (BuildContext context) {
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setModalState) {
@@ -1975,63 +2003,86 @@ class _MainScreenState extends State<MainScreen> {
               );
             }).toList();
 
-            return Container(
-              height: MediaQuery.of(context).size.height * 0.75,
-              decoration: BoxDecoration(
-                color: AppConstants.cardBgColor,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(24),
-                  topRight: Radius.circular(24),
-                ),
-                border: const Border(
-                  top: BorderSide(color: AppConstants.borderGlow, width: 1.5),
-                ),
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 24,
               ),
-              child: Column(
-                children: [
-                  // Drag Handle
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 5,
-                      margin: const EdgeInsets.symmetric(vertical: 12),
-                      decoration: BoxDecoration(
-                        color: AppConstants.textSecondary.withAlpha(80),
-                        borderRadius: BorderRadius.circular(2.5),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: dialogWidth),
+                child: Container(
+                  height: MediaQuery.of(context).size.height * 0.75,
+                  decoration: BoxDecoration(
+                    color: AppConstants.cardBgColor,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: AppConstants.borderGlow,
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withAlpha(120),
+                        blurRadius: 30,
+                        offset: const Offset(0, 12),
                       ),
-                    ),
+                    ],
                   ),
-
-                  // Header with category title and close button
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 8,
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'اختر الأصل للتداول',
-                          style: GoogleFonts.outfit(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
+                  child: Column(
+                    children: [
+                      // Branded header: logo + brand title + subtitle + close
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 8, 8),
+                        child: Row(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: Image.asset(
+                                'assets/logo.jpg',
+                                width: 34,
+                                height: 34,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'EURO TRADER',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                      letterSpacing: 1.5,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'اختر الأصل للتداول',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 12,
+                                      color: AppConstants.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(
+                                Icons.close_rounded,
+                                color: Colors.white,
+                              ),
+                              onPressed: () => Navigator.pop(context),
+                            ),
+                          ],
                         ),
-                        IconButton(
-                          icon: const Icon(
-                            Icons.close_rounded,
-                            color: Colors.white,
-                          ),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                      ],
-                    ),
-                  ),
+                      ),
 
-                  // Search input field
-                  Padding(
+                      // Search input field
+                      Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
                       vertical: 8,
@@ -2194,8 +2245,10 @@ class _MainScreenState extends State<MainScreen> {
                               );
                             },
                           ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             );
           },
@@ -2207,6 +2260,10 @@ class _MainScreenState extends State<MainScreen> {
       });
     });
   }
+
+  // Returns true if at least one configured pair belongs to [cat].
+  bool _categoryHasPairs(String cat) => AppConstants.currencyPairs
+      .any((p) => (p['category'] as String? ?? '') == cat);
 
   Widget _buildCategoryTab(String categoryId, String label, IconData icon) {
     final isSelected = _selectedCategory == categoryId;
