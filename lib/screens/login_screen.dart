@@ -286,7 +286,7 @@ class _LoginScreenState extends State<LoginScreen> {
         if (row != null) {
           role = row['role'] ?? 'standard';
           final vipExpiryStr = row['vip_expiry'] as String?;
-          if (vipExpiryStr != null) vipExpiry = DateTime.tryParse(vipExpiryStr);
+          if (vipExpiryStr != null) vipExpiry = DateTime.tryParse(vipExpiryStr)?.toUtc();
 
           final storedDeviceId     = row['device_id']      as String?;
           final storedClickedBroker = row['clicked_broker'] as String?;
@@ -326,8 +326,8 @@ class _LoginScreenState extends State<LoginScreen> {
               if (gd['enabled'] == true) {
                 final expiryStr = gd['expiry'] as String?;
                 if (expiryStr != null) {
-                  final expiry = DateTime.tryParse(expiryStr);
-                  if (expiry != null && expiry.isAfter(DateTime.now())) {
+                  final expiry = DateTime.tryParse(expiryStr)?.toUtc();
+                  if (expiry != null && expiry.isAfter(DateTime.now().toUtc())) {
                     newRole = 'vip';
                     newVipExpiry = expiryStr;
                     vipExpiry = expiry;
@@ -434,7 +434,7 @@ class _LoginScreenState extends State<LoginScreen> {
           await prefs.setString(AppConstants.keyUserBroker, _selectedBroker);
           await prefs.setString('user_role', role);
           if (vipExpiry != null) {
-            await prefs.setString('vip_expiry', vipExpiry!.toIso8601String());
+            await prefs.setString('vip_expiry', vipExpiry!.toUtc().toIso8601String());
           } else {
             await prefs.remove('vip_expiry');
           }

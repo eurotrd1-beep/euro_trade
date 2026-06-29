@@ -558,7 +558,7 @@ class SignalEngine extends ChangeNotifier {
 
   void updateUserData(String role, DateTime? expiry) {
     _userRole = role;
-    _vipExpiry = expiry;
+    _vipExpiry = expiry?.toUtc();   // VIP expiry is absolute UTC
     notifyListeners();
   }
 
@@ -1981,10 +1981,12 @@ class SignalEngine extends ChangeNotifier {
       _userRole = prefs.getString('user_role') ?? 'standard';
       final expiryStr = prefs.getString('vip_expiry');
       if (expiryStr != null) {
-        _vipExpiry = DateTime.tryParse(expiryStr);
+        // Anchor to UTC: VIP duration is absolute (counts from activation in UTC,
+        // regardless of the user's timezone or whether the app was open/closed).
+        _vipExpiry = DateTime.tryParse(expiryStr)?.toUtc();
       }
       if (_userRole == 'vip' && _vipExpiry != null) {
-        if (DateTime.now().isAfter(_vipExpiry!)) {
+        if (DateTime.now().toUtc().isAfter(_vipExpiry!)) {
           _userRole = 'standard';
           _vipJustExpired = true;
           await prefs.setString('user_role', 'standard');
@@ -5790,9 +5792,9 @@ class SignalEngine extends ChangeNotifier {
     _tickTimer = Timer.periodic(const Duration(milliseconds: 300), (timer) {
       if (_candles.isEmpty) return;
 
-      // Check VIP Expiration
+      // Check VIP Expiration (UTC — absolute, online/offline independent)
       if (_userRole == 'vip' && _vipExpiry != null) {
-        if (DateTime.now().isAfter(_vipExpiry!)) {
+        if (DateTime.now().toUtc().isAfter(_vipExpiry!)) {
           _userRole = 'standard';
           _vipJustExpired = true;
           SharedPreferences.getInstance().then((prefs) {
@@ -6514,12 +6516,14 @@ class SignalEngine extends ChangeNotifier {
         : liveExit;
 
     double diff = exitP - _activeSignal!.entryPrice;
-    bool isWin = true;
-
-    if (_activeSignal!.direction == 'PUT' && diff > 0) {
-      isWin = false;
-    } else if (_activeSignal!.direction == 'CALL' && diff < 0) {
-      isWin = false;
+    // Three outcomes: exit == entry → TIE (تعادل); otherwise WIN/LOSS by direction.
+    String result;
+    if (diff == 0) {
+      result = 'TIE';
+    } else if (_activeSignal!.direction == 'CALL') {
+      result = diff > 0 ? 'WIN' : 'LOSS';
+    } else { // PUT
+      result = diff < 0 ? 'WIN' : 'LOSS';
     }
 
     _activeSignal!.exitPrice = exitP;
@@ -6536,14 +6540,14 @@ class SignalEngine extends ChangeNotifier {
         )
         .toList();
 
-    _activeSignal!.status = isWin ? 'WIN' : 'LOSS';
+    _activeSignal!.status = result;
     _signalHistory.insert(0, _activeSignal!);
     _saveHistory();
 
-    // Play corresponding outcome sound
-    if (isWin) {
+    // Play corresponding outcome sound (no sound for a tie)
+    if (result == 'WIN') {
       _playWinSound();
-    } else {
+    } else if (result == 'LOSS') {
       _playLossSound();
     }
   }

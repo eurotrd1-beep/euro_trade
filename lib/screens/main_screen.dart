@@ -619,7 +619,9 @@ class _MainScreenState extends State<MainScreen> {
 
     final activeSignal = _signalEngine.activeSignal;
     if (activeSignal != null &&
-        (activeSignal.status == 'WIN' || activeSignal.status == 'LOSS') &&
+        (activeSignal.status == 'WIN' ||
+            activeSignal.status == 'LOSS' ||
+            activeSignal.status == 'TIE') &&
         activeSignal != _lastProcessedSignal) {
       _lastProcessedSignal = activeSignal;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -967,8 +969,11 @@ class _MainScreenState extends State<MainScreen> {
 
   void _showTradeReviewDialog(BuildContext context, TradingSignal signal) {
     final isWin = signal.status == 'WIN';
+    final isTie = signal.status == 'TIE';
     final isCall = signal.direction == 'CALL';
-    final profitColor = isWin ? AppConstants.callGreen : AppConstants.putRed;
+    final profitColor = isTie
+        ? AppConstants.warningOrange
+        : (isWin ? AppConstants.callGreen : AppConstants.putRed);
     final exitP = signal.exitPrice ?? signal.currentPrice;
 
     showDialog(
@@ -1008,9 +1013,11 @@ class _MainScreenState extends State<MainScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(
-                        isWin
-                            ? Icons.check_circle_outline_rounded
-                            : Icons.cancel_outlined,
+                        isTie
+                            ? Icons.remove_circle_outline
+                            : (isWin
+                                  ? Icons.check_circle_outline_rounded
+                                  : Icons.cancel_outlined),
                         color: profitColor,
                         size: 26,
                       ),
@@ -1039,7 +1046,9 @@ class _MainScreenState extends State<MainScreen> {
                       ),
                     ),
                     child: Text(
-                      isWin ? '✅  صفقة ناجحة' : '❌  صفقة خاسرة',
+                      isTie
+                          ? '➖  تعادل'
+                          : (isWin ? '✅  صفقة ناجحة' : '❌  صفقة خاسرة'),
                       textAlign: TextAlign.center,
                       style: GoogleFonts.outfit(
                         fontSize: 18,
@@ -1054,6 +1063,7 @@ class _MainScreenState extends State<MainScreen> {
                   _buildMiniPriceChart(
                     signal,
                     isWin,
+                    isTie,
                     isCall,
                     profitColor,
                     exitP,
@@ -1150,11 +1160,12 @@ class _MainScreenState extends State<MainScreen> {
   Widget _buildMiniPriceChart(
     TradingSignal signal,
     bool isWin,
+    bool isTie,
     bool isCall,
     Color profitColor,
     double exitP,
   ) {
-    final diff = exitP - signal.entryPrice;
+    final diff = isTie ? 0.0 : exitP - signal.entryPrice;
     final absDiff = diff.abs();
     // Pips for forex (4-decimal): multiply by 10000. For JPY: multiply by 100. Fallback: raw diff.
     final isJpy = signal.pair.toUpperCase().contains('JPY');
@@ -2618,7 +2629,9 @@ class _MainScreenState extends State<MainScreen> {
                             ? AppConstants.textSecondary
                             : (signal.status == 'WIN'
                                   ? AppConstants.callGreen
-                                  : AppConstants.putRed)),
+                                  : (signal.status == 'TIE'
+                                        ? AppConstants.warningOrange
+                                        : AppConstants.putRed))),
                   letterSpacing: 2,
                 ),
               ),
@@ -2749,38 +2762,38 @@ class _MainScreenState extends State<MainScreen> {
             ),
           ] else ...[
             // Completed Result Badge
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              decoration: BoxDecoration(
-                color:
-                    (signal.status == 'WIN'
-                            ? AppConstants.callGreen
-                            : AppConstants.putRed)
-                        .withAlpha(15),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color:
-                      (signal.status == 'WIN'
-                              ? AppConstants.callGreen
-                              : AppConstants.putRed)
-                          .withAlpha(40),
-                ),
-              ),
-              child: Center(
-                child: Text(
-                  signal.status == 'WIN'
-                      ? 'SUCCESSFUL SIGNAL: WIN 🟢'
-                      : 'COMPLETED SIGNAL: LOSS 🔴',
-                  style: GoogleFonts.outfit(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: signal.status == 'WIN'
-                        ? AppConstants.callGreen
-                        : AppConstants.putRed,
+            Builder(
+              builder: (context) {
+                final resultColor = signal.status == 'WIN'
+                    ? AppConstants.callGreen
+                    : (signal.status == 'TIE'
+                          ? AppConstants.warningOrange
+                          : AppConstants.putRed);
+                final resultText = signal.status == 'WIN'
+                    ? 'SUCCESSFUL SIGNAL: WIN 🟢'
+                    : (signal.status == 'TIE'
+                          ? 'COMPLETED SIGNAL: TIE ➖'
+                          : 'COMPLETED SIGNAL: LOSS 🔴');
+                return Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  decoration: BoxDecoration(
+                    color: resultColor.withAlpha(15),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: resultColor.withAlpha(40)),
                   ),
-                ),
-              ),
+                  child: Center(
+                    child: Text(
+                      resultText,
+                      style: GoogleFonts.outfit(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: resultColor,
+                      ),
+                    ),
+                  ),
+                );
+              },
             ),
           ],
 
@@ -3781,8 +3794,11 @@ class _MainScreenState extends State<MainScreen> {
     // Calculate metrics
     final totalCount = filtered.length;
     final winsCount = filtered.where((sig) => sig.status == 'WIN').length;
-    final lossesCount = totalCount - winsCount;
-    final winRate = totalCount > 0 ? (winsCount / totalCount * 100) : 0.0;
+    final lossesCount = filtered.where((sig) => sig.status == 'LOSS').length;
+    final tiesCount = filtered.where((sig) => sig.status == 'TIE').length;
+    // Ties don't count for or against the win rate.
+    final decidedCount = winsCount + lossesCount;
+    final winRate = decidedCount > 0 ? (winsCount / decidedCount * 100) : 0.0;
 
     return _buildGlassCard(
       child: Padding(
@@ -3918,7 +3934,9 @@ class _MainScreenState extends State<MainScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            '$winsCount رابحة / $lossesCount خاسرة',
+                            tiesCount > 0
+                                ? '$winsCount رابحة / $lossesCount خاسرة / $tiesCount تعادل'
+                                : '$winsCount رابحة / $lossesCount خاسرة',
                             style: GoogleFonts.outfit(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
@@ -3970,9 +3988,12 @@ class _MainScreenState extends State<MainScreen> {
                         itemBuilder: (context, index) {
                           final sig = filtered[index];
                           final isWin = sig.status == 'WIN';
-                          final outcomeColor = isWin
-                              ? AppConstants.callGreen
-                              : AppConstants.putRed;
+                          final isTie = sig.status == 'TIE';
+                          final outcomeColor = isTie
+                              ? AppConstants.warningOrange
+                              : (isWin
+                                    ? AppConstants.callGreen
+                                    : AppConstants.putRed);
                           final directionText = sig.direction == 'CALL'
                               ? 'صعود'
                               : 'هبوط';
@@ -4012,7 +4033,9 @@ class _MainScreenState extends State<MainScreen> {
                                     ),
                                   ),
                                   child: Text(
-                                    isWin ? '✓ كسب' : '✗ خسارة',
+                                    isTie
+                                        ? '➖ تعادل'
+                                        : (isWin ? '✓ كسب' : '✗ خسارة'),
                                     style: GoogleFonts.outfit(
                                       fontSize: 10,
                                       color: outcomeColor,
