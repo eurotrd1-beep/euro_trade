@@ -582,6 +582,13 @@ class SignalEngine extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Server-driven market open/closed flag (from proxy `marketOpen`).
+  void setMarketClosed(bool value) {
+    if (_marketClosed == value) return;
+    _marketClosed = value;
+    notifyListeners();
+  }
+
   void updateStandardStrategy(Map<String, dynamic> json) {
     if (json.containsKey('rules')) {
       _stdDynamic = DynamicStrategy.fromJson(json);

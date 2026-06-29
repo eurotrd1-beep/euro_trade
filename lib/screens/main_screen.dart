@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -43,6 +45,20 @@ class _MainScreenState extends State<MainScreen> {
   String _brokerLogoUrl = '';
   bool _updateChecked = false;
 
+  // --- Server-driven market status (from proxy `marketOpen`) ---
+  static const String _proxyBase = 'https://euro-trade-proxy.onrender.com';
+  Timer? _marketStatusTimer;
+  bool _marketOpen = true; // optimistic default until first poll
+  bool _marketClosedDialogShown = false;
+  bool _marketClosedDialogOpen = false;
+
+  // --- VIP expiry handling ---
+  Timer? _vipExpiryTimer;
+  bool _vipExpiredDialogShown = false; // guard: expired dialog shows once
+  bool _vipReminderShown = false; // guard: 24h reminder shows once per session
+  bool _vipDowngradeInFlight = false; // avoid duplicate Supabase updates
+  String _telegramContact = '';
+
   @override
   void initState() {
     super.initState();
@@ -63,6 +79,78 @@ class _MainScreenState extends State<MainScreen> {
         _signalEngine.selectPair(firstSymbol);
       }
     }
+
+    // Server-driven market status: poll immediately, then every 5s.
+    _startMarketStatusPolling();
+  }
+
+  // ── Market status polling ────────────────────────────────────────────────
+
+  /// Strips the exchange prefix and '/' to get the bare symbol the proxy expects
+  /// (e.g. "OANDA:EURUSD" -> "EURUSD", "BTC/USDT" -> "BTCUSDT").
+  String _bareSymbol() {
+    var s = _activeChartSymbol.isNotEmpty
+        ? _activeChartSymbol
+        : AppConstants.chartSymbolFor(_signalEngine.activePair);
+    final colon = s.indexOf(':');
+    if (colon != -1) s = s.substring(colon + 1);
+    return s.replaceAll('/', '').replaceAll(' (OTC)', '').trim();
+  }
+
+  void _startMarketStatusPolling() {
+    _marketStatusTimer?.cancel();
+    _pollMarketStatus(); // immediate poll so closed market shows instantly
+    _marketStatusTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _pollMarketStatus(),
+    );
+  }
+
+  Future<void> _pollMarketStatus() async {
+    final sym = _bareSymbol();
+    if (sym.isEmpty) return;
+    bool open;
+    try {
+      final resp = await http
+          .get(Uri.parse('$_proxyBase/api/tv/tick?symbol=$sym'))
+          .timeout(const Duration(seconds: 8));
+      if (resp.statusCode != 200) return; // leave state unchanged on bad status
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      // Missing field → treat as open (safety). Otherwise honour marketOpen.
+      open = data.containsKey('marketOpen') ? data['marketOpen'] == true : true;
+    } catch (_) {
+      // Network/parse error → leave current state unchanged (don't flip/spam).
+      return;
+    }
+    if (!mounted) return;
+    _applyMarketStatus(open);
+  }
+
+  void _applyMarketStatus(bool open) {
+    final wasOpen = _marketOpen;
+    _marketOpen = open;
+    // Keep the engine flag reconciled with the server every poll (the engine may
+    // also set it closed internally via its analysis path).
+    _signalEngine.setMarketClosed(!open);
+
+    if (!open) {
+      // (Re-)entering closed state. Show dialog once per closed episode.
+      if (wasOpen && !_marketClosedDialogShown) {
+        _marketClosedDialogShown = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && !_marketClosedDialogOpen) {
+            _showMarketClosedDialog(context);
+          }
+        });
+      }
+    } else if (!wasOpen) {
+      // closed → open: reset guard and dismiss the dialog if it's showing.
+      _marketClosedDialogShown = false;
+      if (_marketClosedDialogOpen && mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        _marketClosedDialogOpen = false;
+      }
+    }
   }
 
   Future<void> _loadUserData() async {
@@ -75,7 +163,9 @@ class _MainScreenState extends State<MainScreen> {
       _userBroker = brokerName;
     });
     _signalEngine.setAccountId(accountId);
+    _loadTelegramContact();
     _startRoleListener(accountId);
+    _startVipExpiryWatch(accountId);
     _startStrategyListeners();
     _startChartModeListener();
     _startPairsListener();
@@ -138,8 +228,88 @@ class _MainScreenState extends State<MainScreen> {
             }
 
             _signalEngine.updateUserData(newRole, newExpiry);
+
+            // Re-evaluate VIP expiry whenever the row changes (covers admin
+            // edits to role/vip_expiry while the session is open).
+            _evaluateVipExpiry(newRole, newExpiry);
           });
     } catch (_) {}
+  }
+
+  // ── VIP expiry handling ────────────────────────────────────────────────────
+
+  /// Reads the telegram contact from configs/social (used in the 24h reminder).
+  /// Missing/empty value is fine — the contact line is then omitted.
+  Future<void> _loadTelegramContact() async {
+    try {
+      final row = await Supabase.instance.client
+          .from('configs')
+          .select('data')
+          .eq('id', 'social')
+          .maybeSingle();
+      if (row == null || !mounted) return;
+      final d = row['data'] as Map<String, dynamic>? ?? {};
+      final tg = (d['telegram'] as String? ?? '').trim();
+      if (tg.isNotEmpty) _telegramContact = tg;
+    } catch (_) {}
+  }
+
+  /// Periodic re-check so a session that crosses the expiry moment downgrades
+  /// without a restart. Reads the engine's current role/expiry each tick.
+  void _startVipExpiryWatch(String accountId) {
+    _vipExpiryTimer?.cancel();
+    // Evaluate immediately on app open, then every 60s.
+    _evaluateVipExpiry(_signalEngine.userRole, _signalEngine.vipExpiry);
+    _vipExpiryTimer = Timer.periodic(const Duration(seconds: 60), (_) {
+      if (!mounted) return;
+      _evaluateVipExpiry(_signalEngine.userRole, _signalEngine.vipExpiry);
+    });
+  }
+
+  /// Central VIP-status evaluation. Compares vip_expiry (parsed as UTC) against
+  /// DateTime.now().toUtc(). Handles auto-downgrade (past) and 24h reminder.
+  void _evaluateVipExpiry(String role, DateTime? expiry) {
+    if (role != 'vip' || expiry == null) return;
+    final expiryUtc = expiry.toUtc();
+    final nowUtc = DateTime.now().toUtc();
+    final remaining = expiryUtc.difference(nowUtc);
+
+    if (remaining.isNegative || remaining == Duration.zero) {
+      // Expired → downgrade + dialog once.
+      _handleVipExpired();
+    } else if (remaining <= const Duration(hours: 24)) {
+      // Within the next 24h → informational reminder once per session.
+      if (!_vipReminderShown) {
+        _vipReminderShown = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _showVipReminderDialog(context);
+        });
+      }
+    }
+  }
+
+  /// Auto-downgrade the user to standard in Supabase + locally, then show the
+  /// expired dialog once.
+  Future<void> _handleVipExpired() async {
+    // Reflect locally immediately (engine is the source of truth for role).
+    _signalEngine.updateUserData('standard', null);
+
+    if (!_vipDowngradeInFlight) {
+      _vipDowngradeInFlight = true;
+      try {
+        await Supabase.instance.client
+            .from('users')
+            .update({'role': 'standard', 'vip_expiry': null})
+            .eq('id', _userAccountId);
+      } catch (_) {}
+    }
+
+    if (!_vipExpiredDialogShown) {
+      _vipExpiredDialogShown = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showVipExpiredDialog(context);
+      });
+    }
   }
 
   void _startMaintenanceListener() {
@@ -432,13 +602,16 @@ class _MainScreenState extends State<MainScreen> {
   void _onSignalEngineUpdate() {
     if (_signalEngine.vipJustExpired) {
       _signalEngine.clearVipJustExpired();
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _showVipExpiredDialog(context);
-      });
+      // Route through the central handler so Supabase is updated and the dialog
+      // is guarded (shown once).
+      _handleVipExpired();
     }
 
-    if (_signalEngine.isMarketClosed) {
-      _signalEngine.clearMarketClosed();
+    // Market closed (driven by server poll or engine analysis path). Show the
+    // dialog once; do NOT clear the flag here — the closed state must persist so
+    // the Live Room stays closed. Clearing happens when the poll sees it reopen.
+    if (_signalEngine.isMarketClosed && !_marketClosedDialogShown) {
+      _marketClosedDialogShown = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _showMarketClosedDialog(context);
       });
@@ -481,7 +654,7 @@ class _MainScreenState extends State<MainScreen> {
                 ),
                 const SizedBox(width: 10),
                 Text(
-                  'انتهى اشتراك VIP ⚠️',
+                  'انتهت عضويتك VIP ⚠️',
                   style: GoogleFonts.outfit(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
@@ -491,7 +664,7 @@ class _MainScreenState extends State<MainScreen> {
               ],
             ),
             content: Text(
-              'انتهى اشتراكك الـ VIP الخاص بك. تم إعادتك للباقة القياسية (Standard) بنجاح. يمكنك الترقية مجدداً في أي وقت.',
+              'تم تحويل حسابك إلى Standard. يمكنك الترقية مجدداً في أي وقت.',
               style: GoogleFonts.outfit(
                 fontSize: 14,
                 color: AppConstants.textSecondary,
@@ -518,7 +691,112 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
+  // Informational reminder shown when VIP expires within the next 24h.
+  // Non-blocking: a single "حسناً" button (and optional telegram link).
+  void _showVipReminderDialog(BuildContext context) {
+    final tg = _telegramContact;
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierColor: AppConstants.spaceBackground.withAlpha(220),
+      builder: (BuildContext context) {
+        return Directionality(
+          textDirection: TextDirection.rtl,
+          child: AlertDialog(
+            backgroundColor: AppConstants.cardBgColor,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(
+                color: AppConstants.warningOrange.withAlpha(100),
+                width: 1.5,
+              ),
+            ),
+            title: Row(
+              children: [
+                const Icon(
+                  Icons.access_time_rounded,
+                  color: AppConstants.warningOrange,
+                  size: 26,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'تنبيه انتهاء VIP ⏳',
+                    style: GoogleFonts.outfit(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'عضويتك VIP ستنتهي خلال أقل من 24 ساعة.',
+                  style: GoogleFonts.outfit(
+                    fontSize: 14,
+                    color: AppConstants.textSecondary,
+                    height: 1.5,
+                  ),
+                ),
+                if (tg.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    'للتجديد تواصل معنا: $tg',
+                    style: GoogleFonts.outfit(
+                      fontSize: 13,
+                      color: AppConstants.accentCyan,
+                      fontWeight: FontWeight.w600,
+                      height: 1.5,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              if (tg.isNotEmpty)
+                TextButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    openBrowserTab(tg);
+                  },
+                  icon: Icon(
+                    Icons.send_rounded,
+                    size: 16,
+                    color: AppConstants.accentCyan,
+                  ),
+                  label: Text(
+                    'تواصل معنا',
+                    style: GoogleFonts.outfit(
+                      color: AppConstants.accentCyan,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text(
+                  'حسناً',
+                  style: GoogleFonts.outfit(
+                    color: AppConstants.textSecondary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   void _showMarketClosedDialog(BuildContext context) {
+    if (_marketClosedDialogOpen) return; // singleton guard
+    _marketClosedDialogOpen = true;
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -669,7 +947,10 @@ class _MainScreenState extends State<MainScreen> {
           ),
         );
       },
-    );
+    ).then((_) {
+      // Dialog dismissed (by button, barrier, or programmatic pop on re-open).
+      _marketClosedDialogOpen = false;
+    });
   }
 
   Map<String, int> _getVipCountdownParts(DateTime? expiry) {
@@ -1082,6 +1363,8 @@ class _MainScreenState extends State<MainScreen> {
     _vipStrategyListener?.cancel();
     _chartModeListener?.cancel();
     _pairsListener?.cancel();
+    _marketStatusTimer?.cancel();
+    _vipExpiryTimer?.cancel();
     _signalEngine.removeListener(_onSignalEngineUpdate);
     _signalEngine.dispose();
     super.dispose();
@@ -1824,6 +2107,8 @@ class _MainScreenState extends State<MainScreen> {
                                     if (cs.isNotEmpty)
                                       setState(() => _activeChartSymbol = cs);
                                     Navigator.pop(context);
+                                    // Re-evaluate market status for the new pair right away.
+                                    _pollMarketStatus();
                                   },
                                   borderRadius: BorderRadius.circular(12),
                                   child: Container(
@@ -2615,6 +2900,24 @@ class _MainScreenState extends State<MainScreen> {
         child: ElevatedButton(
           onPressed: enabled
               ? () {
+                  // Block analysis when the market is closed.
+                  if (!_marketOpen || _signalEngine.isMarketClosed) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'السوق مغلق الان حاول في وقت لاحق',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.outfit(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        backgroundColor: AppConstants.warningOrange,
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                    return;
+                  }
                   _signalEngine.requestNextSignal(
                     _selectedMinutes,
                     tvPriceGetter:
