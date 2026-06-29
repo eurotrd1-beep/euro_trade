@@ -43,3 +43,8 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Firebase Hosting (interim only — app code is Firebase-free; see CLOUDFLARE_DEPLOY.md)
+firebase.json
+.firebaserc
+.firebase/
