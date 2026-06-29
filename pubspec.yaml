@@ -36,8 +36,6 @@ dependencies:
   cupertino_icons: ^1.0.8
   shared_preferences: ^2.2.0
   google_fonts: ^6.1.0
-  firebase_core: ^4.11.0
-  firebase_messaging: ^16.4.1
   supabase_flutter: ^2.9.0
   http: ^1.2.0
   dart_jsonwebtoken: ^2.8.0

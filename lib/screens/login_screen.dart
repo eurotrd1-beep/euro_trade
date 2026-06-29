@@ -1,18 +1,14 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:http/http.dart' as http;
-import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
 import '../utils/web_utils.dart';
 import '../constants.dart';
 import '../widgets/particles.dart';
 import '../widgets/trading_background.dart';
-import '../services/fcm_service.dart';
 import 'main_screen.dart';
 import 'notice_screen.dart';
 
@@ -239,81 +235,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // Notify admin via FCM push when a new user registers
-  Future<void> _pingAdminFcm(String accountId, String broker) async {
-    try {
-      final sb = Supabase.instance.client;
-      // Read admin FCM token
-      final tokenRow = await sb.from('configs').select('data').eq('id', 'adminFcmToken').maybeSingle();
-      final adminToken = (tokenRow?['data'] as Map<String, dynamic>?)?['token'] as String?;
-      if (adminToken == null || adminToken.isEmpty) return;
-
-      // Read Service Account credentials
-      final credsRow = await sb.from('configs').select('data').eq('id', 'fcm').maybeSingle();
-      final credsData = credsRow?['data'] as Map<String, dynamic>? ?? {};
-      final clientEmail = credsData['clientEmail'] as String?;
-      final privateKey  = credsData['privateKey']  as String?;
-      final projectId   = credsData['projectId']   as String?;
-      if (clientEmail == null || privateKey == null || projectId == null)
-        return;
-
-      // Generate signed JWT for Google OAuth2
-      final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-      final jwt = JWT({
-        'iss': clientEmail,
-        'scope': 'https://www.googleapis.com/auth/firebase.messaging',
-        'aud': 'https://oauth2.googleapis.com/token',
-        'iat': now,
-        'exp': now + 3600,
-      });
-      final signed = jwt.sign(
-        RSAPrivateKey(privateKey),
-        algorithm: JWTAlgorithm.RS256,
-      );
-
-      // Exchange JWT for access token
-      final tokenRes = await http.post(
-        Uri.parse('https://oauth2.googleapis.com/token'),
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body:
-            'grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=$signed',
-      );
-      final accessToken =
-          (jsonDecode(tokenRes.body) as Map<String, dynamic>)['access_token']
-              as String?;
-      if (accessToken == null) return;
-
-      // Send FCM HTTP v1 push to admin device
-      await http.post(
-        Uri.parse(
-          'https://fcm.googleapis.com/v1/projects/$projectId/messages:send',
-        ),
-        headers: {
-          'Authorization': 'Bearer $accessToken',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'message': {
-            'token': adminToken,
-            'notification': {
-              'title': '🎉 مستخدم جديد!',
-              'body': 'ID: $accountId — $broker',
-            },
-            'android': {
-              'priority': 'high',
-              'notification': {
-                'channel_id': 'admin_alerts',
-                'sound': 'default',
-              },
-            },
-          },
-        }),
-      );
-    } catch (_) {
-      // Silent fail — never block login flow
-    }
-  }
-
   // Generate or retrieve persistent device ID
   Future<String> _getDeviceId() async {
     final prefs = await SharedPreferences.getInstance();
@@ -426,7 +347,6 @@ class _LoginScreenState extends State<LoginScreen> {
             'clicked_broker': lastClickedBroker,
             'created_at': DateTime.now().toIso8601String(),
           });
-          _pingAdminFcm(accountId, _selectedBroker).catchError((_) {});
 
           final loginKey = _selectedBrokerKey.isNotEmpty
               ? _selectedBrokerKey
@@ -519,9 +439,6 @@ class _LoginScreenState extends State<LoginScreen> {
             await prefs.remove('vip_expiry');
           }
         } catch (_) {}
-
-        // Init FCM token in background — don't block navigation
-        FcmService.initAndSaveToken(accountId).catchError((_) {});
 
         if (!mounted) return;
 
