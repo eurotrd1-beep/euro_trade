@@ -472,20 +472,14 @@ window.CandleChart = (function () {
     if (this._ws) { try { this._ws.close(); } catch(_) {} this._ws = null; }
     clearTimeout(this._wsTimer); this._wsTimer = null;
 
-    /* 1-second heartbeat: opens new candles at boundary + keeps countdown badge live */
+    /* 1-second heartbeat: redraw only (keeps the live countdown badge ticking).
+       A NEW candle is opened ONLY when a CHANGED price arrives (ws.onmessage),
+       never as a flat candle on a timer — mirrors the server rule: a new candle
+       requires BOTH the frame elapsing AND the price changing. So during a frozen
+       price no flat candle is created; the new one opens when the price moves. */
     if (this._tvTimer) clearInterval(this._tvTimer);
     this._tvTimer = setInterval(function() {
       if (self._destroyed || !self.candles.length) return;
-      var last = self.candles[self.candles.length - 1];
-      var cs   = candleSec(self.interval);
-      var cT   = Math.floor(Date.now() / 1000 / cs) * cs;
-      if (cT > last.t) {
-        var hc = { t: cT, o: last.c, h: last.c, l: last.c, c: last.c };
-        if (validCandle(hc)) {
-          self.candles.push(hc);
-          if (self.candles.length > MAX_CANDLES) self.candles.shift();
-        }
-      }
       self._draw();
     }, 1000);
 
