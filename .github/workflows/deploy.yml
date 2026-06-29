@@ -23,7 +23,7 @@ jobs:
         with:
           channel: stable
       - run: flutter pub get
-      - run: flutter build web --release --base-href /euro_trade/
+      - run: flutter build web --release --source-maps --base-href /euro_trade/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: build/web

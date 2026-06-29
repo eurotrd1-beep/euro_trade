@@ -1,50 +1,18 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'supabase_config.dart';
 import 'constants.dart';
 import 'screens/splash_screen.dart';
 
-// TEMP DIAGNOSTIC: surface any startup error on screen instead of a blank page.
-void _showErr(String where, Object e, StackTrace? st) {
-  runApp(MaterialApp(
-    debugShowCheckedModeBanner: false,
-    home: Scaffold(
-      backgroundColor: const Color(0xFF0A0714),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Text(
-            'STARTUP ERROR @ $where\n\n$e\n\n$st',
-            style: const TextStyle(color: Color(0xFFFF5555), fontSize: 12, height: 1.4),
-          ),
-        ),
-      ),
-    ),
-  ));
-}
-
-void main() {
-  runZonedGuarded(() async {
-    WidgetsFlutterBinding.ensureInitialized();
-    FlutterError.onError = (d) => _showErr('FlutterError', d.exception, d.stack);
-    ErrorWidget.builder = (d) => Material(
-      color: const Color(0xFF0A0714),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Text('WIDGET ERROR\n\n${d.exception}\n\n${d.stack}',
-            style: const TextStyle(color: Color(0xFFFF5555), fontSize: 11)),
-      ),
-    );
-    try {
-      await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
-    } catch (e, st) {
-      _showErr('Supabase.initialize', e, st);
-      return;
-    }
-    await _loadAppTheme();
-    runApp(const EuroTradeApp());
-  }, (e, st) => _showErr('Zone', e, st));
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
+  } catch (e) {
+    debugPrint('Supabase init failed: $e');
+  }
+  await _loadAppTheme();
+  runApp(const EuroTradeApp());
 }
 
 Future<void> _loadAppTheme() async {
