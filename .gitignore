@@ -51,3 +51,6 @@ firebase.json
 
 # Proxy is a separate project (euro-trade-proxy) — not part of this repo
 proxy/
+
+# Wrangler (Cloudflare CLI) local cache
+.wrangler/
