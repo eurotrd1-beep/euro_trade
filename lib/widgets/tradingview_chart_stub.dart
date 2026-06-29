@@ -9,17 +9,19 @@ class TradingViewChart extends StatelessWidget {
   final String? signalDirection;
   final double? signalEntryPrice;
   final int?    signalDurationMin;
+  final int?    signalSecondsRemaining;
   final void Function(double Function() priceGetter)? onReady;
 
   const TradingViewChart({
     super.key,
     required this.symbol,
-    this.interval          = '1m',
-    this.mode              = 'sim',
-    this.guaranteedWin     = false,
+    this.interval               = '1m',
+    this.mode                   = 'sim',
+    this.guaranteedWin          = false,
     this.signalDirection,
     this.signalEntryPrice,
     this.signalDurationMin,
+    this.signalSecondsRemaining,
     this.onReady,
   });
 

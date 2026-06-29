@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../constants.dart';
 import '../widgets/particles.dart';
@@ -56,7 +56,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     final maintenance = results[1] as Map<String, dynamic>?;
     final isMaintenanceActive = maintenance?['isActive'] as bool? ?? false;
     final endsAtRaw = maintenance?['endsAt'];
-    final endsAt = endsAtRaw is Timestamp ? endsAtRaw.toDate() : null;
+    final endsAt = endsAtRaw is String ? DateTime.tryParse(endsAtRaw) : null;
     final maintenanceStillActive =
         isMaintenanceActive && (endsAt == null || endsAt.isAfter(DateTime.now()));
 
@@ -76,10 +76,11 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       bool isBanned = false;
       String banReason = '';
       try {
-        final userDoc = await FirebaseFirestore.instance.collection('users').doc(accountId).get();
-        if (userDoc.exists) {
-          isBanned  = userDoc.data()?['isBanned'] as bool? ?? false;
-          banReason = userDoc.data()?['banReason'] as String? ?? '';
+        final userRow = await Supabase.instance.client
+              .from('users').select().eq('id', accountId).maybeSingle();
+        if (userRow != null) {
+          isBanned  = userRow['is_banned'] as bool? ?? false;
+          banReason = userRow['ban_reason'] as String? ?? '';
         }
       } catch (_) {}
 
@@ -104,12 +105,13 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
   Future<Map<String, dynamic>?> _fetchMaintenanceStatus() async {
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('configs')
-          .doc('maintenance')
-          .get()
+      final row = await Supabase.instance.client
+          .from('configs')
+          .select('data')
+          .eq('id', 'maintenance')
+          .maybeSingle()
           .timeout(const Duration(seconds: 4));
-      if (doc.exists) return doc.data();
+      return row?['data'] as Map<String, dynamic>?;
     } catch (_) {}
     return null;
   }

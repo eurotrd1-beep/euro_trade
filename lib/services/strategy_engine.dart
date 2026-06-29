@@ -107,16 +107,16 @@ class StrategyEngine {
         .toList();
 
     final closes = candles.map((c) => c.close).toList();
-    final opens  = candles.map((c) => c.open).toList();
-    final highs  = candles.map((c) => c.high).toList();
-    final lows   = candles.map((c) => c.low).toList();
+    final opens = candles.map((c) => c.open).toList();
+    final highs = candles.map((c) => c.high).toList();
+    final lows = candles.map((c) => c.low).toList();
 
     final ind = _Indicators(
-      rsi:              _calcRsi(closes, 14),
-      macdHistogram:    _calcMacdHistogram(closes),
-      marketStructure:  _calcMarketStructure(closes),
-      hasBullishOB:     _calcBullishOB(opens, closes, highs),
-      hasBearishOB:     _calcBearishOB(opens, closes, lows),
+      rsi: _calcRsi(closes, 14),
+      macdHistogram: _calcMacdHistogram(closes),
+      marketStructure: _calcMarketStructure(closes),
+      hasBullishOB: _calcBullishOB(opens, closes, highs),
+      hasBearishOB: _calcBearishOB(opens, closes, lows),
       inLondonKillZone: _inLondonKillZone(),
     );
 
@@ -125,8 +125,10 @@ class StrategyEngine {
     for (final rule in rules.where((r) => r['signal'] != 'dominant')) {
       if (_evalSpecific(rule, ind)) {
         final score = (rule['score'] as num).toDouble();
-        if (rule['signal'] == 'CALL') callScore += score;
-        else if (rule['signal'] == 'PUT') putScore += score;
+        if (rule['signal'] == 'CALL') {
+          callScore += score;
+        } else if (rule['signal'] == 'PUT')
+          putScore += score;
       }
     }
 
@@ -134,16 +136,19 @@ class StrategyEngine {
     final dominant = callScore > putScore
         ? 'CALL'
         : putScore > callScore
-            ? 'PUT'
-            : null;
+        ? 'PUT'
+        : null;
 
     // Pass 2: "dominant" signal rules — add to winning side
     if (dominant != null) {
       for (final rule in rules.where((r) => r['signal'] == 'dominant')) {
         if (_evalDominant(rule, ind)) {
           final score = (rule['score'] as num).toDouble();
-          if (dominant == 'CALL') callScore += score;
-          else putScore += score;
+          if (dominant == 'CALL') {
+            callScore += score;
+          } else {
+            putScore += score;
+          }
         }
       }
     }
@@ -153,20 +158,23 @@ class StrategyEngine {
 
     if (callScore / total >= 0.60) {
       return StrategyResult(
-          direction: SignalDirection.call,
-          callScore: callScore,
-          putScore: putScore);
+        direction: SignalDirection.call,
+        callScore: callScore,
+        putScore: putScore,
+      );
     }
     if (putScore / total >= 0.60) {
       return StrategyResult(
-          direction: SignalDirection.put,
-          callScore: callScore,
-          putScore: putScore);
+        direction: SignalDirection.put,
+        callScore: callScore,
+        putScore: putScore,
+      );
     }
     return StrategyResult(
-        direction: SignalDirection.none,
-        callScore: callScore,
-        putScore: putScore);
+      direction: SignalDirection.none,
+      callScore: callScore,
+      putScore: putScore,
+    );
   }
 
   // ── Rule evaluators ───────────────────────────────────────────────────────────
@@ -225,7 +233,11 @@ class StrategyEngine {
     double avgGain = 0, avgLoss = 0;
     for (int i = 1; i <= period; i++) {
       final d = closes[i] - closes[i - 1];
-      if (d > 0) avgGain += d; else avgLoss -= d;
+      if (d > 0) {
+        avgGain += d;
+      } else {
+        avgLoss -= d;
+      }
     }
     avgGain /= period;
     avgLoss /= period;
@@ -245,7 +257,9 @@ class StrategyEngine {
     if (ema12.isEmpty || ema26.isEmpty) return 0.0;
     final offset = ema12.length - ema26.length;
     final macdLine = List.generate(
-        ema26.length, (i) => ema12[offset + i] - ema26[i]);
+      ema26.length,
+      (i) => ema12[offset + i] - ema26[i],
+    );
     if (macdLine.length < 9) return 0.0;
     final signal = _emaList(macdLine, 9);
     if (signal.isEmpty) return 0.0;
@@ -265,7 +279,10 @@ class StrategyEngine {
 
   // Bullish OB: last bearish candle followed by price breaking above its high
   bool _calcBullishOB(
-      List<double> opens, List<double> closes, List<double> highs) {
+    List<double> opens,
+    List<double> closes,
+    List<double> highs,
+  ) {
     final n = closes.length;
     if (n < 10) return false;
     for (int i = n - 7; i < n - 2; i++) {
@@ -281,7 +298,10 @@ class StrategyEngine {
 
   // Bearish OB: last bullish candle followed by price breaking below its low
   bool _calcBearishOB(
-      List<double> opens, List<double> closes, List<double> lows) {
+    List<double> opens,
+    List<double> closes,
+    List<double> lows,
+  ) {
     final n = closes.length;
     if (n < 10) return false;
     for (int i = n - 7; i < n - 2; i++) {

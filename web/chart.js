@@ -618,7 +618,7 @@ window.CandleChart = (function () {
 
     /* ── Candle countdown badge on X axis (below last candle) ── */
     /* noTickYet: TV mode and fewer than 2 distinct price changes received yet → don't show countdown */
-    var noTickYet    = this.mode === 'tv' && this._tvDistinctPrices < 2;
+    var noTickYet    = false;
     var marketClosed = this.mode === 'tv' && this._tvDistinctPrices >= 1 &&
                        (Date.now() - this._lastTVTickTime) > 10000;
     if (!noTickYet && last && lastCX >= cl && lastCX <= cr && (secsLeft > 0 || marketClosed)) {

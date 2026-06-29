@@ -1,10 +1,8 @@
-﻿import 'dart:async';
-import 'dart:convert';
+import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../utils/web_utils.dart';
 import '../constants.dart';
@@ -34,20 +32,16 @@ class _MainScreenState extends State<MainScreen> {
   String _searchQuery = '';
   String _historyFilter = 'today';
   DateTimeRange? _customDateRange;
-  StreamSubscription<DocumentSnapshot>? _roleListener;
-  StreamSubscription<DocumentSnapshot>? _maintenanceListener;
-  StreamSubscription<DocumentSnapshot>? _stdStrategyListener;
-  StreamSubscription<DocumentSnapshot>? _vipStrategyListener;
-  StreamSubscription<DocumentSnapshot>? _chartModeListener;
-  StreamSubscription<QuerySnapshot>?    _pairsListener;
+  StreamSubscription<List<Map<String, dynamic>>>? _roleListener;
+  StreamSubscription<List<Map<String, dynamic>>>? _maintenanceListener;
+  StreamSubscription<List<Map<String, dynamic>>>? _stdStrategyListener;
+  StreamSubscription<List<Map<String, dynamic>>>? _vipStrategyListener;
+  StreamSubscription<List<Map<String, dynamic>>>? _chartModeListener;
+  StreamSubscription<List<Map<String, dynamic>>>? _pairsListener;
   String _chartMode = 'sim';
   String _activeChartSymbol = '';
   String _brokerLogoUrl = '';
   bool _updateChecked = false;
-
-  // OTC pairs fetched from proxy server
-  List<Map<String, String>> _otcPairs = [];
-  bool _otcPairsLoading = false;
 
   @override
   void initState() {
@@ -58,15 +52,27 @@ class _MainScreenState extends State<MainScreen> {
     _startMaintenanceListener();
 
     _selectedCategory = 'forex';
+    if (AppConstants.currencyPairs.isNotEmpty) {
+      final firstForex = AppConstants.currencyPairs.firstWhere(
+        (p) => (p['category'] as String? ?? '') == 'forex',
+        orElse: () => AppConstants.currencyPairs.first,
+      );
+      _activeChartSymbol = firstForex['chartSymbol'] as String? ?? '';
+      final firstSymbol = firstForex['symbol'] as String? ?? '';
+      if (firstSymbol.isNotEmpty) {
+        _signalEngine.selectPair(firstSymbol);
+      }
+    }
   }
 
   Future<void> _loadUserData() async {
     final prefs = await SharedPreferences.getInstance();
-    final accountId = prefs.getString(AppConstants.keyUserAccountId) ?? '8392019';
+    final accountId =
+        prefs.getString(AppConstants.keyUserAccountId) ?? '8392019';
     final brokerName = prefs.getString(AppConstants.keyUserBroker) ?? 'Quotex';
     setState(() {
       _userAccountId = accountId;
-      _userBroker    = brokerName;
+      _userBroker = brokerName;
     });
     _signalEngine.setAccountId(accountId);
     _startRoleListener(accountId);
@@ -81,150 +87,119 @@ class _MainScreenState extends State<MainScreen> {
 
   Future<void> _loadBrokerLogo(String brokerName) async {
     try {
-      final snap = await FirebaseFirestore.instance
-          .collection('brokers')
-          .where('name', isEqualTo: brokerName)
-          .limit(1)
-          .get();
-      if (snap.docs.isNotEmpty && mounted) {
-        final url = snap.docs.first.data()['logoUrl'] as String? ?? '';
+      final rows = await Supabase.instance.client
+          .from('brokers')
+          .select('logo_url')
+          .eq('name', brokerName)
+          .limit(1);
+      if ((rows as List).isNotEmpty && mounted) {
+        final url = rows.first['logo_url'] as String? ?? '';
         if (url.isNotEmpty) setState(() => _brokerLogoUrl = url);
       }
     } catch (_) {}
   }
 
-  /// Fetches available OTC pairs for the user's broker from the proxy server.
-  Future<void> _fetchOtcPairs() async {
-    if (_otcPairsLoading) return;
-    setState(() => _otcPairsLoading = true);
-    try {
-      const broker = 'Pocket%20Option';
-      final res = await http
-          .get(Uri.parse(
-              'https://euro-trade-proxy.onrender.com/api/otc/pairs?broker=$broker'))
-          .timeout(const Duration(seconds: 10));
-      if (!mounted) return;
-      if (res.statusCode == 200) {
-        final body   = jsonDecode(res.body) as Map<String, dynamic>;
-        final raw    = (body['pairs'] as List<dynamic>? ?? []).cast<String>();
-        final pairs  = raw.map((sym) => <String, String>{
-          'symbol':      _otcSymToDisplay(sym),
-          'chartSymbol': sym,
-          'category':    'otc',
-          'type':        'OTC',
-          'label':       '',
-        }).toList();
-        setState(() { _otcPairs = pairs; _otcPairsLoading = false; });
-      } else {
-        setState(() => _otcPairsLoading = false);
-      }
-    } catch (_) {
-      if (mounted) setState(() => _otcPairsLoading = false);
-    }
-  }
-
-  String _otcSymToDisplay(String sym) {
-    // EURUSD_OTC → EUR/USD OTC
-    final base = sym.replaceAll('_OTC', '').toUpperCase();
-    if (base.length >= 6) return '${base.substring(0, 3)}/${base.substring(3)} OTC';
-    return sym;
-  }
-
   void _startRoleListener(String accountId) {
-    _roleListener?.cancel();
-    _roleListener = FirebaseFirestore.instance
-        .collection('users')
-        .doc(accountId)
-        .snapshots()
-        .listen((doc) async {
-      if (!doc.exists || !mounted) return;
-      final data = doc.data();
-      if (data == null) return;
+    try {
+      _roleListener?.cancel();
+      _roleListener = Supabase.instance.client
+          .from('users')
+          .stream(primaryKey: ['id'])
+          .eq('id', accountId)
+          .listen((rows) async {
+            if (rows.isEmpty || !mounted) return;
+            final data = rows.first;
 
-      // Real-time ban check
-      final isBanned  = data['isBanned'] as bool? ?? false;
-      final banReason = data['banReason'] as String? ?? '';
-      if (isBanned) {
-        _roleListener?.cancel();
-        _maintenanceListener?.cancel();
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _showBanDialog(banReason);
-        });
-        return;
-      }
+            final isBanned = data['is_banned'] as bool? ?? false;
+            final banReason = data['ban_reason'] as String? ?? '';
+            if (isBanned) {
+              _roleListener?.cancel();
+              _maintenanceListener?.cancel();
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) _showBanDialog(banReason);
+              });
+              return;
+            }
 
-      final newRole = data['role'] ?? 'standard';
-      final vipExpiryData = data['vipExpiry'];
-      DateTime? newExpiry;
-      if (vipExpiryData is Timestamp) {
-        newExpiry = vipExpiryData.toDate();
-      }
+            final newRole = data['role'] ?? 'standard';
+            final vipExpiryStr = data['vip_expiry'] as String?;
+            DateTime? newExpiry;
+            if (vipExpiryStr != null) newExpiry = DateTime.tryParse(vipExpiryStr);
 
-      final guaranteedWin = data['guaranteedWin'] as bool? ?? false;
-      _signalEngine.updateGuaranteedWin(guaranteedWin);
+            final guaranteedWin = data['guaranteed_win'] as bool? ?? false;
+            _signalEngine.updateGuaranteedWin(guaranteedWin);
 
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('user_role', newRole);
-      if (newExpiry != null) {
-        await prefs.setString('vip_expiry', newExpiry.toIso8601String());
-      } else {
-        await prefs.remove('vip_expiry');
-      }
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('user_role', newRole);
+            if (newExpiry != null) {
+              await prefs.setString('vip_expiry', newExpiry.toIso8601String());
+            } else {
+              await prefs.remove('vip_expiry');
+            }
 
-      _signalEngine.updateUserData(newRole, newExpiry);
-    });
+            _signalEngine.updateUserData(newRole, newExpiry);
+          });
+    } catch (_) {}
   }
 
   void _startMaintenanceListener() {
-    _maintenanceListener?.cancel();
-    _maintenanceListener = FirebaseFirestore.instance
-        .collection('configs')
-        .doc('maintenance')
-        .snapshots()
-        .listen((doc) {
-      if (!doc.exists || !mounted) return;
-      final d = doc.data();
-      if (d == null) return;
-      final isActive = d['isActive'] as bool? ?? false;
-      if (!isActive) return;
-      final endsAtRaw = d['endsAt'];
-      final endsAt = endsAtRaw is Timestamp ? endsAtRaw.toDate() : null;
-      if (endsAt != null && endsAt.isBefore(DateTime.now())) return;
-      // Maintenance just activated — route away
-      _roleListener?.cancel();
+    try {
       _maintenanceListener?.cancel();
-      Navigator.of(context).pushReplacement(PageRouteBuilder(
-        pageBuilder: (context, animation, _) => const MaintenanceScreen(),
-        transitionsBuilder: (_, anim, secondary, child) => FadeTransition(opacity: anim, child: child),
-        transitionDuration: const Duration(milliseconds: 600),
-      ));
-    });
+      _maintenanceListener = Supabase.instance.client
+          .from('configs')
+          .stream(primaryKey: ['id'])
+          .eq('id', 'maintenance')
+          .listen((rows) {
+            if (rows.isEmpty || !mounted) return;
+            final d = rows.first['data'] as Map<String, dynamic>? ?? {};
+            final isActive = d['isActive'] as bool? ?? false;
+            if (!isActive) return;
+            final endsAtStr = d['endsAt'] as String?;
+            final endsAt = endsAtStr != null ? DateTime.tryParse(endsAtStr) : null;
+            if (endsAt != null && endsAt.isBefore(DateTime.now())) return;
+            _roleListener?.cancel();
+            _maintenanceListener?.cancel();
+            Navigator.of(context).pushReplacement(
+              PageRouteBuilder(
+                pageBuilder: (context, animation, _) => const MaintenanceScreen(),
+                transitionsBuilder: (_, anim, secondary, child) =>
+                    FadeTransition(opacity: anim, child: child),
+                transitionDuration: const Duration(milliseconds: 600),
+              ),
+            );
+          });
+    } catch (_) {}
   }
 
   Future<void> _checkForUpdate() async {
     if (_updateChecked || !mounted) return;
     _updateChecked = true;
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('configs')
-          .doc('appUpdate')
-          .get();
-      if (!doc.exists || !mounted) return;
-      final d = doc.data();
-      if (d == null) return;
+      final row = await Supabase.instance.client
+          .from('configs')
+          .select('data')
+          .eq('id', 'appUpdate')
+          .maybeSingle();
+      if (row == null || !mounted) return;
+      final d = row['data'] as Map<String, dynamic>? ?? {};
       final hasUpdate = d['hasUpdate'] as bool? ?? false;
       if (!hasUpdate) return;
-      final version  = d['version']      as String? ?? '';
-      final link     = d['downloadLink'] as String? ?? '';
-      final isForced = d['isForced']     as bool?   ?? false;
-      final features = (d['features']    as List<dynamic>? ?? []).cast<String>();
+      final version = d['version'] as String? ?? '';
+      final link = d['downloadLink'] as String? ?? '';
+      final isForced = d['isForced'] as bool? ?? false;
+      final features = (d['features'] as List<dynamic>? ?? []).cast<String>();
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _showUpdateDialog(version, features, link, isForced);
       });
     } catch (_) {}
   }
 
-  void _showUpdateDialog(String version, List<String> features, String link, bool isForced) {
+  void _showUpdateDialog(
+    String version,
+    List<String> features,
+    String link,
+    bool isForced,
+  ) {
     showDialog(
       context: context,
       barrierDismissible: !isForced,
@@ -235,31 +210,77 @@ class _MainScreenState extends State<MainScreen> {
           backgroundColor: AppConstants.cardBgColor,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
-            side: BorderSide(color: AppConstants.accentCyan.withAlpha(100), width: 1.5),
+            side: BorderSide(
+              color: AppConstants.accentCyan.withAlpha(100),
+              width: 1.5,
+            ),
           ),
-          title: Row(children: [
-            Icon(Icons.system_update_alt_rounded, color: AppConstants.accentCyan, size: 22),
-            const SizedBox(width: 10),
-            Text('تحديث جديد متاح 🚀',
-                style: GoogleFonts.outfit(color: AppConstants.textPrimary, fontWeight: FontWeight.bold, fontSize: 16)),
-          ]),
+          title: Row(
+            children: [
+              Icon(
+                Icons.system_update_alt_rounded,
+                color: AppConstants.accentCyan,
+                size: 22,
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'تحديث جديد متاح 🚀',
+                style: GoogleFonts.outfit(
+                  color: AppConstants.textPrimary,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('النسخة الجديدة: $version',
-                  style: GoogleFonts.outfit(color: AppConstants.accentCyan, fontWeight: FontWeight.bold)),
+              Text(
+                'النسخة الجديدة: $version',
+                style: GoogleFonts.outfit(
+                  color: AppConstants.accentCyan,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               if (features.isNotEmpty) ...[
                 const SizedBox(height: 12),
-                Text('المميزات الجديدة:', style: GoogleFonts.outfit(color: AppConstants.textPrimary, fontSize: 13, fontWeight: FontWeight.bold)),
+                Text(
+                  'المميزات الجديدة:',
+                  style: GoogleFonts.outfit(
+                    color: AppConstants.textPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
                 const SizedBox(height: 6),
-                ...features.map((f) => Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('• ', style: GoogleFonts.outfit(color: AppConstants.callGreen)),
-                    Expanded(child: Text(f, style: GoogleFonts.outfit(color: AppConstants.textSecondary, fontSize: 12, height: 1.5))),
-                  ]),
-                )),
+                ...features.map(
+                  (f) => Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '• ',
+                          style: GoogleFonts.outfit(
+                            color: AppConstants.callGreen,
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            f,
+                            style: GoogleFonts.outfit(
+                              color: AppConstants.textSecondary,
+                              fontSize: 12,
+                              height: 1.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ],
               if (isForced) ...[
                 const SizedBox(height: 12),
@@ -268,10 +289,18 @@ class _MainScreenState extends State<MainScreen> {
                   decoration: BoxDecoration(
                     color: AppConstants.putRed.withAlpha(15),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppConstants.putRed.withAlpha(60)),
+                    border: Border.all(
+                      color: AppConstants.putRed.withAlpha(60),
+                    ),
                   ),
-                  child: Text('⚠️ هذا التحديث إجباري ولا يمكن تخطيه',
-                      style: GoogleFonts.outfit(color: AppConstants.putRed, fontSize: 11, fontWeight: FontWeight.bold)),
+                  child: Text(
+                    '⚠️ هذا التحديث إجباري ولا يمكن تخطيه',
+                    style: GoogleFonts.outfit(
+                      color: AppConstants.putRed,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ],
             ],
@@ -280,7 +309,10 @@ class _MainScreenState extends State<MainScreen> {
             if (!isForced)
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: Text('لاحقاً', style: GoogleFonts.outfit(color: AppConstants.textSecondary)),
+                child: Text(
+                  'لاحقاً',
+                  style: GoogleFonts.outfit(color: AppConstants.textSecondary),
+                ),
               ),
             ElevatedButton.icon(
               onPressed: () {
@@ -288,11 +320,16 @@ class _MainScreenState extends State<MainScreen> {
                 if (link.isNotEmpty) openBrowserTab(link);
               },
               icon: const Icon(Icons.download_rounded, size: 16),
-              label: Text('تحميل التحديث', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+              label: Text(
+                'تحميل التحديث',
+                style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
+              ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppConstants.accentCyan,
                 foregroundColor: AppConstants.spaceBackground,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
             ),
           ],
@@ -306,8 +343,8 @@ class _MainScreenState extends State<MainScreen> {
       _userBroker.toLowerCase().contains('quotex')
           ? 'assets/quotex.png'
           : _userBroker.toLowerCase().contains('expert')
-              ? 'assets/expert_option.png'
-              : 'assets/pocket_option.png',
+          ? 'assets/expert_option.png'
+          : 'assets/pocket_option.png',
       fit: BoxFit.contain,
     );
   }
@@ -323,18 +360,36 @@ class _MainScreenState extends State<MainScreen> {
           backgroundColor: AppConstants.cardBgColor,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
-            side: BorderSide(color: AppConstants.putRed.withAlpha(100), width: 1.5),
+            side: BorderSide(
+              color: AppConstants.putRed.withAlpha(100),
+              width: 1.5,
+            ),
           ),
-          title: Row(children: [
-            const Icon(Icons.block_rounded, color: AppConstants.putRed, size: 22),
-            const SizedBox(width: 10),
-            Text('تم حظر حسابك', style: GoogleFonts.outfit(color: AppConstants.textPrimary, fontWeight: FontWeight.bold)),
-          ]),
+          title: Row(
+            children: [
+              const Icon(
+                Icons.block_rounded,
+                color: AppConstants.putRed,
+                size: 22,
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'تم حظر حسابك',
+                style: GoogleFonts.outfit(
+                  color: AppConstants.textPrimary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
           content: Text(
             reason.isNotEmpty
                 ? 'تم حظر حسابك من قِبَل الإدارة.\nالسبب: $reason'
                 : 'تم حظر حسابك من قِبَل الإدارة.\nللمزيد من المعلومات تواصل مع الدعم.',
-            style: GoogleFonts.outfit(color: AppConstants.textSecondary, height: 1.6),
+            style: GoogleFonts.outfit(
+              color: AppConstants.textSecondary,
+              height: 1.6,
+            ),
           ),
           actions: [
             ElevatedButton(
@@ -342,8 +397,14 @@ class _MainScreenState extends State<MainScreen> {
                 Navigator.pop(ctx);
                 await _logout();
               },
-              style: ElevatedButton.styleFrom(backgroundColor: AppConstants.putRed, foregroundColor: Colors.white),
-              child: Text('موافق', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppConstants.putRed,
+                foregroundColor: Colors.white,
+              ),
+              child: Text(
+                'موافق',
+                style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
+              ),
             ),
           ],
         ),
@@ -360,7 +421,8 @@ class _MainScreenState extends State<MainScreen> {
       Navigator.of(context).pushReplacement(
         PageRouteBuilder(
           pageBuilder: (context, animation, _) => const NoticeScreen(),
-          transitionsBuilder: (_, anim, secondary, child) => FadeTransition(opacity: anim, child: child),
+          transitionsBuilder: (_, anim, secondary, child) =>
+              FadeTransition(opacity: anim, child: child),
           transitionDuration: const Duration(milliseconds: 500),
         ),
       );
@@ -371,9 +433,14 @@ class _MainScreenState extends State<MainScreen> {
     if (_signalEngine.vipJustExpired) {
       _signalEngine.clearVipJustExpired();
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _showVipExpiredDialog(context);
-        }
+        if (mounted) _showVipExpiredDialog(context);
+      });
+    }
+
+    if (_signalEngine.isMarketClosed) {
+      _signalEngine.clearMarketClosed();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showMarketClosedDialog(context);
       });
     }
 
@@ -382,11 +449,8 @@ class _MainScreenState extends State<MainScreen> {
         (activeSignal.status == 'WIN' || activeSignal.status == 'LOSS') &&
         activeSignal != _lastProcessedSignal) {
       _lastProcessedSignal = activeSignal;
-
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _showTradeReviewDialog(context, activeSignal);
-        }
+        if (mounted) _showTradeReviewDialog(context, activeSignal);
       });
     }
   }
@@ -403,11 +467,18 @@ class _MainScreenState extends State<MainScreen> {
             backgroundColor: AppConstants.cardBgColor,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
-              side: BorderSide(color: AppConstants.putRed.withAlpha(100), width: 1.5),
+              side: BorderSide(
+                color: AppConstants.putRed.withAlpha(100),
+                width: 1.5,
+              ),
             ),
             title: Row(
               children: [
-                const Icon(Icons.warning_amber_rounded, color: AppConstants.putRed, size: 28),
+                const Icon(
+                  Icons.warning_amber_rounded,
+                  color: AppConstants.putRed,
+                  size: 28,
+                ),
                 const SizedBox(width: 10),
                 Text(
                   'انتهى اشتراك VIP ⚠️',
@@ -447,6 +518,160 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
+  void _showMarketClosedDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: AppConstants.spaceBackground.withAlpha(230),
+      builder: (_) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 40,
+          ),
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppConstants.cardBgColor,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: AppConstants.borderGlow, width: 1.5),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF4A3A7A).withAlpha(60),
+                  blurRadius: 40,
+                  spreadRadius: 8,
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.all(28),
+            child: Directionality(
+              textDirection: TextDirection.rtl,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Icon + glowing circle
+                  Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: const Color(0xFF1E1640),
+                      border: Border.all(
+                        color: AppConstants.warningOrange.withAlpha(100),
+                        width: 2,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppConstants.warningOrange.withAlpha(40),
+                          blurRadius: 24,
+                          spreadRadius: 4,
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.lock_clock_outlined,
+                      color: AppConstants.warningOrange,
+                      size: 38,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    'السوق مغلق مؤقتاً',
+                    style: GoogleFonts.outfit(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: AppConstants.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'السعر ثابت أو السوق خارج أوقات التداول الرسمية.\nانتظر حتى يُفتح السوق ثم أعد المحاولة.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.outfit(
+                      fontSize: 13,
+                      color: AppConstants.textSecondary,
+                      height: 1.6,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '💡 جرب أزواج OTC — متاحة 24/7 حتى في عطلات نهاية الأسبوع',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.outfit(
+                      fontSize: 12,
+                      color: AppConstants.accentCyan,
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  // Status indicator
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppConstants.warningOrange.withAlpha(15),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: AppConstants.warningOrange.withAlpha(60),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: AppConstants.warningOrange,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'السوق: مغلق',
+                          style: GoogleFonts.outfit(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: AppConstants.warningOrange,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppConstants.accentBlue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 6,
+                      ),
+                      child: Text(
+                        'حسناً، سأنتظر',
+                        style: GoogleFonts.outfit(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Map<String, int> _getVipCountdownParts(DateTime? expiry) {
     if (expiry == null) return {'d': 0, 'h': 0, 'm': 0, 's': 0};
     final diff = expiry.difference(DateTime.now());
@@ -459,12 +684,11 @@ class _MainScreenState extends State<MainScreen> {
     };
   }
 
-
-
   void _showTradeReviewDialog(BuildContext context, TradingSignal signal) {
     final isWin = signal.status == 'WIN';
+    final isCall = signal.direction == 'CALL';
     final profitColor = isWin ? AppConstants.callGreen : AppConstants.putRed;
-    final outcomeText = isWin ? 'صفقة ناجحة' : 'صفقة خاسرة';
+    final exitP = signal.exitPrice ?? signal.currentPrice;
 
     showDialog(
       context: context,
@@ -498,14 +722,14 @@ class _MainScreenState extends State<MainScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Title / Header
+                  // ── Header ──
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(
                         isWin
                             ? Icons.check_circle_outline_rounded
-                            : Icons.info_outline_rounded,
+                            : Icons.cancel_outlined,
                         color: profitColor,
                         size: 26,
                       ),
@@ -522,9 +746,9 @@ class _MainScreenState extends State<MainScreen> {
                   ),
                   const Divider(color: AppConstants.borderGlow, height: 24),
 
-                  // Big Outcome Badge
+                  // ── Outcome badge ──
                   Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
                     decoration: BoxDecoration(
                       color: profitColor.withAlpha(15),
                       borderRadius: BorderRadius.circular(12),
@@ -533,22 +757,29 @@ class _MainScreenState extends State<MainScreen> {
                         width: 1,
                       ),
                     ),
-                    child: Column(
-                      children: [
-                        Text(
-                          outcomeText,
-                          style: GoogleFonts.outfit(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: profitColor,
-                          ),
-                        ),
-                      ],
+                    child: Text(
+                      isWin ? '✅  صفقة ناجحة' : '❌  صفقة خاسرة',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.outfit(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: profitColor,
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
 
-                  // Trade Stats Table
+                  // ── Mini price chart ──
+                  _buildMiniPriceChart(
+                    signal,
+                    isWin,
+                    isCall,
+                    profitColor,
+                    exitP,
+                  ),
+                  const SizedBox(height: 14),
+
+                  // ── Stats table ──
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -561,23 +792,23 @@ class _MainScreenState extends State<MainScreen> {
                     child: Column(
                       children: [
                         _buildDialogStatRow(
-                          'زوج العملات / الأصول',
-                          signal.pair,
+                          'زوج العملات',
+                          signal.pair.replaceAll(' (OTC)', ''),
                         ),
                         const Divider(
                           color: AppConstants.borderGlow,
                           height: 16,
                         ),
                         _buildDialogStatRow(
-                          'نوع الاتجاه',
-                          signal.direction == 'CALL' ? 'صعود 🟢' : 'هبوط 🔴',
+                          'الاتجاه',
+                          isCall ? 'صعود  🟢' : 'هبوط  🔴',
                         ),
                         const Divider(
                           color: AppConstants.borderGlow,
                           height: 16,
                         ),
                         _buildDialogStatRow(
-                          'مستوى الدخول',
+                          'سعر الدخول',
                           AppConstants.formatPrice(signal.entryPrice),
                         ),
                         const Divider(
@@ -585,17 +816,15 @@ class _MainScreenState extends State<MainScreen> {
                           height: 16,
                         ),
                         _buildDialogStatRow(
-                          'مستوى الإغلاق',
-                          AppConstants.formatPrice(
-                            signal.exitPrice ?? signal.currentPrice,
-                          ),
+                          'سعر الإغلاق',
+                          AppConstants.formatPrice(exitP),
                         ),
                         const Divider(
                           color: AppConstants.borderGlow,
                           height: 16,
                         ),
                         _buildDialogStatRow(
-                          'المدة المحددة',
+                          'المدة',
                           '${signal.durationMinutes} دقيقة',
                         ),
                       ],
@@ -603,10 +832,11 @@ class _MainScreenState extends State<MainScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // Continue Button
+                  // ── Continue button ──
                   ElevatedButton(
                     onPressed: () {
                       Navigator.of(context).pop();
+                      _signalEngine.clearActiveSignal();
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppConstants.accentBlue,
@@ -618,18 +848,13 @@ class _MainScreenState extends State<MainScreen> {
                       shadowColor: AppConstants.accentBlue.withAlpha(120),
                       elevation: 8,
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          'متابعة الصفقة التالية 🚀',
-                          style: GoogleFonts.outfit(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
+                    child: Text(
+                      'متابعة الصفقة التالية 🚀',
+                      style: GoogleFonts.outfit(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ],
@@ -638,6 +863,191 @@ class _MainScreenState extends State<MainScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildMiniPriceChart(
+    TradingSignal signal,
+    bool isWin,
+    bool isCall,
+    Color profitColor,
+    double exitP,
+  ) {
+    final diff = exitP - signal.entryPrice;
+    final absDiff = diff.abs();
+    // Pips for forex (4-decimal): multiply by 10000. For JPY: multiply by 100. Fallback: raw diff.
+    final isJpy = signal.pair.toUpperCase().contains('JPY');
+    double pipsVal;
+    String pipsLabel;
+    if (absDiff < 1.0) {
+      pipsVal = isJpy ? absDiff * 100 : absDiff * 10000;
+      pipsLabel = '${diff >= 0 ? '+' : '-'}${pipsVal.toStringAsFixed(1)} pips';
+    } else {
+      pipsLabel = '${diff >= 0 ? '+' : ''}${absDiff.toStringAsFixed(5)}';
+    }
+
+    // Positions: entry in center, exit above/below based on movement
+    // For CALL WIN: exit > entry → exit is on top
+    // For CALL LOSS: exit < entry → exit is on bottom
+    final exitOnTop = exitP >= signal.entryPrice;
+
+    return Container(
+      height: 112,
+      decoration: BoxDecoration(
+        color: AppConstants.spaceBackground.withAlpha(200),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppConstants.borderGlow.withAlpha(100)),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Stack(
+          children: [
+            // Background painted layer (shaded zone + lines)
+            Positioned.fill(
+              child: CustomPaint(
+                painter: _MiniPricePainter(
+                  entryPrice: signal.entryPrice,
+                  exitPrice: exitP,
+                  profitColor: profitColor,
+                ),
+              ),
+            ),
+            // Price labels & arrow overlay
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Left column: top price / bottom price labels
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        AppConstants.formatPrice(
+                          exitOnTop ? exitP : signal.entryPrice,
+                        ),
+                        style: GoogleFonts.outfit(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: exitOnTop
+                              ? profitColor
+                              : AppConstants.textSecondary,
+                        ),
+                      ),
+                      Text(
+                        exitOnTop ? 'إغلاق' : 'دخول',
+                        style: GoogleFonts.outfit(
+                          fontSize: 9,
+                          color: exitOnTop
+                              ? profitColor
+                              : AppConstants.textSecondary,
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        exitOnTop ? 'دخول' : 'إغلاق',
+                        style: GoogleFonts.outfit(
+                          fontSize: 9,
+                          color: exitOnTop
+                              ? AppConstants.textSecondary
+                              : profitColor,
+                        ),
+                      ),
+                      Text(
+                        AppConstants.formatPrice(
+                          exitOnTop ? signal.entryPrice : exitP,
+                        ),
+                        style: GoogleFonts.outfit(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: exitOnTop
+                              ? AppConstants.textSecondary
+                              : profitColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                  // Center: arrow + pips
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          exitOnTop
+                              ? Icons.arrow_upward_rounded
+                              : Icons.arrow_downward_rounded,
+                          color: profitColor,
+                          size: 22,
+                        ),
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: profitColor.withAlpha(25),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: profitColor.withAlpha(80),
+                            ),
+                          ),
+                          child: Text(
+                            pipsLabel,
+                            style: GoogleFonts.outfit(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: profitColor,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          isCall ? '▲ CALL' : '▼ PUT',
+                          style: GoogleFonts.outfit(
+                            fontSize: 9,
+                            color: isCall
+                                ? AppConstants.callGreen
+                                : AppConstants.putRed,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Right column: mirror labels
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        exitOnTop ? 'سعر الخروج' : 'سعر الدخول',
+                        style: GoogleFonts.outfit(
+                          fontSize: 9,
+                          color: exitOnTop
+                              ? profitColor.withAlpha(180)
+                              : AppConstants.textSecondary,
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        exitOnTop ? 'سعر الدخول' : 'سعر الخروج',
+                        style: GoogleFonts.outfit(
+                          fontSize: 9,
+                          color: exitOnTop
+                              ? AppConstants.textSecondary
+                              : profitColor.withAlpha(180),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -678,80 +1088,91 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _startChartModeListener() {
-    _chartModeListener?.cancel();
-    _chartModeListener = FirebaseFirestore.instance
-        .collection('configs')
-        .doc('chart_settings')
-        .snapshots()
-        .listen((doc) {
-      if (!doc.exists || !mounted) return;
-      final data = doc.data();
-      if (data == null) return;
-      final mode = data['mode'] as String? ?? 'sim';
-      final resolved = mode == 'tv' ? 'tv' : 'sim';
-      if (resolved != _chartMode) {
-        setState(() {
-          _chartMode = resolved;
-          // OTC tab/pairs are hidden in tv mode — fall back to forex
-          if (resolved == 'tv' && _selectedCategory == 'otc') {
-            _selectedCategory = 'forex';
-          }
-        });
-      }
-    });
+    try {
+      _chartModeListener?.cancel();
+      _chartModeListener = Supabase.instance.client
+          .from('configs')
+          .stream(primaryKey: ['id'])
+          .eq('id', 'chart_settings')
+          .listen((rows) {
+            if (rows.isEmpty || !mounted) return;
+            final data = rows.first['data'] as Map<String, dynamic>? ?? {};
+            final mode = data['mode'] as String? ?? 'sim';
+            final resolved = mode == 'tv' ? 'tv' : 'sim';
+            if (resolved != _chartMode) setState(() { _chartMode = resolved; });
+          });
+    } catch (_) {}
   }
 
   void _startPairsListener() {
-    _pairsListener?.cancel();
-    _pairsListener = FirebaseFirestore.instance
-        .collection('pairs')
-        .orderBy('order')
-        .snapshots()
-        .listen((snap) {
-      if (!mounted) return;
-      final pairs = snap.docs.map((d) {
-        final data = d.data();
-        return <String, dynamic>{
-          'id':          d.id,
-          'symbol':      data['symbol']      as String? ?? '',
-          'chartSymbol': data['chartSymbol'] as String? ?? '',
-          'category':    data['category']    as String? ?? 'forex',
-          'type':        data['type']        as String? ?? 'forex',
-        };
-      }).where((p) => (p['symbol'] as String).isNotEmpty).toList();
+    try {
+      _pairsListener?.cancel();
+      _pairsListener = Supabase.instance.client
+          .from('pairs')
+          .stream(primaryKey: ['id'])
+          .listen((rows) {
+            if (!mounted) return;
+            final pairs = rows
+                .map((d) => <String, dynamic>{
+                      'id': d['id'],
+                      'symbol': d['symbol'] as String? ?? '',
+                      'chartSymbol': d['chart_symbol'] as String? ?? '',
+                      'category': d['category'] as String? ?? 'forex',
+                      'type': d['type'] as String? ?? 'forex',
+                      'order': d['order'] as int? ?? 0,
+                    })
+                .where((p) => (p['symbol'] as String).isNotEmpty)
+                .toList()
+              ..sort((a, b) => (a['order'] as int).compareTo(b['order'] as int));
 
-      setState(() {
-        AppConstants.currencyPairs = pairs;
-        if (_activeChartSymbol.isEmpty && pairs.isNotEmpty) {
-          _activeChartSymbol = pairs.first['chartSymbol'] as String? ?? '';
-        }
-      });
-    });
+            setState(() {
+              AppConstants.currencyPairs = pairs;
+
+              // Verify active pair is still in the new list
+              final activeExists = pairs.any(
+                (p) => p['symbol'] == _signalEngine.activePair,
+              );
+              if (!activeExists && pairs.isNotEmpty) {
+                final firstForex = pairs.firstWhere(
+                  (p) => (p['category'] as String? ?? '') == 'forex',
+                  orElse: () => pairs.first,
+                );
+                _activeChartSymbol =
+                    firstForex['chartSymbol'] as String? ?? '';
+                final firstSymbol = firstForex['symbol'] as String? ?? '';
+                if (firstSymbol.isNotEmpty)
+                  _signalEngine.selectPair(firstSymbol);
+              }
+            });
+          });
+    } catch (_) {}
   }
 
   void _startStrategyListeners() {
-    _stdStrategyListener?.cancel();
-    _vipStrategyListener?.cancel();
+    try {
+      _stdStrategyListener?.cancel();
+      _vipStrategyListener?.cancel();
 
-    _stdStrategyListener = FirebaseFirestore.instance
-        .collection('configs')
-        .doc('strategy_standard')
-        .snapshots()
-        .listen((doc) {
-      if (!doc.exists || !mounted) return;
-      final data = doc.data();
-      if (data != null) _signalEngine.updateStandardStrategy(data);
-    });
+      _stdStrategyListener = Supabase.instance.client
+          .from('configs')
+          .stream(primaryKey: ['id'])
+          .eq('id', 'strategy_standard')
+          .listen((rows) {
+            if (rows.isEmpty || !mounted) return;
+            final data = rows.first['data'] as Map<String, dynamic>? ?? {};
+            if (data.isNotEmpty) _signalEngine.updateStandardStrategy(data);
+          });
 
-    _vipStrategyListener = FirebaseFirestore.instance
-        .collection('configs')
-        .doc('strategy_vip')
-        .snapshots()
-        .listen((doc) {
-      if (!doc.exists || !mounted) return;
-      final data = doc.data();
-      if (data != null) _signalEngine.updateVipStrategy(data);
-    });
+      _vipStrategyListener = Supabase.instance.client
+          .from('configs')
+          .stream(primaryKey: ['id'])
+          .eq('id', 'strategy_vip')
+          .listen((rows) {
+            if (rows.isEmpty || !mounted) return;
+            final data = rows.first['data'] as Map<String, dynamic>? ?? {};
+            if (data.isNotEmpty) _signalEngine.updateVipStrategy(data);
+          });
+    } catch (_) {}
   }
 
   @override
@@ -883,7 +1304,9 @@ class _MainScreenState extends State<MainScreen> {
                 children: [
                   Flexible(
                     child: Text(
-                      isVip ? 'VIP USER: $_userAccountId' : 'USER: $_userAccountId',
+                      isVip
+                          ? 'VIP USER: $_userAccountId'
+                          : 'USER: $_userAccountId',
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.outfit(
                         fontSize: 14,
@@ -903,14 +1326,16 @@ class _MainScreenState extends State<MainScreen> {
                       color: isVip ? Colors.amber : Colors.grey.shade700,
                       borderRadius: BorderRadius.circular(4),
                       border: Border.all(
-                        color: isVip ? Colors.amberAccent : Colors.white.withAlpha(50),
+                        color: isVip
+                            ? Colors.amberAccent
+                            : Colors.white.withAlpha(50),
                       ),
                       boxShadow: isVip
                           ? [
                               BoxShadow(
                                 color: Colors.amber.withAlpha(80),
                                 blurRadius: 4,
-                              )
+                              ),
                             ]
                           : null,
                     ),
@@ -951,8 +1376,12 @@ class _MainScreenState extends State<MainScreen> {
                       child: Padding(
                         padding: const EdgeInsets.all(1.0),
                         child: _brokerLogoUrl.isNotEmpty
-                            ? Image.network(_brokerLogoUrl, fit: BoxFit.contain,
-                                errorBuilder: (ctx, err, stack) => _brokerLogoFallback())
+                            ? Image.network(
+                                _brokerLogoUrl,
+                                fit: BoxFit.contain,
+                                errorBuilder: (ctx, err, stack) =>
+                                    _brokerLogoFallback(),
+                              )
                             : _brokerLogoFallback(),
                       ),
                     ),
@@ -960,7 +1389,9 @@ class _MainScreenState extends State<MainScreen> {
                   const SizedBox(width: 6),
                   Flexible(
                     child: Text(
-                      isVip ? 'منصة التداول: $_userBroker VIP' : 'منصة التداول: $_userBroker',
+                      isVip
+                          ? 'منصة التداول: $_userBroker VIP'
+                          : 'منصة التداول: $_userBroker',
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.outfit(
                         fontSize: 11,
@@ -1027,7 +1458,7 @@ class _MainScreenState extends State<MainScreen> {
                 color: Colors.amber.withAlpha(60),
                 blurRadius: 12,
                 offset: const Offset(0, 2),
-              )
+              ),
             ],
           ),
           child: Row(
@@ -1059,10 +1490,7 @@ class _MainScreenState extends State<MainScreen> {
         borderRadius: BorderRadius.circular(7),
         border: Border.all(color: Colors.amber.withAlpha(100), width: 1),
         boxShadow: [
-          BoxShadow(
-            color: Colors.amber.withAlpha(30),
-            blurRadius: 6,
-          )
+          BoxShadow(color: Colors.amber.withAlpha(30), blurRadius: 6),
         ],
       ),
       child: Column(
@@ -1113,7 +1541,9 @@ class _MainScreenState extends State<MainScreen> {
           },
           icon: Icon(
             _soundEnabled ? Icons.volume_up_rounded : Icons.volume_off_rounded,
-            color: _soundEnabled ? AppConstants.accentCyan : AppConstants.textSecondary,
+            color: _soundEnabled
+                ? AppConstants.accentCyan
+                : AppConstants.textSecondary,
             size: 20,
           ),
           tooltip: 'Sound Notifications',
@@ -1151,14 +1581,14 @@ class _MainScreenState extends State<MainScreen> {
         children: [
           // Category Selector Row
           Container(
-            height: 48,
-            padding: const EdgeInsets.symmetric(vertical: 8),
+            height: 88,
+            padding: const EdgeInsets.symmetric(vertical: 10),
             decoration: const BoxDecoration(
               border: Border(bottom: BorderSide(color: Color(0xFF1E1736))),
             ),
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Row(
                 children: [
                   _buildCategoryTab(
@@ -1166,16 +1596,7 @@ class _MainScreenState extends State<MainScreen> {
                     'فوركس',
                     Icons.currency_exchange_rounded,
                   ),
-                  _buildCategoryTab(
-                    'otc',
-                    'OTC',
-                    Icons.bolt_rounded,
-                  ),
-                  _buildCategoryTab(
-                    'metals',
-                    'معادن',
-                    Icons.diamond_rounded,
-                  ),
+                  _buildCategoryTab('metals', 'معادن', Icons.diamond_rounded),
                   _buildCategoryTab(
                     'commodities',
                     'سلع',
@@ -1225,7 +1646,7 @@ class _MainScreenState extends State<MainScreen> {
                     Row(
                       children: [
                         Text(
-                          _signalEngine.activePair,
+                          _signalEngine.activePair.replaceAll(' (OTC)', ''),
                           style: GoogleFonts.outfit(
                             fontSize: 15,
                             fontWeight: FontWeight.bold,
@@ -1234,25 +1655,6 @@ class _MainScreenState extends State<MainScreen> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        if (_signalEngine.activePair.contains('OTC'))
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppConstants.warningOrange.withAlpha(35),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              'OTC',
-                              style: GoogleFonts.outfit(
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
-                                color: AppConstants.warningOrange,
-                              ),
-                            ),
-                          ),
                         const SizedBox(width: 12),
                         Icon(
                           Icons.currency_exchange_rounded,
@@ -1279,27 +1681,15 @@ class _MainScreenState extends State<MainScreen> {
       builder: (BuildContext context) {
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setModalState) {
-            // OTC: Firestore pairs added by admin + server-scraped pairs
-            final List<Map<String, dynamic>> sourcePairs;
-            if (_selectedCategory == 'otc') {
-              final firestoreOtc = AppConstants.currencyPairs
-                  .where((p) => p['category'] == 'otc')
-                  .toList();
-              final serverOnly = _otcPairs.cast<Map<String, dynamic>>()
-                  .where((p) => !firestoreOtc.any((f) => f['chartSymbol'] == p['chartSymbol']))
-                  .toList();
-              sourcePairs = [...firestoreOtc, ...serverOnly];
-            } else {
-              sourcePairs = AppConstants.currencyPairs
-                  .where((pair) => pair['category'] == _selectedCategory)
-                  .toList();
-            }
+            final sourcePairs = AppConstants.currencyPairs
+                .where((pair) => pair['category'] == _selectedCategory)
+                .toList();
 
             final filteredPairs = sourcePairs.where((pair) {
               if (_searchQuery.isEmpty) return true;
-              return (pair['symbol'] as String)
-                  .toLowerCase()
-                  .contains(_searchQuery.toLowerCase());
+              return (pair['symbol'] as String).toLowerCase().contains(
+                _searchQuery.toLowerCase(),
+              );
             }).toList();
 
             return Container(
@@ -1399,24 +1789,10 @@ class _MainScreenState extends State<MainScreen> {
 
                   // List of pairs
                   Expanded(
-                    child: _selectedCategory == 'otc' && _otcPairsLoading
-                        ? Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                CircularProgressIndicator(color: AppConstants.warningOrange, strokeWidth: 2),
-                                const SizedBox(height: 12),
-                                Text('جاري جلب أزواج OTC من السيرفر...',
-                                    style: GoogleFonts.outfit(color: AppConstants.textSecondary, fontSize: 12)),
-                              ],
-                            ),
-                          )
-                        : filteredPairs.isEmpty
+                    child: filteredPairs.isEmpty
                         ? Center(
                             child: Text(
-                              _selectedCategory == 'otc'
-                                  ? 'لا توجد أزواج OTC متاحة حالياً\nأضف أزواج OTC من لوحة الأدمن'
-                                  : 'لا توجد أصول تطابق البحث',
+                              'لا توجد أصول تطابق البحث',
                               textAlign: TextAlign.center,
                               style: GoogleFonts.outfit(
                                 color: AppConstants.textSecondary,
@@ -1443,8 +1819,10 @@ class _MainScreenState extends State<MainScreen> {
                                 child: InkWell(
                                   onTap: () {
                                     _signalEngine.selectPair(pair['symbol']);
-                                    final cs = pair['chartSymbol'] as String? ?? '';
-                                    if (cs.isNotEmpty) setState(() => _activeChartSymbol = cs);
+                                    final cs =
+                                        pair['chartSymbol'] as String? ?? '';
+                                    if (cs.isNotEmpty)
+                                      setState(() => _activeChartSymbol = cs);
                                     Navigator.pop(context);
                                   },
                                   borderRadius: BorderRadius.circular(12),
@@ -1500,38 +1878,14 @@ class _MainScreenState extends State<MainScreen> {
                                                 ),
                                               ),
                                             ),
-                                            const SizedBox(width: 8),
-                                            if (pair['type'] == 'OTC')
-                                              Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 6,
-                                                      vertical: 3,
-                                                    ),
-                                                decoration: BoxDecoration(
-                                                  color: AppConstants
-                                                      .warningOrange
-                                                      .withAlpha(30),
-                                                  borderRadius:
-                                                      BorderRadius.circular(4),
-                                                ),
-                                                child: Text(
-                                                  'OTC',
-                                                  style: GoogleFonts.outfit(
-                                                    fontSize: 10,
-                                                    fontWeight: FontWeight.bold,
-                                                    color: AppConstants
-                                                        .warningOrange,
-                                                  ),
-                                                ),
-                                              ),
                                           ],
                                         ),
                                         // Right side: Symbol + optional label
                                         Row(
                                           children: [
                                             Text(
-                                              pair['symbol'],
+                                              (pair['symbol'] as String)
+                                                  .replaceAll(' (OTC)', ''),
                                               style: GoogleFonts.outfit(
                                                 fontSize: 14,
                                                 fontWeight: FontWeight.bold,
@@ -1572,30 +1926,39 @@ class _MainScreenState extends State<MainScreen> {
   Widget _buildCategoryTab(String categoryId, String label, IconData icon) {
     final isSelected = _selectedCategory == categoryId;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 6),
       child: InkWell(
         onTap: () {
           setState(() => _selectedCategory = categoryId);
-          if (categoryId == 'otc') _fetchOtcPairs();
         },
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(12),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          duration: const Duration(milliseconds: 250),
+          width: 95,
+          height: 64,
           decoration: BoxDecoration(
             color: isSelected
-                ? AppConstants.accentCyan.withAlpha(25)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(20),
+                ? AppConstants.accentCyan.withAlpha(20)
+                : AppConstants.cardBgColor.withAlpha(150),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: isSelected
-                  ? AppConstants.accentCyan.withAlpha(150)
-                  : Colors.transparent,
-              width: 1,
+                  ? AppConstants.accentCyan
+                  : AppConstants.borderGlow,
+              width: 1.5,
             ),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: AppConstants.accentCyan.withAlpha(30),
+                      blurRadius: 10,
+                      spreadRadius: 1,
+                    )
+                  ]
+                : [],
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
                 icon,
@@ -1654,6 +2017,8 @@ class _MainScreenState extends State<MainScreen> {
         _buildSignalHistoryCard(),
         const SizedBox(height: 20),
         _buildLiveFeedCard(),
+        const SizedBox(height: 20),
+        _buildSocialCards(),
       ],
     );
   }
@@ -1670,10 +2035,10 @@ class _MainScreenState extends State<MainScreen> {
     final accentColor = signal == null || _signalEngine.isAnalyzing
         ? AppConstants.accentCyan
         : signal.direction == 'WAIT'
-            ? AppConstants.warningOrange
-            : signal.direction == 'CALL'
-                ? AppConstants.callGreen
-                : AppConstants.putRed;
+        ? AppConstants.warningOrange
+        : signal.direction == 'CALL'
+        ? AppConstants.callGreen
+        : AppConstants.putRed;
 
     return _buildGlassCard(
       borderColor: isActive ? accentColor.withAlpha(100) : null,
@@ -1691,29 +2056,37 @@ class _MainScreenState extends State<MainScreen> {
                     color: AppConstants.accentCyan.withAlpha(15),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(Icons.candlestick_chart_rounded,
-                      color: AppConstants.accentCyan, size: 16),
+                  child: Icon(
+                    Icons.candlestick_chart_rounded,
+                    color: AppConstants.accentCyan,
+                    size: 16,
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('LIVE CHART',
-                          style: GoogleFonts.outfit(
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold,
-                              color: AppConstants.textSecondary,
-                              letterSpacing: 1.5)),
                       Text(
-                          chartSymbol
-                              .replaceFirst(RegExp(r'^[A-Z]+:'), '')
-                              .replaceAll('_', '/'),
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.outfit(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w900,
-                              color: Colors.white)),
+                        'LIVE CHART',
+                        style: GoogleFonts.outfit(
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                          color: AppConstants.textSecondary,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                      Text(
+                        chartSymbol
+                            .replaceFirst(RegExp(r'^[A-Z]+:'), '')
+                            .replaceAll('_', '/'),
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.outfit(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.white,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -1721,9 +2094,13 @@ class _MainScreenState extends State<MainScreen> {
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
-                    children: ['1m', '5m', '15m', '1h', '1D']
-                        .map(_buildTimeframeButton)
-                        .toList(),
+                    children: [
+                      '1m',
+                      '5m',
+                      '15m',
+                      '1h',
+                      '1D',
+                    ].map(_buildTimeframeButton).toList(),
                   ),
                 ),
               ],
@@ -1732,7 +2109,6 @@ class _MainScreenState extends State<MainScreen> {
 
           // ── Chart ──
           TradingViewChart(
-            key: ValueKey('$chartSymbol-$_chartMode'),
             symbol: chartSymbol,
             interval: tf,
             mode: _chartMode,
@@ -1740,6 +2116,9 @@ class _MainScreenState extends State<MainScreen> {
             signalDirection: isActive ? signal!.direction : null,
             signalEntryPrice: signal?.entryPrice,
             signalDurationMin: signal?.durationMinutes,
+            signalSecondsRemaining: isActive
+                ? _signalEngine.secondsRemaining
+                : null,
             onReady: (getter) => _tvPriceGetter = getter,
           ),
 
@@ -1806,46 +2185,63 @@ class _MainScreenState extends State<MainScreen> {
         padding: const EdgeInsets.all(14),
         child: Column(
           children: [
-            Row(children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: AppConstants.accentCyan.withAlpha(15),
-                  shape: BoxShape.circle,
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: AppConstants.accentCyan.withAlpha(15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.psychology_rounded,
+                    color: AppConstants.accentCyan,
+                    size: 16,
+                  ),
                 ),
-                child: Icon(Icons.psychology_rounded,
-                    color: AppConstants.accentCyan, size: 16),
-              ),
-              const SizedBox(width: 8),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('VIP ALGORITHM SENSOR',
+                const SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'VIP ALGORITHM SENSOR',
                       style: GoogleFonts.outfit(
-                          fontSize: 9,
-                          fontWeight: FontWeight.bold,
-                          color: AppConstants.textSecondary,
-                          letterSpacing: 1.5)),
-                  const SizedBox(height: 2),
-                  Text('التحليل جاهز للاستخراج',
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                        color: AppConstants.textSecondary,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'التحليل جاهز للاستخراج',
                       style: GoogleFonts.outfit(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.white)),
-                ],
-              ),
-            ]),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
             const Divider(color: AppConstants.borderGlow, height: 16),
             Text(
-              'اضغط أدناه لبدء تحليل شامل للزوج ${_signalEngine.activePair} بفريم ${_signalEngine.chartTimeframe} واستخراج الصفقة ذات الاحتمالية الأكبر.',
+              'اضغط أدناه لبدء تحليل شامل للزوج ${_signalEngine.activePair.replaceAll(' (OTC)', '')} بفريم ${_signalEngine.chartTimeframe} واستخراج الصفقة ذات الاحتمالية الأكبر.',
               textAlign: TextAlign.center,
               style: GoogleFonts.outfit(
-                  fontSize: 11, color: AppConstants.textSecondary, height: 1.4),
+                fontSize: 11,
+                color: AppConstants.textSecondary,
+                height: 1.4,
+              ),
             ),
             const SizedBox(height: 12),
             _buildDurationSelector(),
             const SizedBox(height: 12),
-            _buildRequestButton(enabled: true, text: 'استخراج الإشارة التالية ⚡'),
+            _buildRequestButton(
+              enabled: true,
+              text: 'استخراج الإشارة التالية ⚡',
+            ),
           ],
         ),
       );
@@ -1877,10 +2273,10 @@ class _MainScreenState extends State<MainScreen> {
                   color: isWait
                       ? AppConstants.warningOrange
                       : (isActive
-                          ? AppConstants.textSecondary
-                          : (signal.status == 'WIN'
-                              ? AppConstants.callGreen
-                              : AppConstants.putRed)),
+                            ? AppConstants.textSecondary
+                            : (signal.status == 'WIN'
+                                  ? AppConstants.callGreen
+                                  : AppConstants.putRed)),
                   letterSpacing: 2,
                 ),
               ),
@@ -1891,217 +2287,234 @@ class _MainScreenState extends State<MainScreen> {
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: accentColor.withAlpha(80)),
                 ),
-                child: Row(children: [
-                  Icon(
-                    isWait
-                        ? Icons.hourglass_empty_rounded
-                        : (isCall
-                            ? Icons.arrow_upward_rounded
-                            : Icons.arrow_downward_rounded),
-                    color: accentColor,
-                    size: 14,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    isWait ? 'انتظار (WAIT)' : (isCall ? 'صعود (CALL)' : 'هبوط (PUT)'),
-                    style: GoogleFonts.outfit(
+                child: Row(
+                  children: [
+                    Icon(
+                      isWait
+                          ? Icons.hourglass_empty_rounded
+                          : (isCall
+                                ? Icons.arrow_upward_rounded
+                                : Icons.arrow_downward_rounded),
+                      color: accentColor,
+                      size: 14,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      isWait
+                          ? 'انتظار (WAIT)'
+                          : (isCall ? 'صعود (CALL)' : 'هبوط (PUT)'),
+                      style: GoogleFonts.outfit(
                         fontSize: 11,
                         fontWeight: FontWeight.w900,
-                        color: accentColor),
-                  ),
-                ]),
+                        color: accentColor,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
-            const Divider(color: AppConstants.borderGlow, height: 16),
+          const Divider(color: AppConstants.borderGlow, height: 16),
 
-            // Grid of signals metrics
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
+          // Grid of signals metrics
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildSignalMetric(
+                label: 'STRIKE ACCURACY',
+                value: isWait
+                    ? 'N/A'
+                    : '${signal.confidence.toStringAsFixed(1)}%',
+                valueColor: isWait
+                    ? AppConstants.textSecondary
+                    : AppConstants.accentCyan,
+              ),
+              _buildSignalMetric(
+                label: 'ENTRY PRICE',
+                value: isWait
+                    ? 'N/A'
+                    : AppConstants.formatPrice(signal.entryPrice),
+                valueColor: isWait ? AppConstants.textSecondary : Colors.white,
+              ),
+              _buildSignalMetric(
+                label: 'TIMEFRAME',
+                value: '${signal.durationMinutes} MIN',
+                valueColor: AppConstants.warningOrange,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          if (isWait) ...[
+            // No transaction progress or result badge
+          ] else if (isActive) ...[
+            // Expiry countdown progress
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildSignalMetric(
-                  label: 'STRIKE ACCURACY',
-                  value: isWait ? 'N/A' : '${signal.confidence.toStringAsFixed(1)}%',
-                  valueColor: isWait ? AppConstants.textSecondary : AppConstants.accentCyan,
-                ),
-                _buildSignalMetric(
-                  label: 'ENTRY PRICE',
-                  value: isWait ? 'N/A' : AppConstants.formatPrice(signal.entryPrice),
-                  valueColor: isWait ? AppConstants.textSecondary : Colors.white,
-                ),
-                _buildSignalMetric(
-                  label: 'TIMEFRAME',
-                  value: '${signal.durationMinutes} MIN',
-                  valueColor: AppConstants.warningOrange,
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            if (isWait) ...[
-              // No transaction progress or result badge
-            ] else if (isActive) ...[
-              // Expiry countdown progress
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        remainingTime > 0
-                            ? 'ACTIVE TRANSACTION SECONDS'
-                            : 'FINISHING TRANSACTION...',
-                        style: GoogleFonts.outfit(
-                          fontSize: 9,
-                          color: AppConstants.textSecondary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      Text(
-                        '$remainingTime s',
-                        style: GoogleFonts.outfit(
-                          fontSize: 11,
-                          color: accentColor,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: LinearProgressIndicator(
-                      value: remainingTime / (signal.durationMinutes * 60),
-                      color: remainingTime <= 10
-                          ? AppConstants.warningOrange
-                          : accentColor,
-                      backgroundColor: AppConstants.spaceBackground,
-                      minHeight: 6,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Center(
-                    child: Text(
-                      _signalEngine.signalChangeNotice.isNotEmpty
-                          ? _signalEngine.signalChangeNotice
-                          : 'ملاحظة: بدأت هذه الصفقة مع بداية الشمعة الحالية',
-                      textAlign: TextAlign.center,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      remainingTime > 0
+                          ? 'ACTIVE TRANSACTION SECONDS'
+                          : 'FINISHING TRANSACTION...',
                       style: GoogleFonts.outfit(
-                        fontSize: 10,
-                        color: _signalEngine.signalChangeNotice.isNotEmpty
-                            ? AppConstants.warningOrange
-                            : AppConstants.accentCyan,
+                        fontSize: 9,
+                        color: AppConstants.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      '$remainingTime s',
+                      style: GoogleFonts.outfit(
+                        fontSize: 11,
+                        color: accentColor,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: LinearProgressIndicator(
+                    value: remainingTime / (signal.durationMinutes * 60),
+                    color: remainingTime <= 10
+                        ? AppConstants.warningOrange
+                        : accentColor,
+                    backgroundColor: AppConstants.spaceBackground,
+                    minHeight: 6,
                   ),
-                ],
-              ),
-            ] else ...[
-              // Completed Result Badge
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                decoration: BoxDecoration(
+                ),
+                const SizedBox(height: 8),
+                Center(
+                  child: Text(
+                    _signalEngine.signalChangeNotice.isNotEmpty
+                        ? _signalEngine.signalChangeNotice
+                        : 'ملاحظة: بدأت هذه الصفقة مع بداية الشمعة الحالية',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.outfit(
+                      fontSize: 10,
+                      color: _signalEngine.signalChangeNotice.isNotEmpty
+                          ? AppConstants.warningOrange
+                          : AppConstants.accentCyan,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ] else ...[
+            // Completed Result Badge
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              decoration: BoxDecoration(
+                color:
+                    (signal.status == 'WIN'
+                            ? AppConstants.callGreen
+                            : AppConstants.putRed)
+                        .withAlpha(15),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
                   color:
                       (signal.status == 'WIN'
                               ? AppConstants.callGreen
                               : AppConstants.putRed)
-                          .withAlpha(15),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color:
-                        (signal.status == 'WIN'
-                                ? AppConstants.callGreen
-                                : AppConstants.putRed)
-                            .withAlpha(40),
-                  ),
+                          .withAlpha(40),
                 ),
-                child: Center(
-                  child: Text(
-                    signal.status == 'WIN'
-                        ? 'SUCCESSFUL SIGNAL: WIN 🟢'
-                        : 'COMPLETED SIGNAL: LOSS 🔴',
-                    style: GoogleFonts.outfit(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: signal.status == 'WIN'
-                          ? AppConstants.callGreen
-                          : AppConstants.putRed,
-                    ),
+              ),
+              child: Center(
+                child: Text(
+                  signal.status == 'WIN'
+                      ? 'SUCCESSFUL SIGNAL: WIN 🟢'
+                      : 'COMPLETED SIGNAL: LOSS 🔴',
+                  style: GoogleFonts.outfit(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: signal.status == 'WIN'
+                        ? AppConstants.callGreen
+                        : AppConstants.putRed,
                   ),
                 ),
               ),
-            ],
-
-            // Recommendation Card (Market Condition & Action Recommendation)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(10),
-              margin: const EdgeInsets.only(top: 10),
-              decoration: BoxDecoration(
-                color: accentColor.withAlpha(15),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: accentColor.withAlpha(40)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        isWait ? Icons.warning_amber_rounded : Icons.gpp_good_rounded,
-                        color: accentColor,
-                        size: 14,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        isWait ? 'حالة السوق: تذبذب وحالة غير آمنة ⚠️' : 'حالة السوق: دخول آمن ومستقر ✅',
-                        style: GoogleFonts.outfit(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: accentColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    signal.marketCondition,
-                    style: GoogleFonts.outfit(
-                      fontSize: 11,
-                      color: AppConstants.textPrimary,
-                      height: 1.4,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'التوصية: ${signal.recommendation}',
-                    style: GoogleFonts.outfit(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: isWait ? AppConstants.warningOrange : AppConstants.accentCyan,
-                      height: 1.4,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 12),
-            if (!isActive) ...[
-              _buildDurationSelector(),
-              const SizedBox(height: 12),
-            ],
-            _buildRequestButton(
-              enabled: !isActive,
-              text: isActive
-                  ? 'الصفقة جارية حالياً...'
-                  : 'تحليل الصفقة التالية ⚡',
             ),
           ],
-        ),
+
+          // Recommendation Card (Market Condition & Action Recommendation)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(10),
+            margin: const EdgeInsets.only(top: 10),
+            decoration: BoxDecoration(
+              color: accentColor.withAlpha(15),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: accentColor.withAlpha(40)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      isWait
+                          ? Icons.warning_amber_rounded
+                          : Icons.gpp_good_rounded,
+                      color: accentColor,
+                      size: 14,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      isWait
+                          ? 'حالة السوق: تذبذب وحالة غير آمنة ⚠️'
+                          : 'حالة السوق: دخول آمن ومستقر ✅',
+                      style: GoogleFonts.outfit(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: accentColor,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  signal.marketCondition,
+                  style: GoogleFonts.outfit(
+                    fontSize: 11,
+                    color: AppConstants.textPrimary,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'التوصية: ${signal.recommendation}',
+                  style: GoogleFonts.outfit(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: isWait
+                        ? AppConstants.warningOrange
+                        : AppConstants.accentCyan,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 12),
+          if (!isActive) ...[
+            _buildDurationSelector(),
+            const SizedBox(height: 12),
+          ],
+          _buildRequestButton(
+            enabled: !isActive,
+            text: isActive
+                ? 'الصفقة جارية حالياً...'
+                : 'تحليل الصفقة التالية ⚡',
+          ),
+        ],
+      ),
     );
   }
 
@@ -2204,7 +2617,8 @@ class _MainScreenState extends State<MainScreen> {
               ? () {
                   _signalEngine.requestNextSignal(
                     _selectedMinutes,
-                    tvPriceGetter: _chartMode == 'tv' ? _tvPriceGetter : null,
+                    tvPriceGetter:
+                        _tvPriceGetter, // always pass — correct for both sim & TV
                   );
                 }
               : null,
@@ -2285,7 +2699,6 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-
   Widget _buildTimeframeButton(String tf) {
     final isSelected = _signalEngine.chartTimeframe == tf;
     return Padding(
@@ -2340,8 +2753,12 @@ class _MainScreenState extends State<MainScreen> {
     if (hasActiveSignal) {
       final isCall = _signalEngine.activeSignal!.direction == 'CALL';
       actionRecommendation = isCall ? 'CALL' : 'PUT';
-      recommendationColor = isCall ? AppConstants.callGreen : AppConstants.putRed;
-      recommendationIcon = isCall ? Icons.trending_up_rounded : Icons.trending_down_rounded;
+      recommendationColor = isCall
+          ? AppConstants.callGreen
+          : AppConstants.putRed;
+      recommendationIcon = isCall
+          ? Icons.trending_up_rounded
+          : Icons.trending_down_rounded;
     }
 
     return _buildGlassCard(
@@ -2359,7 +2776,11 @@ class _MainScreenState extends State<MainScreen> {
                     color: AppConstants.accentCyan.withAlpha(15),
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: Icon(Icons.psychology_rounded, color: AppConstants.accentCyan, size: 14),
+                  child: Icon(
+                    Icons.psychology_rounded,
+                    color: AppConstants.accentCyan,
+                    size: 14,
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -2374,16 +2795,25 @@ class _MainScreenState extends State<MainScreen> {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
                     color: recommendationColor.withAlpha(20),
                     borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: recommendationColor.withAlpha(80)),
+                    border: Border.all(
+                      color: recommendationColor.withAlpha(80),
+                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(recommendationIcon, color: recommendationColor, size: 11),
+                      Icon(
+                        recommendationIcon,
+                        color: recommendationColor,
+                        size: 11,
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         actionRecommendation,
@@ -2404,30 +2834,57 @@ class _MainScreenState extends State<MainScreen> {
             // ── Compact Indicators Grid (4 circular gauges) ──
             Row(
               children: [
-                Expanded(child: _buildMiniIndicator(
-                  'RSI', rsi.toStringAsFixed(0),
-                  rsi / 100,
-                  rsi > 70 ? AppConstants.putRed : (rsi < 30 ? AppConstants.callGreen : AppConstants.accentCyan),
-                )),
+                Expanded(
+                  child: _buildMiniIndicator(
+                    'RSI',
+                    rsi.toStringAsFixed(0),
+                    rsi / 100,
+                    rsi > 70
+                        ? AppConstants.putRed
+                        : (rsi < 30
+                              ? AppConstants.callGreen
+                              : AppConstants.accentCyan),
+                  ),
+                ),
                 const SizedBox(width: 6),
-                Expanded(child: _buildMiniIndicator(
-                  'Stoch', stochK.toStringAsFixed(0),
-                  stochK / 100,
-                  stochK > 80 ? AppConstants.putRed : (stochK < 20 ? AppConstants.callGreen : AppConstants.accentCyan),
-                )),
+                Expanded(
+                  child: _buildMiniIndicator(
+                    'Stoch',
+                    stochK.toStringAsFixed(0),
+                    stochK / 100,
+                    stochK > 80
+                        ? AppConstants.putRed
+                        : (stochK < 20
+                              ? AppConstants.callGreen
+                              : AppConstants.accentCyan),
+                  ),
+                ),
                 const SizedBox(width: 6),
-                Expanded(child: _buildMiniIndicator(
-                  'ADX', adx.toStringAsFixed(0),
-                  adx / 100,
-                  adx > 35 ? AppConstants.callGreen : (adx > 20 ? AppConstants.warningOrange : AppConstants.textSecondary),
-                )),
+                Expanded(
+                  child: _buildMiniIndicator(
+                    'ADX',
+                    adx.toStringAsFixed(0),
+                    adx / 100,
+                    adx > 35
+                        ? AppConstants.callGreen
+                        : (adx > 20
+                              ? AppConstants.warningOrange
+                              : AppConstants.textSecondary),
+                  ),
+                ),
                 const SizedBox(width: 6),
-                Expanded(child: _buildMiniIndicator(
-                  'LIQ', '${_signalEngine.liquidityScore.toStringAsFixed(0)}%',
-                  _signalEngine.liquidityScore / 100,
-                  _signalEngine.liquidityZone.contains('Demand') ? AppConstants.callGreen
-                      : (_signalEngine.liquidityZone.contains('Supply') ? AppConstants.putRed : AppConstants.warningOrange),
-                )),
+                Expanded(
+                  child: _buildMiniIndicator(
+                    'LIQ',
+                    '${_signalEngine.liquidityScore.toStringAsFixed(0)}%',
+                    _signalEngine.liquidityScore / 100,
+                    _signalEngine.liquidityZone.contains('Demand')
+                        ? AppConstants.callGreen
+                        : (_signalEngine.liquidityZone.contains('Supply')
+                              ? AppConstants.putRed
+                              : AppConstants.warningOrange),
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 6),
@@ -2442,17 +2899,42 @@ class _MainScreenState extends State<MainScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _buildKeyMetric('VWAP', AppConstants.formatPrice(_signalEngine.vwapVal),
-                    _signalEngine.currentPrice > _signalEngine.vwapVal ? AppConstants.callGreen : AppConstants.putRed),
-                  _buildKeyMetric('CMF', cmf.toStringAsFixed(3),
-                    cmf > 0.05 ? AppConstants.callGreen : (cmf < -0.05 ? AppConstants.putRed : AppConstants.accentCyan)),
-                  _buildKeyMetric('Vol\u0394', '${volDelta.toStringAsFixed(0)}%',
-                    volDelta > 15 ? AppConstants.callGreen : (volDelta < -15 ? AppConstants.putRed : AppConstants.warningOrange)),
-                  _buildKeyMetric('Sent.', _signalEngine.marketSentiment.split(' ').first,
-                    _signalEngine.marketSentiment.contains('Bullish') || _signalEngine.marketSentiment.contains('Buy')
+                  _buildKeyMetric(
+                    'VWAP',
+                    AppConstants.formatPrice(_signalEngine.vwapVal),
+                    _signalEngine.currentPrice > _signalEngine.vwapVal
                         ? AppConstants.callGreen
-                        : (_signalEngine.marketSentiment.contains('Bearish') || _signalEngine.marketSentiment.contains('Sell')
-                            ? AppConstants.putRed : AppConstants.warningOrange)),
+                        : AppConstants.putRed,
+                  ),
+                  _buildKeyMetric(
+                    'CMF',
+                    cmf.toStringAsFixed(3),
+                    cmf > 0.05
+                        ? AppConstants.callGreen
+                        : (cmf < -0.05
+                              ? AppConstants.putRed
+                              : AppConstants.accentCyan),
+                  ),
+                  _buildKeyMetric(
+                    'Vol\u0394',
+                    '${volDelta.toStringAsFixed(0)}%',
+                    volDelta > 15
+                        ? AppConstants.callGreen
+                        : (volDelta < -15
+                              ? AppConstants.putRed
+                              : AppConstants.warningOrange),
+                  ),
+                  _buildKeyMetric(
+                    'Sent.',
+                    _signalEngine.marketSentiment.split(' ').first,
+                    _signalEngine.marketSentiment.contains('Bullish') ||
+                            _signalEngine.marketSentiment.contains('Buy')
+                        ? AppConstants.callGreen
+                        : (_signalEngine.marketSentiment.contains('Bearish') ||
+                                  _signalEngine.marketSentiment.contains('Sell')
+                              ? AppConstants.putRed
+                              : AppConstants.warningOrange),
+                  ),
                 ],
               ),
             ),
@@ -2463,7 +2945,12 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   // Mini circular indicator widget for compact display
-  Widget _buildMiniIndicator(String label, String value, double progress, Color color) {
+  Widget _buildMiniIndicator(
+    String label,
+    String value,
+    double progress,
+    Color color,
+  ) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
       decoration: BoxDecoration(
@@ -2533,85 +3020,364 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
+  // WIDGET: Social media follow cards
+  Widget _buildSocialCards() {
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: Supabase.instance.client
+          .from('configs')
+          .stream(primaryKey: ['id'])
+          .eq('id', 'social'),
+      builder: (context, snap) {
+        final rows = snap.data ?? [];
+        final data = rows.isNotEmpty
+            ? rows.first['data'] as Map<String, dynamic>? ?? {}
+            : <String, dynamic>{};
+        final ytUrl   = data['youtubeUrl']  as String? ?? 'https://www.youtube.com/@euro_trader';
+        final tgUrl   = data['telegramUrl'] as String? ?? 'https://t.me/euro_trd1';
+        final chatUrl = data['chatUrl']     as String? ?? 'https://t.me/euro_trd';
+
+        return _buildGlassCard(
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Directionality(
+              textDirection: TextDirection.rtl,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.share_rounded,
+                        color: AppConstants.accentCyan,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'تابعنا على السوشيال ميديا',
+                        style: GoogleFonts.outfit(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: AppConstants.textPrimary,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _socialBtn(
+                          icon: Icons.play_circle_fill_rounded,
+                          color: Colors.red,
+                          label: 'يوتيوب',
+                          sublabel: '@euro_trader',
+                          url: ytUrl,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _socialBtn(
+                          icon: Icons.send_rounded,
+                          color: const Color(0xFF29B6F6),
+                          label: 'تليجرام',
+                          sublabel: '@euro_trd1',
+                          url: tgUrl,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _socialBtn(
+                          icon: Icons.chat_bubble_rounded,
+                          color: AppConstants.warningOrange,
+                          label: 'تواصل معنا',
+                          sublabel: 'للتجديد والدعم',
+                          url: chatUrl,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _socialBtn({
+    required IconData icon,
+    required Color color,
+    required String label,
+    required String sublabel,
+    required String url,
+  }) {
+    return GestureDetector(
+      onTap: () => openBrowserTab(url),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+        decoration: BoxDecoration(
+          color: color.withAlpha(15),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withAlpha(60)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: color, size: 22),
+            const SizedBox(height: 5),
+            Text(
+              label,
+              style: GoogleFonts.outfit(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: AppConstants.textPrimary,
+              ),
+            ),
+            Text(
+              sublabel,
+              style: GoogleFonts.outfit(
+                fontSize: 9,
+                color: AppConstants.textSecondary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   // WIDGET: Real-time scrolling feed of VIP winners
   Widget _buildLiveFeedCard() {
     final logs = _signalEngine.socialWinLogs;
 
+    // Market closed — show closed room message instead of fake winners
+    if (_signalEngine.isWeekendClosed) {
+      return _buildGlassCard(
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.lock_clock_rounded,
+                    color: AppConstants.textSecondary.withAlpha(120),
+                    size: 16,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'VIP LIVE ROOM',
+                    style: GoogleFonts.outfit(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: AppConstants.textSecondary,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Icon(
+                Icons.schedule_rounded,
+                color: AppConstants.putRed.withAlpha(160),
+                size: 32,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'السوق مغلق حالياً',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.outfit(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: AppConstants.putRed.withAlpha(200),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'الغرفة ستعود للعمل مع فتح الأسواق',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.outfit(
+                  fontSize: 10,
+                  color: AppConstants.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return _buildGlassCard(
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // ── Header ──
             Row(
               children: [
-                Icon(
-                  Icons.people_alt_rounded,
-                  color: AppConstants.accentCyan,
-                  size: 16,
-                ),
+                _LivePulseDot(),
                 const SizedBox(width: 8),
                 Text(
-                  'LIVE VIP ROOM TRANSACTIONS',
+                  'VIP LIVE ROOM',
                   style: GoogleFonts.outfit(
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
-                    letterSpacing: 1.2,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppConstants.callGreen.withAlpha(20),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: AppConstants.callGreen.withAlpha(60),
+                    ),
+                  ),
+                  child: Text(
+                    '${12 + (logs.length % 8)} ONLINE',
+                    style: GoogleFonts.outfit(
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold,
+                      color: AppConstants.callGreen,
+                    ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            Container(
-              height: 80,
-              decoration: BoxDecoration(
-                color: AppConstants.spaceBackground.withAlpha(150),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppConstants.borderGlow),
-              ),
+            const SizedBox(height: 10),
+            // ── Feed ──
+            SizedBox(
+              height: 140,
               child: logs.isEmpty
                   ? Center(
-                      child: Text(
-                        'Awaiting new trades...',
-                        style: GoogleFonts.outfit(
-                          color: AppConstants.textSecondary,
-                          fontSize: 11,
-                        ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.hourglass_empty_rounded,
+                            color: AppConstants.textSecondary.withAlpha(100),
+                            size: 24,
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'في انتظار أولى الصفقات...',
+                            style: GoogleFonts.outfit(
+                              color: AppConstants.textSecondary,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
                       ),
                     )
-                  : ListView.builder(
+                  : ListView.separated(
                       itemCount: logs.length,
-                      padding: const EdgeInsets.all(8),
+                      separatorBuilder: (_, _) => const SizedBox(height: 5),
+                      padding: EdgeInsets.zero,
                       itemBuilder: (context, index) {
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 4.0),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.chevron_right_rounded,
-                                color: AppConstants.accentCyan,
-                                size: 12,
-                              ),
-                              const SizedBox(width: 4),
-                              Expanded(
-                                child: Text(
-                                  logs[index],
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 10.5,
-                                    color: Colors.white.withAlpha(200),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
+                        return _buildWinCard(logs[index]);
                       },
                     ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildWinCard(String log) {
+    // Parse: "VIP Name (ID***) won +$profit on ASSET DIR"
+    final isCall = log.contains('CALL');
+    final dirColor = isCall ? AppConstants.callGreen : AppConstants.putRed;
+    final dirIcon = isCall
+        ? Icons.arrow_upward_rounded
+        : Icons.arrow_downward_rounded;
+    // Extract profit amount
+    final profitMatch = RegExp(r'\+\$(\d+)').firstMatch(log);
+    final profit = profitMatch != null ? profitMatch.group(0)! : '+\$---';
+    // Extract name
+    final nameMatch = RegExp(r'VIP (\w+) \(').firstMatch(log);
+    final name = nameMatch != null ? nameMatch.group(1)! : 'Trader';
+    // Extract asset
+    final assetMatch = RegExp(r' on (.+?) (CALL|PUT)').firstMatch(log);
+    final asset = assetMatch != null ? assetMatch.group(1)! : '---';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: dirColor.withAlpha(10),
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(color: dirColor.withAlpha(40)),
+      ),
+      child: Row(
+        children: [
+          // Avatar circle
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: dirColor.withAlpha(25),
+              border: Border.all(color: dirColor.withAlpha(80)),
+            ),
+            child: Center(
+              child: Text(
+                name.isNotEmpty ? name[0].toUpperCase() : 'V',
+                style: GoogleFonts.outfit(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: dirColor,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Name + Asset
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'VIP $name',
+                  style: GoogleFonts.outfit(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                Text(
+                  asset,
+                  style: GoogleFonts.outfit(
+                    fontSize: 9,
+                    color: AppConstants.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Direction badge
+          Icon(dirIcon, color: dirColor, size: 13),
+          const SizedBox(width: 4),
+          // Profit
+          Text(
+            profit,
+            style: GoogleFonts.outfit(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: dirColor,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -2904,7 +3670,7 @@ class _MainScreenState extends State<MainScreen> {
                                       Row(
                                         children: [
                                           Text(
-                                            sig.pair,
+                                            sig.pair.replaceAll(' (OTC)', ''),
                                             style: GoogleFonts.outfit(
                                               fontSize: 13,
                                               fontWeight: FontWeight.bold,
@@ -3070,4 +3836,149 @@ class _MainScreenState extends State<MainScreen> {
       child: ClipRRect(borderRadius: BorderRadius.circular(16), child: child),
     );
   }
+}
+
+// ── Live pulse dot (animated) ─────────────────────────────────────────────────
+
+class _LivePulseDot extends StatefulWidget {
+  @override
+  State<_LivePulseDot> createState() => _LivePulseDotState();
+}
+
+class _LivePulseDotState extends State<_LivePulseDot>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 1),
+    )..repeat(reverse: true);
+    _anim = Tween<double>(
+      begin: 0.4,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _anim,
+      builder: (_, _) => Container(
+        width: 8,
+        height: 8,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: AppConstants.callGreen.withValues(alpha: _anim.value),
+          boxShadow: [
+            BoxShadow(
+              color: AppConstants.callGreen.withValues(
+                alpha: _anim.value * 0.5,
+              ),
+              blurRadius: 6,
+              spreadRadius: 1,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Mini price chart painter ──────────────────────────────────────────────────
+
+class _MiniPricePainter extends CustomPainter {
+  final double entryPrice;
+  final double exitPrice;
+  final Color profitColor;
+
+  const _MiniPricePainter({
+    required this.entryPrice,
+    required this.exitPrice,
+    required this.profitColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final higher = entryPrice > exitPrice ? entryPrice : exitPrice;
+    final lower = entryPrice < exitPrice ? entryPrice : exitPrice;
+    final range = higher - lower;
+    const vPad = 18.0;
+
+    double entryY, exitY;
+    if (range == 0) {
+      entryY = size.height * 0.5;
+      exitY = size.height * 0.5;
+    } else {
+      final scale = (size.height - 2 * vPad) / range;
+      entryY = vPad + (higher - entryPrice) * scale;
+      exitY = vPad + (higher - exitPrice) * scale;
+    }
+
+    // Shaded zone between entry and exit
+    final top = exitY < entryY ? exitY : entryY;
+    final bottom = exitY > entryY ? exitY : entryY;
+    final shadeH = (bottom - top).clamp(4.0, size.height);
+    canvas.drawRect(
+      Rect.fromLTWH(0, top, size.width, shadeH),
+      Paint()..color = profitColor.withAlpha(22),
+    );
+
+    // Dashed entry line (neutral)
+    _dashedLine(
+      canvas,
+      size.width,
+      entryY,
+      const Color(0xFF8899AA),
+      dashed: true,
+    );
+    // Solid exit line (colored)
+    _dashedLine(canvas, size.width, exitY, profitColor);
+
+    // Dots
+    canvas.drawCircle(
+      Offset(size.width / 2, entryY),
+      3.5,
+      Paint()..color = const Color(0xFF8899AA),
+    );
+    canvas.drawCircle(
+      Offset(size.width / 2, exitY),
+      4.5,
+      Paint()..color = profitColor,
+    );
+  }
+
+  void _dashedLine(
+    Canvas canvas,
+    double width,
+    double y,
+    Color color, {
+    bool dashed = false,
+  }) {
+    final p = Paint()
+      ..color = color.withAlpha(dashed ? 120 : 200)
+      ..strokeWidth = dashed ? 1.0 : 1.5;
+    if (!dashed) {
+      canvas.drawLine(Offset(0, y), Offset(width, y), p);
+      return;
+    }
+    double x = 0;
+    while (x < width) {
+      canvas.drawLine(Offset(x, y), Offset((x + 5).clamp(0, width), y), p);
+      x += 10;
+    }
+  }
+
+  @override
+  bool shouldRepaint(_MiniPricePainter old) =>
+      old.entryPrice != entryPrice || old.exitPrice != exitPrice;
 }

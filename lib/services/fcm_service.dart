@@ -1,5 +1,5 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart';
 
 /// Background message handler — must be a top-level function
@@ -52,10 +52,10 @@ class FcmService {
 
   static Future<void> _saveToken(String accountId, String token) async {
     try {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(accountId)
-          .update({'fcmToken': token});
+      await Supabase.instance.client
+          .from('users')
+          .update({'fcm_token': token})
+          .eq('id', accountId);
     } catch (_) {}
   }
 }

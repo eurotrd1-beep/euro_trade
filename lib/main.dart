@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'firebase_options.dart';
+import 'supabase_config.dart';
 import 'constants.dart';
 import 'screens/splash_screen.dart';
 import 'services/fcm_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
   try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
+    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
     FcmService.setupBackgroundHandler();
   } catch (e) {
-    debugPrint('Firebase initialization failed: $e');
+    debugPrint('Firebase init failed: $e');
   }
   await _loadAppTheme();
   runApp(const EuroTradeApp());
@@ -22,13 +22,14 @@ void main() async {
 
 Future<void> _loadAppTheme() async {
   try {
-    final doc = await FirebaseFirestore.instance
-        .collection('configs')
-        .doc('theme')
-        .get()
+    final row = await Supabase.instance.client
+        .from('configs')
+        .select('data')
+        .eq('id', 'theme')
+        .maybeSingle()
         .timeout(const Duration(seconds: 3));
-    if (doc.exists) {
-      final data = doc.data()!;
+    if (row != null) {
+      final data = row['data'] as Map<String, dynamic>? ?? {};
       final primary   = data['primaryColor']   as int?;
       final secondary = data['secondaryColor'] as int?;
       if (primary   != null) AppConstants.accentCyan = Color(primary);

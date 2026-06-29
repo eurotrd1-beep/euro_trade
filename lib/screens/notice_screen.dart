@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../constants.dart';
 import '../utils/web_utils.dart';
 import '../widgets/particles.dart';
@@ -198,14 +198,14 @@ class _NoticeScreenState extends State<NoticeScreen> {
                       ),
                       const SizedBox(height: 20),
 
-                      // Dynamic broker cards from Firestore
-                      StreamBuilder<QuerySnapshot>(
-                        stream: FirebaseFirestore.instance
-                            .collection('brokers')
-                            .orderBy('order')
-                            .snapshots(),
+                      // Dynamic broker cards from Supabase
+                      StreamBuilder<List<Map<String, dynamic>>>(
+                        stream: Supabase.instance.client
+                            .from('brokers')
+                            .stream(primaryKey: ['id'])
+                            .order('order'),
                         builder: (context, snap) {
-                          final docs = snap.data?.docs ?? [];
+                          final docs = snap.data ?? [];
                           if (docs.isEmpty) {
                             return Center(
                               child: Padding(
@@ -217,22 +217,19 @@ class _NoticeScreenState extends State<NoticeScreen> {
                               ),
                             );
                           }
-                          final activeDocs = docs.where((doc) {
-                            final d = doc.data() as Map<String, dynamic>;
-                            return d['isActive'] as bool? ?? true;
-                          }).toList();
+                          final activeDocs = docs.where((d) => d['is_active'] as bool? ?? true).toList();
                           return Column(
                             children: activeDocs.asMap().entries.map((entry) {
                               final i = entry.key;
-                              final d = entry.value.data() as Map<String, dynamic>;
-                              final name       = d['name']             as String? ?? '';
-                              final logoUrl    = d['logoUrl']          as String? ?? '';
-                              final link       = d['registrationLink'] as String? ?? '';
-                              final clickKey   = d['clickKey']         as String? ?? name.toLowerCase().replaceAll(' ', '_');
-                              final isRec      = d['isRecommended']    as bool?   ?? false;
-                              final promoCode  = d['promoCode']        as String? ?? '';
-                              final bonusPct   = d['bonusPercent']     as int?    ?? 0;
-                              final minDep     = d['minDeposit']       as int?    ?? 0;
+                              final d = entry.value;
+                              final name       = d['name']              as String? ?? '';
+                              final logoUrl    = d['logo_url']          as String? ?? '';
+                              final link       = d['registration_link'] as String? ?? '';
+                              final clickKey   = d['click_key']         as String? ?? name.toLowerCase().replaceAll(' ', '_');
+                              final isRec      = d['is_recommended']    as bool?   ?? false;
+                              final promoCode  = d['promo_code']        as String? ?? '';
+                              final bonusPct   = d['bonus_percent']     as int?    ?? 0;
+                              final minDep     = d['min_deposit']       as int?    ?? 0;
                               return Column(children: [
                                 if (i > 0) const SizedBox(height: 16),
                                 _buildBrokerCard(

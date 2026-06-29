@@ -121,8 +121,9 @@ class VipAnalysisResult {
 
 class StrategyRule {
   final String indicator;
-  final String condition; // gt, lt, gte, lte, eq, neq, between, bullish, bearish
-  final String signal;    // CALL, PUT, dominant/confirm
+  final String
+  condition; // gt, lt, gte, lte, eq, neq, between, bullish, bearish
+  final String signal; // CALL, PUT, dominant/confirm
   final double score;
   final bool enabled;
 
@@ -165,19 +166,22 @@ class StrategyRule {
   factory StrategyRule.fromJson(Map<String, dynamic> j) => StrategyRule(
     indicator: j['indicator'] as String,
     condition: j['condition'] as String,
-    signal:    j['signal']    as String,
-    score:     (j['score'] as num).toDouble(),
-    enabled:   j['enabled'] as bool? ?? true,
-    role:      j['role']    as String? ?? '',
-    period:    (j['period'] as num?)?.toInt() ?? 14,
-    fast:      (j['fast']   as num?)?.toInt() ?? 9,
-    slow:      (j['slow']   as num?)?.toInt() ?? 21,
-    smooth:    (j['smooth'] as num?)?.toInt() ?? 3,
-    stddev:    (j['stddev'] as num?)?.toDouble() ?? 2.0,
-    value:     (j['value'] as num?)?.toDouble() ?? (j['level'] as num?)?.toDouble(),
-    valueMin:  (j['value_min'] as num?)?.toDouble(),
-    valueMax:  (j['value_max'] as num?)?.toDouble(),
-    pattern:   j['pattern'] as String? ?? j['session'] as String? ?? j['wave']?.toString(),
+    signal: j['signal'] as String,
+    score: (j['score'] as num).toDouble(),
+    enabled: j['enabled'] as bool? ?? true,
+    role: j['role'] as String? ?? '',
+    period: (j['period'] as num?)?.toInt() ?? 14,
+    fast: (j['fast'] as num?)?.toInt() ?? 9,
+    slow: (j['slow'] as num?)?.toInt() ?? 21,
+    smooth: (j['smooth'] as num?)?.toInt() ?? 3,
+    stddev: (j['stddev'] as num?)?.toDouble() ?? 2.0,
+    value: (j['value'] as num?)?.toDouble() ?? (j['level'] as num?)?.toDouble(),
+    valueMin: (j['value_min'] as num?)?.toDouble(),
+    valueMax: (j['value_max'] as num?)?.toDouble(),
+    pattern:
+        j['pattern'] as String? ??
+        j['session'] as String? ??
+        j['wave']?.toString(),
   );
 }
 
@@ -195,17 +199,19 @@ class PyramidConfig {
   final String waitMessage;
 
   const PyramidConfig({
-    this.minPrimaryScore    = 3.0,
-    this.confirmationRatio  = 0.5,
-    this.requireAllFilters  = true,
-    this.waitMessage        = 'الهرم لم يكتمل — انتظار الشمعة القادمة',
+    this.minPrimaryScore = 3.0,
+    this.confirmationRatio = 0.5,
+    this.requireAllFilters = true,
+    this.waitMessage = 'الهرم لم يكتمل — انتظار الشمعة القادمة',
   });
 
   factory PyramidConfig.fromJson(Map<String, dynamic> j) => PyramidConfig(
-    minPrimaryScore:   (j['min_primary_score']   as num?)?.toDouble() ?? 3.0,
-    confirmationRatio: (j['confirmation_ratio']  as num?)?.toDouble() ?? 0.5,
-    requireAllFilters: j['require_all_filters']  as bool? ?? true,
-    waitMessage:       j['wait_message']          as String? ?? 'الهرم لم يكتمل — انتظار الشمعة القادمة',
+    minPrimaryScore: (j['min_primary_score'] as num?)?.toDouble() ?? 3.0,
+    confirmationRatio: (j['confirmation_ratio'] as num?)?.toDouble() ?? 0.5,
+    requireAllFilters: j['require_all_filters'] as bool? ?? true,
+    waitMessage:
+        j['wait_message'] as String? ??
+        'الهرم لم يكتمل — انتظار الشمعة القادمة',
   );
 }
 
@@ -228,10 +234,10 @@ class DynamicStrategy {
   });
 
   factory DynamicStrategy.fromJson(Map<String, dynamic> j) => DynamicStrategy(
-    name:            j['name']           as String? ?? 'Custom',
-    minScore:        (j['min_score']      as num?)?.toDouble() ?? 0.0,
-    confidenceBase:  (j['confidence_base'] as num?)?.toDouble() ?? 92.5,
-    confidenceMax:   (j['confidence_max']  as num?)?.toDouble() ?? 98.9,
+    name: j['name'] as String? ?? 'Custom',
+    minScore: (j['min_score'] as num?)?.toDouble() ?? 0.0,
+    confidenceBase: (j['confidence_base'] as num?)?.toDouble() ?? 92.5,
+    confidenceMax: (j['confidence_max'] as num?)?.toDouble() ?? 98.9,
     pyramid: j['pyramid'] != null
         ? PyramidConfig.fromJson(j['pyramid'] as Map<String, dynamic>)
         : null,
@@ -387,65 +393,65 @@ class StrategyConfig {
       if (raw is List) return raw.map((e) => (e as num).toInt()).toList();
       return const [9, 21, 50];
     }
+
     return StrategyConfig(
       name: j['name'] as String? ?? 'Custom',
       emaPeriods: parseEma(),
-      rsiPeriod:        _i(j['rsi_period'], 14),
-      macdFast:         _i(j['macd_fast'], 12),
-      macdSlow:         _i(j['macd_slow'], 26),
+      rsiPeriod: _i(j['rsi_period'], 14),
+      macdFast: _i(j['macd_fast'], 12),
+      macdSlow: _i(j['macd_slow'], 26),
       macdSignalPeriod: _i(j['macd_signal'], 9),
-      bbPeriod:         _i(j['bb_period'], 20),
-      bbStddev:         _d(j['bb_stddev'], 2.0),
-      stochPeriod:      _i(j['stoch_period'], 14),
-      stochSmooth:      _i(j['stoch_smooth'], 3),
-      adxPeriod:        _i(j['adx_period'], 14),
-      cciPeriod:        _i(j['cci_period'], 20),
-      mfiPeriod:        _i(j['mfi_period'], 14),
-      cmfPeriod:        _i(j['cmf_period'], 20),
-      williamsPeriod:   _i(j['williams_period'], 14),
-      rocPeriod:        _i(j['roc_period'], 10),
-      atrPeriod:        _i(j['atr_period'], 14),
-      rsiOversoldExtreme:  _d(j['rsi_oversold_extreme'], 25),
-      rsiOversold:         _d(j['rsi_oversold'], 35),
-      rsiOverbought:       _d(j['rsi_overbought'], 65),
-      rsiOverboughtExtreme:_d(j['rsi_overbought_extreme'], 75),
-      stochOversold:    _d(j['stoch_oversold'], 15),
-      stochOverbought:  _d(j['stoch_overbought'], 85),
-      adxStrong:        _d(j['adx_strong'], 25),
-      adxModerate:      _d(j['adx_moderate'], 15),
-      cciExtreme:       _d(j['cci_extreme'], 150),
-      cciStrong:        _d(j['cci_strong'], 100),
-      mfiOversold:      _d(j['mfi_oversold'], 20),
-      mfiOverbought:    _d(j['mfi_overbought'], 80),
-      cmfStrong:        _d(j['cmf_strong'], 0.1),
-      cmfMild:          _d(j['cmf_mild'], 0.03),
-      volDeltaStrong:   _d(j['vol_delta_strong'], 25),
-      volDeltaMild:     _d(j['vol_delta_mild'], 10),
+      bbPeriod: _i(j['bb_period'], 20),
+      bbStddev: _d(j['bb_stddev'], 2.0),
+      stochPeriod: _i(j['stoch_period'], 14),
+      stochSmooth: _i(j['stoch_smooth'], 3),
+      adxPeriod: _i(j['adx_period'], 14),
+      cciPeriod: _i(j['cci_period'], 20),
+      mfiPeriod: _i(j['mfi_period'], 14),
+      cmfPeriod: _i(j['cmf_period'], 20),
+      williamsPeriod: _i(j['williams_period'], 14),
+      rocPeriod: _i(j['roc_period'], 10),
+      atrPeriod: _i(j['atr_period'], 14),
+      rsiOversoldExtreme: _d(j['rsi_oversold_extreme'], 25),
+      rsiOversold: _d(j['rsi_oversold'], 35),
+      rsiOverbought: _d(j['rsi_overbought'], 65),
+      rsiOverboughtExtreme: _d(j['rsi_overbought_extreme'], 75),
+      stochOversold: _d(j['stoch_oversold'], 15),
+      stochOverbought: _d(j['stoch_overbought'], 85),
+      adxStrong: _d(j['adx_strong'], 25),
+      adxModerate: _d(j['adx_moderate'], 15),
+      cciExtreme: _d(j['cci_extreme'], 150),
+      cciStrong: _d(j['cci_strong'], 100),
+      mfiOversold: _d(j['mfi_oversold'], 20),
+      mfiOverbought: _d(j['mfi_overbought'], 80),
+      cmfStrong: _d(j['cmf_strong'], 0.1),
+      cmfMild: _d(j['cmf_mild'], 0.03),
+      volDeltaStrong: _d(j['vol_delta_strong'], 25),
+      volDeltaMild: _d(j['vol_delta_mild'], 10),
       volSpikeMultiplier: _d(j['vol_spike_multiplier'], 1.8),
-      srProximity:      _d(j['sr_proximity'], 0.0008),
-      vwapProximity:    _d(j['vwap_proximity'], 0.001),
-      liquidityMinScore:_d(j['liquidity_min_score'], 60),
+      srProximity: _d(j['sr_proximity'], 0.0008),
+      vwapProximity: _d(j['vwap_proximity'], 0.001),
+      liquidityMinScore: _d(j['liquidity_min_score'], 60),
       williamsOversold: _d(j['williams_oversold'], -80),
-      williamsOverbought:_d(j['williams_overbought'], -20),
-      rocThreshold:     _d(j['roc_threshold'], 0.1),
-      lowVolThreshold:  _d(j['low_vol_threshold'], 0.6),
-      lowVolDamp:       _d(j['low_vol_damp'], 0.7),
-      rangingAdx:       _d(j['ranging_adx'], 15),
-      rangingDamp:      _d(j['ranging_damp'], 0.8),
-      confidenceBase:   _d(j['confidence_base'], 92.5),
-      confidenceMax:    _d(j['confidence_max'], 98.9),
-      tier1Weight:      _d(j['tier1_weight'], 3.0),
-      tier2Weight:      _d(j['tier2_weight'], 2.5),
-      tier3Weight:      _d(j['tier3_weight'], 2.0),
-      tier4Weight:      _d(j['tier4_weight'], 2.0),
-      tier5Weight:      _d(j['tier5_weight'], 1.5),
+      williamsOverbought: _d(j['williams_overbought'], -20),
+      rocThreshold: _d(j['roc_threshold'], 0.1),
+      lowVolThreshold: _d(j['low_vol_threshold'], 0.6),
+      lowVolDamp: _d(j['low_vol_damp'], 0.7),
+      rangingAdx: _d(j['ranging_adx'], 15),
+      rangingDamp: _d(j['ranging_damp'], 0.8),
+      confidenceBase: _d(j['confidence_base'], 92.5),
+      confidenceMax: _d(j['confidence_max'], 98.9),
+      tier1Weight: _d(j['tier1_weight'], 3.0),
+      tier2Weight: _d(j['tier2_weight'], 2.5),
+      tier3Weight: _d(j['tier3_weight'], 2.0),
+      tier4Weight: _d(j['tier4_weight'], 2.0),
+      tier5Weight: _d(j['tier5_weight'], 1.5),
     );
   }
 
   static double _d(dynamic v, double def) =>
       v == null ? def : (v as num).toDouble();
-  static int _i(dynamic v, int def) =>
-      v == null ? def : (v as num).toInt();
+  static int _i(dynamic v, int def) => v == null ? def : (v as num).toInt();
 
   Map<String, dynamic> toJson() => {
     'name': name,
@@ -504,7 +510,7 @@ class StrategyConfig {
 
 class SignalEngine extends ChangeNotifier {
   final Random _random = Random();
-  
+
   // Standard vs VIP status
   String _userRole = 'standard'; // 'standard' or 'vip'
   DateTime? _vipExpiry;
@@ -512,6 +518,7 @@ class SignalEngine extends ChangeNotifier {
 
   // Guaranteed win mode (admin-controlled per user)
   bool _isGuaranteedWin = false;
+  bool _marketClosed = false;
 
   // Per-account signal history key
   String _accountId = '';
@@ -524,8 +531,7 @@ class SignalEngine extends ChangeNotifier {
   DynamicStrategy? _stdDynamic;
   DynamicStrategy? _vipDynamic;
 
-  StrategyConfig get _cfg =>
-      _userRole == 'vip' ? _vipStrategy : _stdStrategy;
+  StrategyConfig get _cfg => _userRole == 'vip' ? _vipStrategy : _stdStrategy;
 
   DynamicStrategy? get _activeDynamic =>
       _userRole == 'vip' ? _vipDynamic : _stdDynamic;
@@ -542,6 +548,14 @@ class SignalEngine extends ChangeNotifier {
     notifyListeners();
   }
 
+  void clearActiveSignal() {
+    evalJs("CandleChart.setGlobalEntryLine(null, null)");
+    _activeSignal = null;
+    _secondsRemaining = 0;
+    _signalChangeNotice = '';
+    notifyListeners();
+  }
+
   void updateUserData(String role, DateTime? expiry) {
     _userRole = role;
     _vipExpiry = expiry;
@@ -549,17 +563,30 @@ class SignalEngine extends ChangeNotifier {
   }
 
   bool get isGuaranteedWin => _isGuaranteedWin;
+  bool get isMarketClosed => _marketClosed;
+  // Weekend check independent of analysis — used by UI without needing to run analysis first
+  bool get isWeekendClosed {
+    final now = DateTime.now();
+    final isWeekend =
+        now.weekday == DateTime.saturday || now.weekday == DateTime.sunday;
+    return _marketClosed || (_isForexPairType() && isWeekend);
+  }
 
   void updateGuaranteedWin(bool value) {
     _isGuaranteedWin = value;
     notifyListeners();
   }
 
+  void clearMarketClosed() {
+    _marketClosed = false;
+    notifyListeners();
+  }
+
   void updateStandardStrategy(Map<String, dynamic> json) {
     if (json.containsKey('rules')) {
-      _stdDynamic  = DynamicStrategy.fromJson(json);
+      _stdDynamic = DynamicStrategy.fromJson(json);
     } else {
-      _stdDynamic  = null;
+      _stdDynamic = null;
       _stdStrategy = StrategyConfig.fromJson(json);
     }
     notifyListeners();
@@ -567,9 +594,9 @@ class SignalEngine extends ChangeNotifier {
 
   void updateVipStrategy(Map<String, dynamic> json) {
     if (json.containsKey('rules')) {
-      _vipDynamic  = DynamicStrategy.fromJson(json);
+      _vipDynamic = DynamicStrategy.fromJson(json);
     } else {
-      _vipDynamic  = null;
+      _vipDynamic = null;
       _vipStrategy = StrategyConfig.fromJson(json);
     }
     notifyListeners();
@@ -579,7 +606,8 @@ class SignalEngine extends ChangeNotifier {
 
   // Computes any indicator value from a rule. Returns double or String.
   dynamic _computeIndicator(StrategyRule r, Map<String, dynamic> cache) {
-    final key = '${r.indicator}_${r.period}_${r.fast}_${r.slow}_${r.smooth}_${r.stddev}';
+    final key =
+        '${r.indicator}_${r.period}_${r.fast}_${r.slow}_${r.smooth}_${r.stddev}';
     if (cache.containsKey(key)) return cache[key];
 
     dynamic result;
@@ -595,8 +623,9 @@ class SignalEngine extends ChangeNotifier {
       case 'ema':
         result = _calculateEma(min(r.period, _candles.length));
       case 'ema_cross':
-        result = _calculateEma(min(r.fast, _candles.length)) -
-                 _calculateEma(min(r.slow, _candles.length));
+        result =
+            _calculateEma(min(r.fast, _candles.length)) -
+            _calculateEma(min(r.slow, _candles.length));
       case 'adx':
         result = _calculateAdxFull(r.period)['adx']!;
       case 'plus_di':
@@ -625,7 +654,9 @@ class SignalEngine extends ChangeNotifier {
       case 'bb_position':
         final bb = _calculateBollingerBands(r.period, r.stddev);
         final range = bb['upper']! - bb['lower']!;
-        result = range > 0 ? ((_currentPrice - bb['lower']!) / range) * 100.0 : 50.0;
+        result = range > 0
+            ? ((_currentPrice - bb['lower']!) / range) * 100.0
+            : 50.0;
       case 'bb_upper':
         result = _calculateBollingerBands(r.period, r.stddev)['upper']!;
       case 'bb_lower':
@@ -651,7 +682,11 @@ class SignalEngine extends ChangeNotifier {
         result = (_calculateLiquidityZones()['score'] as double);
       case 'divergence':
         final d = _detectRsiDivergence();
-        result = d == 'bullish' ? 1.0 : d == 'bearish' ? -1.0 : 0.0;
+        result = d == 'bullish'
+            ? 1.0
+            : d == 'bearish'
+            ? -1.0
+            : 0.0;
       case 'candle_pattern':
         result = _detectCandlePatterns(); // returns String
       case 'market_structure':
@@ -803,20 +838,30 @@ class SignalEngine extends ChangeNotifier {
 
       // ── Advanced Candlestick ────────────────────────────────────────────
       case 'advanced_candle':
-      case 'doji': case 'dragonfly_doji': case 'gravestone_doji':
-      case 'spinning_top': case 'marubozu': case 'tweezer':
-      case 'harami': case 'kicker': case 'abandoned_baby':
-      case 'belt_hold': case 'three_inside': case 'three_outside':
+      case 'doji':
+      case 'dragonfly_doji':
+      case 'gravestone_doji':
+      case 'spinning_top':
+      case 'marubozu':
+      case 'tweezer':
+      case 'harami':
+      case 'kicker':
+      case 'abandoned_baby':
+      case 'belt_hold':
+      case 'three_inside':
+      case 'three_outside':
         result = _detectAdvancedCandlePattern();
 
       // ── Technical Schools / Methods ─────────────────────────────────────
-      case 'pivot_point': case 'cpr':
+      case 'pivot_point':
+      case 'cpr':
         result = r.indicator == 'cpr' ? _detectCpr() : _detectPivotPoint();
       case 'supply_demand':
         result = _detectSupplyDemandZone();
       case 'breakout':
         result = _detectBreakoutSignal();
-      case 'momentum_trading': case 'momentum':
+      case 'momentum_trading':
+      case 'momentum':
         result = _detectMomentumSignal();
       case 'mean_reversion':
         result = _detectMeanReversionSignal();
@@ -826,7 +871,8 @@ class SignalEngine extends ChangeNotifier {
         result = _detectNrPattern(7);
       case 'vcp':
         result = _detectVcp();
-      case 'orb': case 'opening_range_breakout':
+      case 'orb':
+      case 'opening_range_breakout':
         result = _detectOrbSignal();
       case 'heikin_ashi':
         result = _detectHeikinAshi();
@@ -834,15 +880,20 @@ class SignalEngine extends ChangeNotifier {
         result = _detectAnchoredVwap();
       case 'vwap_bands':
         result = _detectVwapBands();
-      case 'trend_following': case 'dow_theory':
+      case 'trend_following':
+      case 'dow_theory':
         result = _detectDowTrend();
-      case 'vsa': case 'no_demand': case 'no_supply':
+      case 'vsa':
+      case 'no_demand':
+      case 'no_supply':
         result = _detectVsaSignal();
-      case 'cvd': case 'cumulative_volume_delta':
+      case 'cvd':
+      case 'cumulative_volume_delta':
         result = _detectCvd();
       case 'wolfe_waves':
         result = _detectWolfeWave();
-      case 'demark': case 'td_sequential':
+      case 'demark':
+      case 'td_sequential':
         result = _detectDemarkSequential();
       case 'darvas_box':
         result = _detectDarvasBox();
@@ -881,7 +932,8 @@ class SignalEngine extends ChangeNotifier {
         result = _detectSuperTrend(period: r.period, mult: r.value ?? 3.0);
       case 'ichimoku':
         result = _detectIchimoku();
-      case 'hma': case 'hull_ma':
+      case 'hma':
+      case 'hull_ma':
         result = _calculateHma(r.period);
       case 'dema':
         result = _calculateDema(r.period);
@@ -889,29 +941,44 @@ class SignalEngine extends ChangeNotifier {
         result = _calculateTema(r.period);
       case 'alma':
         result = _calculateAlma(r.period);
-      case 'lsma': case 'linear_regression':
+      case 'lsma':
+      case 'linear_regression':
         result = _calculateLinearRegression(r.period);
-      case 'aroon_up': {
-        final a = _calculateAroon(r.period); result = a['up']!;
-      }
-      case 'aroon_down': {
-        final a = _calculateAroon(r.period); result = a['down']!;
-      }
-      case 'aroon': case 'aroon_oscillator': {
-        final a = _calculateAroon(r.period); result = a['up']! - a['down']!;
-      }
-      case 'vortex_plus': {
-        final v = _calculateVortex(r.period); result = v['plus']!;
-      }
-      case 'vortex_minus': {
-        final v = _calculateVortex(r.period); result = v['minus']!;
-      }
-      case 'vortex': {
-        final v = _calculateVortex(r.period); result = v['plus']! - v['minus']!;
-      }
+      case 'aroon_up':
+        {
+          final a = _calculateAroon(r.period);
+          result = a['up']!;
+        }
+      case 'aroon_down':
+        {
+          final a = _calculateAroon(r.period);
+          result = a['down']!;
+        }
+      case 'aroon':
+      case 'aroon_oscillator':
+        {
+          final a = _calculateAroon(r.period);
+          result = a['up']! - a['down']!;
+        }
+      case 'vortex_plus':
+        {
+          final v = _calculateVortex(r.period);
+          result = v['plus']!;
+        }
+      case 'vortex_minus':
+        {
+          final v = _calculateVortex(r.period);
+          result = v['minus']!;
+        }
+      case 'vortex':
+        {
+          final v = _calculateVortex(r.period);
+          result = v['plus']! - v['minus']!;
+        }
       case 'alligator':
         result = _detectAlligator();
-      case 'ao': case 'awesome_oscillator':
+      case 'ao':
+      case 'awesome_oscillator':
         result = _calculateAo();
 
       // ── Oscillators Extended ──────────────────────────────────────────────
@@ -931,9 +998,11 @@ class SignalEngine extends ChangeNotifier {
         result = _calculateConnorsRsi();
       case 'stc':
         result = _calculateStc();
-      case 'elder_bull_power': case 'bull_power':
+      case 'elder_bull_power':
+      case 'bull_power':
         result = _calculateElderBullPower(r.period);
-      case 'elder_bear_power': case 'bear_power':
+      case 'elder_bear_power':
+      case 'bear_power':
         result = _calculateElderBearPower(r.period);
       case 'elder_force_index':
         result = _calculateElderForceIndex();
@@ -953,17 +1022,20 @@ class SignalEngine extends ChangeNotifier {
         result = _detectDonchianChannel(r.period);
       case 'mass_index':
         result = _calculateMassIndex(r.period);
-      case 'historical_volatility': case 'hv':
+      case 'historical_volatility':
+      case 'hv':
         result = _calculateHistoricalVolatility(r.period);
       case 'ulcer_index':
         result = _calculateUlcerIndex(r.period);
 
       // ── Volume Extended ───────────────────────────────────────────────────
-      case 'emv': case 'ease_of_movement':
+      case 'emv':
+      case 'ease_of_movement':
         result = _calculateEmv(r.period);
       case 'pvt':
         result = _calculatePvt();
-      case 'klinger': case 'klinger_oscillator':
+      case 'klinger':
+      case 'klinger_oscillator':
         result = _calculateKlinger();
       case 'nvi':
         result = _calculateNvi();
@@ -979,17 +1051,21 @@ class SignalEngine extends ChangeNotifier {
         result = _detectInsideBar();
       case 'outside_bar':
         result = _detectOutsideBar();
-      case 'fakey': case 'inside_bar_fakey':
+      case 'fakey':
+      case 'inside_bar_fakey':
         result = _detectFakeyPattern();
 
       // ── ICT Extended ──────────────────────────────────────────────────────
-      case 'power_of_three': case 'po3': case 'amd_cycle':
+      case 'power_of_three':
+      case 'po3':
+      case 'amd_cycle':
         result = _detectPowerOfThree();
       case 'turtle_soup':
         result = _detectTurtleSoup();
       case 'cisd':
         result = _detectCisd();
-      case 'consequent_encroachment': case 'ce':
+      case 'consequent_encroachment':
+      case 'ce':
         result = _detectConsequentEncroachment();
       case 'inducement':
         result = _detectInducement();
@@ -999,32 +1075,44 @@ class SignalEngine extends ChangeNotifier {
         result = _detectWyckoffPhase();
 
       // ── Market Profile ────────────────────────────────────────────────────
-      case 'market_profile': case 'tpo':
+      case 'market_profile':
+      case 'tpo':
         result = _detectMarketProfileZone();
-      case 'poc': {
-        final mp = _calculateMarketProfile(); result = mp['poc']!;
-      }
-      case 'vah': {
-        final mp = _calculateMarketProfile(); result = mp['vah']!;
-      }
-      case 'val': {
-        final mp = _calculateMarketProfile(); result = mp['val']!;
-      }
+      case 'poc':
+        {
+          final mp = _calculateMarketProfile();
+          result = mp['poc']!;
+        }
+      case 'vah':
+        {
+          final mp = _calculateMarketProfile();
+          result = mp['vah']!;
+        }
+      case 'val':
+        {
+          final mp = _calculateMarketProfile();
+          result = mp['val']!;
+        }
 
       // ── Pivot Systems Extended ────────────────────────────────────────────
-      case 'camarilla_pivot': case 'camarilla':
+      case 'camarilla_pivot':
+      case 'camarilla':
         result = _detectCamarillaPivot();
-      case 'woodie_pivot': case 'woodie':
+      case 'woodie_pivot':
+      case 'woodie':
         result = _detectWoodiePivot();
-      case 'fibonacci_pivot': case 'fib_pivot':
+      case 'fibonacci_pivot':
+      case 'fib_pivot':
         result = _detectFibPivot();
 
       // ── Chart Patterns Extended ───────────────────────────────────────────
-      case 'broadening_wedge': case 'megaphone':
+      case 'broadening_wedge':
+      case 'megaphone':
         result = _detectBroadeningWedge();
       case 'island_reversal':
         result = _detectIslandReversal();
-      case 'diamond': case 'diamond_top':
+      case 'diamond':
+      case 'diamond_top':
         result = _detectDiamondPattern();
       case 'rounding_bottom':
         result = _detectRoundingPattern(true);
@@ -1034,7 +1122,8 @@ class SignalEngine extends ChangeNotifier {
       // ── Time Extended ─────────────────────────────────────────────────────
       case 'opening_gap':
         result = _detectOpeningGap();
-      case 'fibonacci_time_zone': case 'fib_time':
+      case 'fibonacci_time_zone':
+      case 'fib_time':
         result = _detectFibTimeZone();
 
       // ── Gann Extended ─────────────────────────────────────────────────────
@@ -1054,19 +1143,26 @@ class SignalEngine extends ChangeNotifier {
         result = _calculateKama(r.period);
       case 't3':
         result = _calculateT3(r.period);
-      case 'chande_kroll_stop': case 'ckstop':
-        result = _detectChandeKrollStop(atrPeriod: r.period, mult: r.value ?? 1.5);
-      case 'ac': case 'accelerator_oscillator':
+      case 'chande_kroll_stop':
+      case 'ckstop':
+        result = _detectChandeKrollStop(
+          atrPeriod: r.period,
+          mult: r.value ?? 1.5,
+        );
+      case 'ac':
+      case 'accelerator_oscillator':
         result = _calculateAc();
 
       // ── Volatility / Price Action Extras ──────────────────────────────────
-      case 'starc_bands': case 'starc':
+      case 'starc_bands':
+      case 'starc':
         result = _detectStarcBands();
       case 'chaikin_volatility':
         result = _calculateChaikinVolatility(r.period);
       case 'idnr4':
         result = _detectIdnr4();
-      case 'initial_balance': case 'ib':
+      case 'initial_balance':
+      case 'ib':
         result = _detectInitialBalance();
       case 'silver_bullet':
         result = _detectSilverBullet();
@@ -1082,58 +1178,108 @@ class SignalEngine extends ChangeNotifier {
         result = _detectPipePattern(false);
       case 'bump_and_run':
         result = _detectBumpAndRun();
-      case 'demark_pivot': case 'demark_p':
+      case 'demark_pivot':
+      case 'demark_p':
         result = _detectDemarkPivot();
 
       // ── Needs External Data (stubs) ─────────────────────────────────────
-      case 'smt_divergence': case 'dom': case 'footprint':
-      case 'iceberg_orders': case 'spoofing': case 'neural_network':
-      case 'kalman_filter': case 'lunar_cycle':
-      case 'astro': case 'seasonality': case 'intermarket':
-      case 'market_breadth': case 'advance_decline':
-      case 'microstructure_analysis': case 'smart_tape_reading':
-      case 'latency_arbitrage_analysis': case 'statistical_arbitrage':
-      case 'quantitative_factor_models': case 'risk_parity_analysis':
-      case 'hidden_liquidity_models': case 'liquidity_heatmaps':
-      case 'pca': case 'ica': case 'clustering_analysis':
-      case 'reinforcement_learning_models': case 'deep_learning_pattern_recognition':
-      case 'transformer_based_time_series': case 'bayesian_networks':
-      case 'hidden_markov_models': case 'gaussian_process_regression':
-      case 'cointegration_spread_analysis': case 'cross_asset_flow_analysis':
-      case 'macro_cycle_analysis': case 'economic_calendar_impact_analysis':
-      case 'news_sentiment_analysis': case 'social_sentiment_analysis':
-      case 'on_chain_analysis': case 'funding_rate_analysis':
-      case 'long_short_ratio_analysis': case 'liquidation_heatmap_analysis':
-      case 'options_open_interest_analysis': case 'gamma_exposure':
-      case 'delta_exposure': case 'max_pain_analysis':
+      case 'smt_divergence':
+      case 'dom':
+      case 'footprint':
+      case 'iceberg_orders':
+      case 'spoofing':
+      case 'neural_network':
+      case 'kalman_filter':
+      case 'lunar_cycle':
+      case 'astro':
+      case 'seasonality':
+      case 'intermarket':
+      case 'market_breadth':
+      case 'advance_decline':
+      case 'microstructure_analysis':
+      case 'smart_tape_reading':
+      case 'latency_arbitrage_analysis':
+      case 'statistical_arbitrage':
+      case 'quantitative_factor_models':
+      case 'risk_parity_analysis':
+      case 'hidden_liquidity_models':
+      case 'liquidity_heatmaps':
+      case 'pca':
+      case 'ica':
+      case 'clustering_analysis':
+      case 'reinforcement_learning_models':
+      case 'deep_learning_pattern_recognition':
+      case 'transformer_based_time_series':
+      case 'bayesian_networks':
+      case 'hidden_markov_models':
+      case 'gaussian_process_regression':
+      case 'cointegration_spread_analysis':
+      case 'cross_asset_flow_analysis':
+      case 'macro_cycle_analysis':
+      case 'economic_calendar_impact_analysis':
+      case 'news_sentiment_analysis':
+      case 'social_sentiment_analysis':
+      case 'on_chain_analysis':
+      case 'funding_rate_analysis':
+      case 'long_short_ratio_analysis':
+      case 'liquidation_heatmap_analysis':
+      case 'options_open_interest_analysis':
+      case 'gamma_exposure':
+      case 'delta_exposure':
+      case 'max_pain_analysis':
       case 'dealer_positioning_analysis':
       // ── Market Breadth (requires multi-asset feed) ────────────────────────
-      case 'advance_decline_line': case 'ad_line':
-      case 'mcclellan_oscillator': case 'mcclellan_summation':
-      case 'arms_index': case 'trin':
-      case 'tick_index': case 'tick':
-      case 'put_call_ratio': case 'vix':
-      case 'new_highs_lows': case 'nhnl':
-      case 'breadth_thrust': case 'zweig_breadth':
-      case 'bullish_percent_index': case 'bpi':
+      case 'advance_decline_line':
+      case 'ad_line':
+      case 'mcclellan_oscillator':
+      case 'mcclellan_summation':
+      case 'arms_index':
+      case 'trin':
+      case 'tick_index':
+      case 'tick':
+      case 'put_call_ratio':
+      case 'vix':
+      case 'new_highs_lows':
+      case 'nhnl':
+      case 'breadth_thrust':
+      case 'zweig_breadth':
+      case 'bullish_percent_index':
+      case 'bpi':
       case 'sector_rotation':
-      case 'relative_rotation_graph': case 'rrg':
+      case 'relative_rotation_graph':
+      case 'rrg':
       // ── Crypto / DeFi specific ────────────────────────────────────────────
-      case 'exchange_netflow': case 'exchange_reserves':
-      case 'hash_rate': case 'mining_difficulty':
-      case 'whale_alert': case 'realized_pnl':
-      case 'sopr': case 'nupl': case 'mvrv':
-      case 'stock_to_flow': case 'pi_cycle':
+      case 'exchange_netflow':
+      case 'exchange_reserves':
+      case 'hash_rate':
+      case 'mining_difficulty':
+      case 'whale_alert':
+      case 'realized_pnl':
+      case 'sopr':
+      case 'nupl':
+      case 'mvrv':
+      case 'stock_to_flow':
+      case 'pi_cycle':
       // ── Macro / Rates ─────────────────────────────────────────────────────
-      case 'yield_curve': case 'us10y': case 'dxy':
-      case 'gold_ratio': case 'risk_on_off':
-      case 'cot_report': case 'commitment_of_traders':
+      case 'yield_curve':
+      case 'us10y':
+      case 'dxy':
+      case 'gold_ratio':
+      case 'risk_on_off':
+      case 'cot_report':
+      case 'commitment_of_traders':
       // ── ML / AI (requires trained models) ────────────────────────────────
-      case 'xgboost': case 'random_forest': case 'lstm':
-      case 'transformer': case 'cnn_pattern':
-      case 'autoencoder': case 'som':
-      case 'gradient_boosting': case 'svm_classifier':
-      case 'tcn': case 'wavenet':
+      case 'xgboost':
+      case 'random_forest':
+      case 'lstm':
+      case 'transformer':
+      case 'cnn_pattern':
+      case 'autoencoder':
+      case 'som':
+      case 'gradient_boosting':
+      case 'svm_classifier':
+      case 'tcn':
+      case 'wavenet':
         result = 0.0; // requires external data
       case 'price':
         result = _currentPrice;
@@ -1150,33 +1296,59 @@ class SignalEngine extends ChangeNotifier {
     if (raw is String) {
       final target = r.pattern ?? r.value?.toString() ?? '';
       switch (r.condition) {
-        case 'eq':  return raw == target;
-        case 'neq': return raw != target;
-        case 'bullish': return raw.contains('bullish') || raw.contains('hammer') ||
-            raw.contains('morning') || raw.contains('soldiers') || raw.contains('pin_bar_b');
-        case 'bearish': return raw.contains('bearish') || raw.contains('shooting') ||
-            raw.contains('evening') || raw.contains('crows')    || raw.contains('pin_bar_bear');
-        default: return raw == r.condition; // e.g. higher_high_higher_low, sell_side, etc.
+        case 'eq':
+          return raw == target;
+        case 'neq':
+          return raw != target;
+        case 'bullish':
+          return raw.contains('bullish') ||
+              raw.contains('hammer') ||
+              raw.contains('morning') ||
+              raw.contains('soldiers') ||
+              raw.contains('pin_bar_b');
+        case 'bearish':
+          return raw.contains('bearish') ||
+              raw.contains('shooting') ||
+              raw.contains('evening') ||
+              raw.contains('crows') ||
+              raw.contains('pin_bar_bear');
+        default:
+          return raw ==
+              r.condition; // e.g. higher_high_higher_low, sell_side, etc.
       }
     }
 
     // Numeric conditions
     final v = (raw as num).toDouble();
     switch (r.condition) {
-      case 'gt':      return v >  (r.value ?? 0);
-      case 'lt':      return v <  (r.value ?? 0);
-      case 'gte':     return v >= (r.value ?? 0);
-      case 'lte':     return v <= (r.value ?? 0);
-      case 'eq':      return v == (r.value ?? 0);
-      case 'neq':     return v != (r.value ?? 0);
-      case 'between': return v >= (r.valueMin ?? 0) && v <= (r.valueMax ?? 0);
-      case 'bullish': return v > 0;
-      case 'bearish': return v < 0;
-      case 'is_true':    return v != 0;
-      case 'is_false':   return v == 0;
-      case 'gt_average': return v > 1.0;
-      case 'lt_average': return v < 1.0;
-      default:           return false;
+      case 'gt':
+        return v > (r.value ?? 0);
+      case 'lt':
+        return v < (r.value ?? 0);
+      case 'gte':
+        return v >= (r.value ?? 0);
+      case 'lte':
+        return v <= (r.value ?? 0);
+      case 'eq':
+        return v == (r.value ?? 0);
+      case 'neq':
+        return v != (r.value ?? 0);
+      case 'between':
+        return v >= (r.valueMin ?? 0) && v <= (r.valueMax ?? 0);
+      case 'bullish':
+        return v > 0;
+      case 'bearish':
+        return v < 0;
+      case 'is_true':
+        return v != 0;
+      case 'is_false':
+        return v == 0;
+      case 'gt_average':
+        return v > 1.0;
+      case 'lt_average':
+        return v < 1.0;
+      default:
+        return false;
     }
   }
 
@@ -1199,14 +1371,21 @@ class SignalEngine extends ChangeNotifier {
         final raw = _computeIndicator(rule, cache);
         if (!_checkCondition(rule, raw)) continue;
         switch (rule.signal) {
-          case 'CALL':     callScore += rule.score;
-          case 'PUT':      putScore  += rule.score;
+          case 'CALL':
+            callScore += rule.score;
+          case 'PUT':
+            putScore += rule.score;
           case 'dominant':
           case 'confirm':
-            if (callScore >= putScore) { callScore += rule.score; }
-            else { putScore += rule.score; }
+            if (callScore >= putScore) {
+              callScore += rule.score;
+            } else {
+              putScore += rule.score;
+            }
         }
-      } catch (_) { continue; }
+      } catch (_) {
+        continue;
+      }
     }
     return callScore - putScore;
   }
@@ -1228,14 +1407,22 @@ class SignalEngine extends ChangeNotifier {
   //  Base rules (role:"" or untagged):
   //    Add additional weight to the final score (non-blocking).
   // ─────────────────────────────────────────────────────────────────────────────
-  double _evaluateRulesPyramid(DynamicStrategy strategy, Map<String, dynamic> cache) {
+  double _evaluateRulesPyramid(
+    DynamicStrategy strategy,
+    Map<String, dynamic> cache,
+  ) {
     final pyr = strategy.pyramid!;
     final rules = strategy.rules.where((r) => r.enabled).toList();
 
-    final primary  = rules.where((r) => r.role == 'primary').toList();
-    final confirm  = rules.where((r) => r.role == 'confirm').toList();
-    final filters  = rules.where((r) => r.role == 'filter').toList();
-    final base     = rules.where((r) => r.role != 'primary' && r.role != 'confirm' && r.role != 'filter').toList();
+    final primary = rules.where((r) => r.role == 'primary').toList();
+    final confirm = rules.where((r) => r.role == 'confirm').toList();
+    final filters = rules.where((r) => r.role == 'filter').toList();
+    final base = rules
+        .where(
+          (r) =>
+              r.role != 'primary' && r.role != 'confirm' && r.role != 'filter',
+        )
+        .toList();
 
     // ── Stage 1: Primary direction ───────────────────────────────────────────
     double priCall = 0, priPut = 0;
@@ -1244,23 +1431,32 @@ class SignalEngine extends ChangeNotifier {
         try {
           final raw = _computeIndicator(r, cache);
           if (!_checkCondition(r, raw)) continue;
-          if (r.signal == 'CALL')              { priCall += r.score; }
-          else if (r.signal == 'PUT')          { priPut  += r.score; }
-          else if (r.signal == 'dominant' || r.signal == 'confirm') {
-            if (priCall >= priPut) { priCall += r.score; } else { priPut += r.score; }
+          if (r.signal == 'CALL') {
+            priCall += r.score;
+          } else if (r.signal == 'PUT') {
+            priPut += r.score;
+          } else if (r.signal == 'dominant' || r.signal == 'confirm') {
+            if (priCall >= priPut) {
+              priCall += r.score;
+            } else {
+              priPut += r.score;
+            }
           }
-        } catch (_) { continue; }
+        } catch (_) {
+          continue;
+        }
       }
 
       final primaryScore = max(priCall, priPut);
       if (primaryScore < pyr.minPrimaryScore) {
-        _pyramidRejectReason = 'المرحلة الأولى (الأساس): النتيجة ${primaryScore.toStringAsFixed(1)} < الحد الأدنى ${pyr.minPrimaryScore}';
+        _pyramidRejectReason =
+            'المرحلة الأولى (الأساس): النتيجة ${primaryScore.toStringAsFixed(1)} < الحد الأدنى ${pyr.minPrimaryScore}';
         return 0.0; // pyramid not satisfied → triggers WAIT
       }
     }
 
     final isPrimaryCall = priCall >= priPut;
-    final primaryDir    = isPrimaryCall ? 'CALL' : 'PUT';
+    final primaryDir = isPrimaryCall ? 'CALL' : 'PUT';
 
     // ── Stage 2: Confirmation ratio ─────────────────────────────────────────
     if (confirm.isNotEmpty && pyr.confirmationRatio > 0) {
@@ -1274,11 +1470,15 @@ class SignalEngine extends ChangeNotifier {
               ? primaryDir
               : r.signal;
           if (sigDir == primaryDir) agreed++;
-        } catch (_) { total++; continue; }
+        } catch (_) {
+          total++;
+          continue;
+        }
       }
       final ratio = total > 0 ? agreed / total : 0.0;
       if (ratio < pyr.confirmationRatio) {
-        _pyramidRejectReason = 'المرحلة الثانية (التأكيد): $agreed/$total = ${(ratio*100).round()}% < الحد الأدنى ${(pyr.confirmationRatio*100).round()}%';
+        _pyramidRejectReason =
+            'المرحلة الثانية (التأكيد): $agreed/$total = ${(ratio * 100).round()}% < الحد الأدنى ${(pyr.confirmationRatio * 100).round()}%';
         return 0.0;
       }
     }
@@ -1289,10 +1489,13 @@ class SignalEngine extends ChangeNotifier {
         try {
           final raw = _computeIndicator(r, cache);
           if (!_checkCondition(r, raw)) {
-            _pyramidRejectReason = 'المرحلة الثالثة (الفلاتر): فشل فلتر "${r.indicator}"';
+            _pyramidRejectReason =
+                'المرحلة الثالثة (الفلاتر): فشل فلتر "${r.indicator}"';
             return 0.0;
           }
-        } catch (_) { continue; }
+        } catch (_) {
+          continue;
+        }
       }
     }
 
@@ -1303,12 +1506,20 @@ class SignalEngine extends ChangeNotifier {
       try {
         final raw = _computeIndicator(r, cache);
         if (!_checkCondition(r, raw)) continue;
-        if (r.signal == 'CALL')             { callScore += r.score; }
-        else if (r.signal == 'PUT')         { putScore  += r.score; }
-        else if (r.signal == 'dominant' || r.signal == 'confirm') {
-          if (callScore >= putScore) { callScore += r.score; } else { putScore += r.score; }
+        if (r.signal == 'CALL') {
+          callScore += r.score;
+        } else if (r.signal == 'PUT') {
+          putScore += r.score;
+        } else if (r.signal == 'dominant' || r.signal == 'confirm') {
+          if (callScore >= putScore) {
+            callScore += r.score;
+          } else {
+            putScore += r.score;
+          }
         }
-      } catch (_) { continue; }
+      } catch (_) {
+        continue;
+      }
     }
     return callScore - putScore;
   }
@@ -1383,23 +1594,26 @@ class SignalEngine extends ChangeNotifier {
       recommendation: j['recommendation'] as String? ?? '',
     );
   }
-  
+
   // Active pair and candlestick list (last 30 candles)
   String _activePair = 'EUR/USD (OTC)';
   final List<Candle> _candles = [];
   double _currentPrice = 1.08450;
   String _chartTimeframe = '1m';
-  
+
   // Real-time signals
   TradingSignal? _activeSignal;
   final List<TradingSignal> _signalHistory = [];
   bool _isAnalyzing = false;
   String _analysisStageText = '';
   String _signalChangeNotice = '';
-  
+
   // Social win feed simulated log
   final List<String> _socialWinLogs = [];
-  
+
+  // Live price getter from the chart widget (set on each requestNextSignal call)
+  double Function()? _tvPriceGetter;
+
   // Countdown timer for active signal
   int _secondsRemaining = 0;
   Timer? _tickTimer;
@@ -1414,33 +1628,33 @@ class SignalEngine extends ChangeNotifier {
   String _marketSentiment = 'Neutral';
 
   // Advanced indicators
-  double _atrVal = 0.0;           // Average True Range (Volatility)
-  double _stochK = 50.0;         // Stochastic %K
-  double _stochD = 50.0;         // Stochastic %D
-  double _adxVal = 25.0;         // Average Directional Index (Trend Strength)
-  double _obvVal = 0.0;          // On-Balance Volume
-  double _vwapVal = 0.0;         // Volume Weighted Average Price
-  double _volumeDelta = 0.0;     // Buy vs Sell volume pressure
+  double _atrVal = 0.0; // Average True Range (Volatility)
+  double _stochK = 50.0; // Stochastic %K
+  double _stochD = 50.0; // Stochastic %D
+  double _adxVal = 25.0; // Average Directional Index (Trend Strength)
+  double _obvVal = 0.0; // On-Balance Volume
+  double _vwapVal = 0.0; // Volume Weighted Average Price
+  double _volumeDelta = 0.0; // Buy vs Sell volume pressure
   double _liquidityScore = 50.0; // Liquidity zone proximity score (0-100)
-  String _liquidityZone = 'Neutral';  // Current liquidity zone
-  double _ema50 = 0.0;           // EMA 50 for trend
-  double _cmfVal = 0.0;          // Chaikin Money Flow
+  String _liquidityZone = 'Neutral'; // Current liquidity zone
+  double _ema50 = 0.0; // EMA 50 for trend
+  double _cmfVal = 0.0; // Chaikin Money Flow
   String _trendStrength = 'Moderate'; // ADX-based trend strength
 
   // ============= Ultra-Advanced Indicators (V2 Engine) =============
-  double _williamsR = -50.0;      // Williams %R (-100 to 0)
-  double _cciVal = 0.0;           // Commodity Channel Index
-  double _mfiVal = 50.0;          // Money Flow Index (volume-weighted RSI)
-  double _rocVal = 0.0;           // Rate of Change (Momentum)
-  double _ema9 = 0.0;             // EMA 9 (fast)
-  double _ema21 = 0.0;            // EMA 21 (medium)
-  bool _volumeSpike = false;      // Volume spike detected
-  double _volumeRatio = 1.0;      // Current vol / avg vol ratio
-  String _obvTrend = 'flat';      // OBV trend direction
+  double _williamsR = -50.0; // Williams %R (-100 to 0)
+  double _cciVal = 0.0; // Commodity Channel Index
+  double _mfiVal = 50.0; // Money Flow Index (volume-weighted RSI)
+  double _rocVal = 0.0; // Rate of Change (Momentum)
+  double _ema9 = 0.0; // EMA 9 (fast)
+  double _ema21 = 0.0; // EMA 21 (medium)
+  bool _volumeSpike = false; // Volume spike detected
+  double _volumeRatio = 1.0; // Current vol / avg vol ratio
+  String _obvTrend = 'flat'; // OBV trend direction
   String _candlePattern = 'none'; // Detected candle pattern
   String _rsiDivergence = 'none'; // RSI divergence (bullish/bearish/none)
-  double _plusDi = 0.0;           // +DI for ADX direction
-  double _minusDi = 0.0;          // -DI for ADX direction
+  double _plusDi = 0.0; // +DI for ADX direction
+  double _minusDi = 0.0; // -DI for ADX direction
 
   // Getters
   String get activePair => _activePair;
@@ -1503,12 +1717,18 @@ class SignalEngine extends ChangeNotifier {
 
   int get timeframeSeconds {
     switch (_chartTimeframe) {
-      case '1m': return 60;
-      case '5m': return 300;
-      case '15m': return 900;
-      case '30m': return 1800;
-      case '1h': return 3600;
-      default: return 60;
+      case '1m':
+        return 60;
+      case '5m':
+        return 300;
+      case '15m':
+        return 900;
+      case '30m':
+        return 1800;
+      case '1h':
+        return 3600;
+      default:
+        return 60;
     }
   }
 
@@ -1520,14 +1740,21 @@ class SignalEngine extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> requestNextSignal(int selectedMinutes, {double Function()? tvPriceGetter}) async {
-    if (_isAnalyzing || (_activeSignal != null && _activeSignal!.status == 'ACTIVE')) {
+  Future<void> requestNextSignal(
+    int selectedMinutes, {
+    double Function()? tvPriceGetter,
+  }) async {
+    if (_isAnalyzing ||
+        (_activeSignal != null && _activeSignal!.status == 'ACTIVE')) {
       return;
     }
+    _tvPriceGetter = tvPriceGetter; // save for entry + exit price lookups
 
     _isAnalyzing = true;
+    _marketClosed = false;
     _signalChangeNotice = ''; // Clear previous warning notice
-    _activeSignal = null; // Clear previous signal card to show analysis progress
+    _activeSignal =
+        null; // Clear previous signal card to show analysis progress
 
     // Track TV price samples across all stages to detect static market
     final double priceAtStart = tvPriceGetter?.call() ?? 0;
@@ -1540,7 +1767,8 @@ class SignalEngine extends ChangeNotifier {
 
     // Stage 1: Support & Resistance
     final sr = _calculateSupportResistance();
-    _analysisStageText = '📊 تحليل مستويات الدعم والمقاومة لـ $_activePair | الدعم: ${AppConstants.formatPrice(sr['support']!)} | المقاومة: ${AppConstants.formatPrice(sr['resistance']!)}...';
+    _analysisStageText =
+        '📊 تحليل مستويات الدعم والمقاومة لـ ${_activePair.replaceAll(' (OTC)', '')} | الدعم: ${AppConstants.formatPrice(sr['support']!)} | المقاومة: ${AppConstants.formatPrice(sr['resistance']!)}...';
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 400));
     samplePrice();
@@ -1549,7 +1777,8 @@ class SignalEngine extends ChangeNotifier {
     final rsi = _calculateRsi(14);
     final stoch = _calculateStochastic(14, 3);
     final cci = _calculateCci(20);
-    _analysisStageText = '📈 فحص مؤشرات التذبذب ومناطق التشبع | RSI: ${rsi.toStringAsFixed(1)} | Stochastic: ${stoch['k']!.toStringAsFixed(1)} | CCI: ${cci.toStringAsFixed(0)}...';
+    _analysisStageText =
+        '📈 فحص مؤشرات التذبذب ومناطق التشبع | RSI: ${rsi.toStringAsFixed(1)} | Stochastic: ${stoch['k']!.toStringAsFixed(1)} | CCI: ${cci.toStringAsFixed(0)}...';
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 400));
     samplePrice();
@@ -1557,7 +1786,8 @@ class SignalEngine extends ChangeNotifier {
     // Stage 3: Volatility & Trend Strength
     final atr = _calculateAtr(14);
     final adxFull = _calculateAdxFull(14);
-    _analysisStageText = '⚡ فحص قوة الاتجاه ومعدل التذبذب | ATR: ${atr.toStringAsFixed(5)} | ADX: ${adxFull['adx']!.toStringAsFixed(1)}...';
+    _analysisStageText =
+        '⚡ فحص قوة الاتجاه ومعدل التذبذب | ATR: ${atr.toStringAsFixed(5)} | ADX: ${adxFull['adx']!.toStringAsFixed(1)}...';
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 400));
     samplePrice();
@@ -1565,7 +1795,8 @@ class SignalEngine extends ChangeNotifier {
     // Stage 4: Institutional Volume & MFI
     final vwap = _calculateVwap();
     final mfi = _calculateMfi(14);
-    _analysisStageText = '🏦 مراقبة تدفق سيولة الحوت والـ MFI | MFI: ${mfi.toStringAsFixed(1)} | VWAP: ${AppConstants.formatPrice(vwap)}...';
+    _analysisStageText =
+        '🏦 مراقبة تدفق سيولة الحوت والـ MFI | MFI: ${mfi.toStringAsFixed(1)} | VWAP: ${AppConstants.formatPrice(vwap)}...';
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 400));
     samplePrice();
@@ -1573,14 +1804,16 @@ class SignalEngine extends ChangeNotifier {
     // Stage 5: Money Flow & Volume Delta
     final cmf = _calculateCmf(20);
     final volDelta = _calculateVolumeDelta();
-    _analysisStageText = '💰 حساب ضغط الشراء مقابل البيع | CMF: ${cmf.toStringAsFixed(3)} | Vol Delta: ${volDelta.toStringAsFixed(1)}%...';
+    _analysisStageText =
+        '💰 حساب ضغط الشراء مقابل البيع | CMF: ${cmf.toStringAsFixed(3)} | Vol Delta: ${volDelta.toStringAsFixed(1)}%...';
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 400));
     samplePrice();
 
     // Stage 6: Order Blocks & Liquidity Zones
     final liq = _calculateLiquidityZones();
-    _analysisStageText = '🔍 تحديد مناطق الطلب والعرض والمستويات المؤسسية | LIQ Score: ${(liq['score'] as double).toStringAsFixed(0)}%...';
+    _analysisStageText =
+        '🔍 تحديد مناطق الطلب والعرض والمستويات المؤسسية | LIQ Score: ${(liq['score'] as double).toStringAsFixed(0)}%...';
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 400));
     samplePrice();
@@ -1588,25 +1821,29 @@ class SignalEngine extends ChangeNotifier {
     // Stage 7: Candlestick Patterns & Divergences
     final pattern = _detectCandlePatterns();
     final divergence = _detectRsiDivergence();
-    _analysisStageText = '🕯️ تحليل البرايس أكشن ونموذج الشموع | Pattern: ${pattern.replaceAll('_', ' ')} | Divergence: $divergence...';
+    _analysisStageText =
+        '🕯️ تحليل البرايس أكشن ونموذج الشموع | Pattern: ${pattern.replaceAll('_', ' ')} | Divergence: $divergence...';
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 400));
     samplePrice();
 
     // Stage 8: Correlation & DXY Index
-    _analysisStageText = '⚙️ قياس قوة العملة مقابل مؤشر الدولار والعملات الأخرى (Correlation Index)...';
+    _analysisStageText =
+        '⚙️ قياس قوة العملة مقابل مؤشر الدولار والعملات الأخرى (Correlation Index)...';
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 400));
     samplePrice();
 
     // Stage 9: Multi-Timeframe Confluence (1m / 5m / 15m)
-    _analysisStageText = '🔄 فحص محاذاة الاتجاه عبر الفريمات المتعددة لضمان دقة الدخول...';
+    _analysisStageText =
+        '🔄 فحص محاذاة الاتجاه عبر الفريمات المتعددة لضمان دقة الدخول...';
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 400));
     samplePrice();
 
     // Stage 10: Market Noise Filter
-    _analysisStageText = '🛡️ تصفية الضوضاء السعرية وكشف كسر الدعم والمقاومة الكاذب...';
+    _analysisStageText =
+        '🛡️ تصفية الضوضاء السعرية وكشف كسر الدعم والمقاومة الكاذب...';
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 400));
     samplePrice();
@@ -1618,111 +1855,109 @@ class SignalEngine extends ChangeNotifier {
     samplePrice();
 
     // Stage 12: Confluence Scoring
-    _analysisStageText = '🏁 احتساب Confluence النهائي لـ 18 مؤشر فني وحسم اتجاه السوق...';
+    _analysisStageText =
+        '🏁 احتساب Confluence النهائي لـ 18 مؤشر فني وحسم اتجاه السوق...';
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 400));
     samplePrice();
 
-    // Calculate remaining seconds in the current active candle and wait for it to close
-    if (_candles.isNotEmpty) {
-      final activeCandle = _candles.last;
-      int remainingInCandle = timeframeSeconds - DateTime.now().difference(activeCandle.time).inSeconds;
-      if (remainingInCandle < 0) remainingInCandle = 0;
+    // Wait for the current candle to close.
+    // Records the end of the CURRENT candle once, then counts down to it.
+    // Display formula: currentCandleEnd - nowSec  (matches chart.js badge exactly)
+    {
+      final cs = timeframeSeconds;
+      final startSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      final currentCandleEnd = (startSec ~/ cs + 1) * cs;
 
-      while (remainingInCandle > 0) {
-        _analysisStageText = 'بانتظار إغلاق الشمعة الحالية لفتح صفقة مع الشمعة القادمة: $remainingInCandle ثانية...';
-        notifyListeners();
-        await Future.delayed(const Duration(seconds: 1));
-        samplePrice();
-        final updatedRemaining = timeframeSeconds - DateTime.now().difference(activeCandle.time).inSeconds;
-        remainingInCandle = updatedRemaining >= 0 ? updatedRemaining : 0;
+      var lastRem = -1;
+      while (true) {
+        final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+        final rem = currentCandleEnd - nowSec;
+        if (rem <= 0) break;
+        if (rem != lastRem) {
+          lastRem = rem;
+          _analysisStageText =
+              'بانتظار إغلاق الشمعة الحالية لفتح صفقة مع الشمعة القادمة: $rem ثانية...';
+          notifyListeners();
+          samplePrice();
+        }
+        await Future.delayed(const Duration(milliseconds: 100));
       }
     }
 
-    // ── Market closed / paused detection ─────────────────────────────────────
-    final bool isPriceStatic = tvPriceGetter != null && priceSamples.length <= 1;
-    final bool isForexPair   = _isForexPairType();
-    final bool isWeekend     = DateTime.now().weekday == DateTime.saturday ||
-                               DateTime.now().weekday == DateTime.sunday;
+    // ── Market closed detection — weekend only for forex ─────────────────────
+    final bool isForexPair = _isForexPairType();
+    final bool isWeekend =
+        DateTime.now().weekday == DateTime.saturday ||
+        DateTime.now().weekday == DateTime.sunday;
 
-    if (isForexPair && (isWeekend || isPriceStatic)) {
+    if (isForexPair && isWeekend) {
       _isAnalyzing = false;
-      _activeSignal = TradingSignal(
-        pair: _activePair,
-        direction: 'WAIT',
-        durationMinutes: selectedMinutes,
-        entryPrice: _currentPrice,
-        currentPrice: _currentPrice,
-        confidence: 0.0,
-        entryTime: DateTime.now(),
-        expiryTime: DateTime.now(),
-        status: 'PENDING',
-        marketCondition: 'سوق الفوركس مغلق حالياً — يفتح الأحد مساءً بتوقيت نيويورك.',
-        recommendation: 'السوق غير متاح الآن ⛔ — جرب أزواج OTC أو العملات الرقمية.',
-      );
+      _activeSignal = null;
       _secondsRemaining = 0;
+      _marketClosed = true;
+      _socialWinLogs.clear();
       notifyListeners();
       return;
     }
 
-    if (isPriceStatic) {
+    // Detect static price in TV/scraping mode — price never changed across all analysis stages
+    if (_tvPriceGetter != null &&
+        priceSamples.length <= 1 &&
+        priceSamples.isNotEmpty) {
       _isAnalyzing = false;
-      _activeSignal = TradingSignal(
-        pair: _activePair,
-        direction: 'WAIT',
-        durationMinutes: selectedMinutes,
-        entryPrice: _currentPrice,
-        currentPrice: _currentPrice,
-        confidence: 0.0,
-        entryTime: DateTime.now(),
-        expiryTime: DateTime.now(),
-        status: 'PENDING',
-        marketCondition: 'السعر ثابت تماماً طوال فترة التحليل.',
-        recommendation: 'السوق واقف مؤقتاً ⏸️ — انتظر قليلاً وأعد المحاولة.',
-      );
+      _activeSignal = null;
       _secondsRemaining = 0;
+      _marketClosed = true;
+      _socialWinLogs.clear();
       notifyListeners();
       return;
     }
-
-    // Evaluate if the signal quality is strong enough
-    double netScore = _userRole == 'vip' ? _scoreV3VipEngine() : _scoreV2Engine();
-    double absScore = netScore.abs();
 
     _isAnalyzing = false;
+    evalJs(
+      "console.log('[SIG] wait loop done. price='+$_currentPrice+' candles='+${_candles.length}+' mins=$selectedMinutes')",
+    );
 
-    // WAIT conditions:
-    // • VIP built-in engine rejected (absScore < 6.0)
-    // • Pyramid rejected (any role, any plan)
-    final pyramidRejected = _pyramidRejectReason.isNotEmpty;
-    final vipBuiltInReject = _userRole == 'vip' && _vipDynamic == null && absScore < 6.0;
-    if (vipBuiltInReject || pyramidRejected) {
-      final rejectMsg = pyramidRejected
-          ? 'NO TRADE ⛔ | $_pyramidRejectReason'
-          : _vipLastResult?.rejectionReason.isNotEmpty == true
-              ? 'NO TRADE ⛔ | ${_vipLastResult!.rejectionReason}'
-              : 'الخوارزمية الـ VIP تنصح بالانتظار لحين تأكيد التحليل المزدوج.';
+    try {
+      _generateNextSignal(selectedMinutes);
+      evalJs(
+        "console.log('[SIG] signal generated: '+\"${_activeSignal?.direction ?? 'null'}\"+' exp='+\"${_activeSignal?.expiryTime}\"+' secs='+$_secondsRemaining)",
+      );
+    } catch (e) {
+      evalJs("console.error('[SIG] _generateNextSignal threw: '+\"$e\")");
+      // Scoring threw — fall back to a simple direction based on last candles
+      final isCall = _candles.length >= 2
+          ? _candles.last.close >= _candles[_candles.length - 2].close
+          : true;
+      final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      final cs = timeframeSeconds;
+      final cStart = (nowSec ~/ cs) * cs;
+      final expiry = cStart + selectedMinutes * cs;
+      final fallbackEntry = _tvPriceGetter?.call() ?? _currentPrice;
       _activeSignal = TradingSignal(
         pair: _activePair,
-        direction: 'WAIT',
+        direction: isCall ? 'CALL' : 'PUT',
         durationMinutes: selectedMinutes,
-        entryPrice: _currentPrice,
-        currentPrice: _currentPrice,
-        confidence: 0.0,
-        entryTime: DateTime.now(),
-        expiryTime: DateTime.now(),
-        status: 'PENDING',
-        marketCondition: pyramidRejected
-            ? 'الهرم لم يكتمل — انتظر تأكيد كامل المراحل ⚠️'
-            : 'سوق متذبذب مؤقتاً لكن تحت المراقبة الفائقة للسيولة ⚠️',
-        recommendation: rejectMsg,
+        entryPrice: fallbackEntry,
+        currentPrice: fallbackEntry,
+        confidence: 75.0,
+        entryTime: DateTime.fromMillisecondsSinceEpoch(cStart * 1000),
+        expiryTime: DateTime.fromMillisecondsSinceEpoch(expiry * 1000),
+        status: 'ACTIVE',
+        marketCondition: 'تحليل مباشر',
+        recommendation: isCall ? 'CALL ✅' : 'PUT ✅',
       );
-      _secondsRemaining = 0;
+      _secondsRemaining = (expiry - nowSec).clamp(1, selectedMinutes * cs + cs);
       _playNewSignalSound();
-    } else {
-      _generateNextSignal(selectedMinutes);
     }
-    
+
+    // Draw entry line on chart directly — works for both primary and fallback signal paths
+    if (_activeSignal != null) {
+      final ep = _activeSignal!.entryPrice;
+      final dir = _activeSignal!.direction;
+      evalJs("CandleChart.setGlobalEntryLine($ep, '$dir')");
+    }
     notifyListeners();
   }
 
@@ -1770,22 +2005,23 @@ class SignalEngine extends ChangeNotifier {
       (p) => p['symbol'] == _activePair,
       orElse: () => <String, dynamic>{},
     );
-    final type = (pair['type'] as String? ?? '').toLowerCase();
-    if (type == 'forex') return true;
-    if (type.isNotEmpty) return false;
-    // Fallback: infer from symbol name
-    return !_activePair.contains('(OTC)') &&
+    final category = (pair['category'] as String? ?? '').toLowerCase();
+    // Crypto is 24/7
+    if (category == 'crypto') return false;
+    // forex category covers both regular and OTC forex — all close on weekends
+    if (category == 'forex') return true;
+    // Fallback: infer from symbol name for unlisted pairs
+    return !_activePair.contains('BTC') &&
+        !_activePair.contains('ETH') &&
+        !_activePair.contains('SOL') &&
+        !_activePair.contains('BNB') &&
+        !_activePair.contains('XRP') &&
         !_activePair.contains('XAU') &&
         !_activePair.contains('XAG') &&
         !_activePair.contains('Gold') &&
         !_activePair.contains('Silver') &&
-        !_activePair.contains('BTC') &&
-        !_activePair.contains('ETH') &&
         !_activePair.contains('OIL') &&
-        !_activePair.contains('Crude') &&
-        !_activePair.contains('SOL') &&
-        !_activePair.contains('BNB') &&
-        !_activePair.contains('XRP');
+        !_activePair.contains('Crude');
   }
 
   // Helper: Calculate RSI from historical candles list
@@ -1819,21 +2055,21 @@ class SignalEngine extends ChangeNotifier {
   // Helper: Calculate EMA (Exponential Moving Average)
   double _calculateEma(int period) {
     if (_candles.length < period) return _currentPrice;
-    
+
     // Start with SMA as the first EMA value
     double sum = 0.0;
     for (int i = 0; i < period; i++) {
       sum += _candles[i].close;
     }
     double ema = sum / period;
-    
+
     // Multiplier
     double k = 2.0 / (period + 1);
-    
+
     for (int i = period; i < _candles.length; i++) {
       ema = (_candles[i].close * k) + (ema * (1 - k));
     }
-    
+
     return ema;
   }
 
@@ -1848,15 +2084,15 @@ class SignalEngine extends ChangeNotifier {
 
     double support = double.infinity;
     double resistance = double.negativeInfinity;
-    
+
     final List<double> peaks = [];
     final List<double> valleys = [];
-    
+
     for (int i = 1; i < _candles.length - 1; i++) {
       final prev = _candles[i - 1];
       final curr = _candles[i];
       final next = _candles[i + 1];
-      
+
       if (curr.high > prev.high && curr.high > next.high) {
         peaks.add(curr.high);
       }
@@ -1864,27 +2100,27 @@ class SignalEngine extends ChangeNotifier {
         valleys.add(curr.low);
       }
     }
-    
+
     if (valleys.isEmpty) {
       support = _candles.map((c) => c.low).reduce(min);
     } else {
       support = valleys.reduce(min);
     }
-    
+
     if (peaks.isEmpty) {
       resistance = _candles.map((c) => c.high).reduce(max);
     } else {
       resistance = peaks.reduce(max);
     }
-    
-    return {
-      'support': support,
-      'resistance': resistance,
-    };
+
+    return {'support': support, 'resistance': resistance};
   }
 
   // Helper: Calculate Bollinger Bands
-  Map<String, double> _calculateBollingerBands(int period, [double stdDevMult = 2.0]) {
+  Map<String, double> _calculateBollingerBands(
+    int period, [
+    double stdDevMult = 2.0,
+  ]) {
     double sma = _calculateSma(period);
     if (_candles.length < period) {
       return {'upper': sma * 1.002, 'lower': sma * 0.998, 'middle': sma};
@@ -1906,13 +2142,13 @@ class SignalEngine extends ChangeNotifier {
     final ema12 = _calculateEma(12);
     final ema26 = _calculateEma(26);
     final macdLine = ema12 - ema26;
-    
+
     // Signal line = 9-period EMA of MACD line (approximated)
     // We compute a rolling average of recent MACD-like values
     if (_candles.length < 26) {
       return {'macd': macdLine, 'signal': 0.0, 'histogram': macdLine};
     }
-    
+
     List<double> macdValues = [];
     for (int i = max(0, _candles.length - 9); i < _candles.length; i++) {
       double sum12 = 0, sum26 = 0;
@@ -1927,18 +2163,19 @@ class SignalEngine extends ChangeNotifier {
       }
       macdValues.add((sum12 / cnt12) - (sum26 / cnt26));
     }
-    
-    double signalLine = macdValues.isEmpty ? 0.0 : macdValues.reduce((a, b) => a + b) / macdValues.length;
+
+    double signalLine = macdValues.isEmpty
+        ? 0.0
+        : macdValues.reduce((a, b) => a + b) / macdValues.length;
     double histogram = macdLine - signalLine;
-    
+
     return {'macd': macdLine, 'signal': signalLine, 'histogram': histogram};
   }
-
 
   // Helper: Calculate ATR (Average True Range) - Volatility Measure
   double _calculateAtr(int period) {
     if (_candles.length < period + 1) return _currentPrice * 0.001;
-    
+
     double totalTR = 0.0;
     for (int i = _candles.length - period; i < _candles.length; i++) {
       final curr = _candles[i];
@@ -1954,19 +2191,21 @@ class SignalEngine extends ChangeNotifier {
   // Helper: Stochastic Oscillator (%K and %D)
   Map<String, double> _calculateStochastic(int period, int smoothK) {
     if (_candles.length < period) return {'k': 50.0, 'd': 50.0};
-    
+
     double highestHigh = double.negativeInfinity;
     double lowestLow = double.infinity;
     for (int i = _candles.length - period; i < _candles.length; i++) {
       if (_candles[i].high > highestHigh) highestHigh = _candles[i].high;
       if (_candles[i].low < lowestLow) lowestLow = _candles[i].low;
     }
-    
+
     double range = highestHigh - lowestLow;
-    double rawK = range == 0 ? 50.0 : ((_currentPrice - lowestLow) / range) * 100.0;
+    double rawK = range == 0
+        ? 50.0
+        : ((_currentPrice - lowestLow) / range) * 100.0;
     rawK = rawK.clamp(0.0, 100.0);
-    
-    // Smooth %K using SMA of recent raw %K values  
+
+    // Smooth %K using SMA of recent raw %K values
     List<double> kValues = [];
     for (int s = 0; s < smoothK && s < _candles.length - period; s++) {
       int offset = _candles.length - period - s;
@@ -1978,17 +2217,22 @@ class SignalEngine extends ChangeNotifier {
         if (_candles[i].low < ll) ll = _candles[i].low;
       }
       double r = hh - ll;
-      kValues.add(r == 0 ? 50.0 : ((_candles[min(offset + period - 1, _candles.length - 1)].close - ll) / r) * 100.0);
+      kValues.add(
+        r == 0
+            ? 50.0
+            : ((_candles[min(offset + period - 1, _candles.length - 1)].close -
+                          ll) /
+                      r) *
+                  100.0,
+      );
     }
     kValues.insert(0, rawK);
-    
+
     double smoothedK = kValues.reduce((a, b) => a + b) / kValues.length;
     double smoothedD = smoothedK; // %D is SMA of %K (simplified)
-    
+
     return {'k': smoothedK.clamp(0.0, 100.0), 'd': smoothedD.clamp(0.0, 100.0)};
   }
-
-
 
   // Helper: OBV (On-Balance Volume) - Volume-based momentum
   double _calculateObv() {
@@ -2025,7 +2269,9 @@ class SignalEngine extends ChangeNotifier {
     for (int i = _candles.length - period; i < _candles.length; i++) {
       final c = _candles[i];
       double hl = c.high - c.low;
-      double mfMultiplier = hl == 0 ? 0.0 : ((c.close - c.low) - (c.high - c.close)) / hl;
+      double mfMultiplier = hl == 0
+          ? 0.0
+          : ((c.close - c.low) - (c.high - c.close)) / hl;
       mfvSum += mfMultiplier * c.volume;
       volSum += c.volume;
     }
@@ -2039,7 +2285,9 @@ class SignalEngine extends ChangeNotifier {
     double sellVolume = 0.0;
     for (int i = _candles.length - 5; i < _candles.length; i++) {
       final c = _candles[i];
-      double bodyRatio = c.high == c.low ? 0.5 : (c.close - c.low) / (c.high - c.low);
+      double bodyRatio = c.high == c.low
+          ? 0.5
+          : (c.close - c.low) / (c.high - c.low);
       buyVolume += c.volume * bodyRatio;
       sellVolume += c.volume * (1.0 - bodyRatio);
     }
@@ -2055,8 +2303,9 @@ class SignalEngine extends ChangeNotifier {
 
     // Identify high-volume candles as liquidity zones (order blocks)
     List<double> volumeValues = _candles.map((c) => c.volume).toList();
-    double avgVolume = volumeValues.reduce((a, b) => a + b) / volumeValues.length;
-    
+    double avgVolume =
+        volumeValues.reduce((a, b) => a + b) / volumeValues.length;
+
     // Find price levels where volume was significantly above average (1.5x+)
     List<double> liquidityLevels = [];
     for (final c in _candles) {
@@ -2064,15 +2313,15 @@ class SignalEngine extends ChangeNotifier {
         liquidityLevels.add((c.high + c.low) / 2.0);
       }
     }
-    
+
     // Also add support/resistance as liquidity pools
     final sr = _calculateSupportResistance();
     liquidityLevels.add(sr['support']!);
     liquidityLevels.add(sr['resistance']!);
-    
+
     // Add VWAP as institutional interest level
     liquidityLevels.add(_calculateVwap());
-    
+
     // Calculate proximity score (how close price is to a liquidity zone)
     double minDist = double.infinity;
     double nearestLevel = _currentPrice;
@@ -2083,11 +2332,13 @@ class SignalEngine extends ChangeNotifier {
         nearestLevel = level;
       }
     }
-    
+
     // Score: 100 = right at liquidity zone, 0 = far away
     double atr = _calculateAtr(14);
-    double proximityScore = atr == 0 ? 50.0 : (1.0 - (minDist / (atr * 3.0)).clamp(0.0, 1.0)) * 100.0;
-    
+    double proximityScore = atr == 0
+        ? 50.0
+        : (1.0 - (minDist / (atr * 3.0)).clamp(0.0, 1.0)) * 100.0;
+
     // Determine zone type
     String zoneType;
     if (proximityScore > 75) {
@@ -2101,8 +2352,12 @@ class SignalEngine extends ChangeNotifier {
     } else {
       zoneType = 'Low Liquidity';
     }
-    
-    return {'score': proximityScore, 'zone': zoneType, 'nearestLevel': nearestLevel};
+
+    return {
+      'score': proximityScore,
+      'zone': zoneType,
+      'nearestLevel': nearestLevel,
+    };
   }
 
   // ======================================================================
@@ -2128,12 +2383,17 @@ class SignalEngine extends ChangeNotifier {
     if (_candles.length < period) return 0.0;
     List<double> typicalPrices = [];
     for (int i = _candles.length - period; i < _candles.length; i++) {
-      typicalPrices.add((_candles[i].high + _candles[i].low + _candles[i].close) / 3.0);
+      typicalPrices.add(
+        (_candles[i].high + _candles[i].low + _candles[i].close) / 3.0,
+      );
     }
     double mean = typicalPrices.reduce((a, b) => a + b) / typicalPrices.length;
-    double meanDeviation = typicalPrices.map((tp) => (tp - mean).abs()).reduce((a, b) => a + b) / typicalPrices.length;
+    double meanDeviation =
+        typicalPrices.map((tp) => (tp - mean).abs()).reduce((a, b) => a + b) /
+        typicalPrices.length;
     if (meanDeviation == 0) return 0.0;
-    double currentTP = (_candles.last.high + _candles.last.low + _candles.last.close) / 3.0;
+    double currentTP =
+        (_candles.last.high + _candles.last.low + _candles.last.close) / 3.0;
     return (currentTP - mean) / (0.015 * meanDeviation);
   }
 
@@ -2143,8 +2403,11 @@ class SignalEngine extends ChangeNotifier {
     double posFlow = 0.0;
     double negFlow = 0.0;
     for (int i = _candles.length - period; i < _candles.length; i++) {
-      double tp = (_candles[i].high + _candles[i].low + _candles[i].close) / 3.0;
-      double prevTp = (_candles[i - 1].high + _candles[i - 1].low + _candles[i - 1].close) / 3.0;
+      double tp =
+          (_candles[i].high + _candles[i].low + _candles[i].close) / 3.0;
+      double prevTp =
+          (_candles[i - 1].high + _candles[i - 1].low + _candles[i - 1].close) /
+          3.0;
       double rawMF = tp * _candles[i].volume;
       if (tp > prevTp) {
         posFlow += rawMF;
@@ -2167,7 +2430,8 @@ class SignalEngine extends ChangeNotifier {
 
   // Enhanced ADX with +DI / -DI directional components
   Map<String, double> _calculateAdxFull(int period) {
-    if (_candles.length < period + 1) return {'adx': 25.0, 'plusDi': 50.0, 'minusDi': 50.0};
+    if (_candles.length < period + 1)
+      return {'adx': 25.0, 'plusDi': 50.0, 'minusDi': 50.0};
 
     double plusDmSum = 0, minusDmSum = 0, trSum = 0;
     for (int i = _candles.length - period; i < _candles.length; i++) {
@@ -2180,7 +2444,10 @@ class SignalEngine extends ChangeNotifier {
       double plusDm = (upMove > downMove && upMove > 0) ? upMove : 0;
       double minusDm = (downMove > upMove && downMove > 0) ? downMove : 0;
 
-      double tr = max(curr.high - curr.low, max((curr.high - prev.close).abs(), (curr.low - prev.close).abs()));
+      double tr = max(
+        curr.high - curr.low,
+        max((curr.high - prev.close).abs(), (curr.low - prev.close).abs()),
+      );
 
       plusDmSum += plusDm;
       minusDmSum += minusDm;
@@ -2202,7 +2469,12 @@ class SignalEngine extends ChangeNotifier {
   // Volume Profile Analysis - Spike detection, OBV trend, and volume confirmation
   Map<String, dynamic> _analyzeVolumeProfile() {
     if (_candles.length < 10) {
-      return {'spike': false, 'ratio': 1.0, 'trend': 'flat', 'avgVolume': 1000.0};
+      return {
+        'spike': false,
+        'ratio': 1.0,
+        'trend': 'flat',
+        'avgVolume': 1000.0,
+      };
     }
 
     // Average volume (excluding last candle)
@@ -2226,9 +2498,16 @@ class SignalEngine extends ChangeNotifier {
         obvRecent -= _candles[i].volume;
       }
     }
-    String trend = obvRecent > 0 ? 'bullish' : (obvRecent < 0 ? 'bearish' : 'flat');
+    String trend = obvRecent > 0
+        ? 'bullish'
+        : (obvRecent < 0 ? 'bearish' : 'flat');
 
-    return {'spike': spike, 'ratio': ratio, 'trend': trend, 'avgVolume': avgVol};
+    return {
+      'spike': spike,
+      'ratio': ratio,
+      'trend': trend,
+      'avgVolume': avgVol,
+    };
   }
 
   // ── Smart Money Concepts ─────────────────────────────────────────────────
@@ -2241,13 +2520,17 @@ class SignalEngine extends ChangeNotifier {
 
     for (int i = 2; i < _candles.length - 2; i++) {
       final h = _candles[i].high;
-      if (h > _candles[i-1].high && h > _candles[i-2].high &&
-          h > _candles[i+1].high && h > _candles[i+2].high) {
+      if (h > _candles[i - 1].high &&
+          h > _candles[i - 2].high &&
+          h > _candles[i + 1].high &&
+          h > _candles[i + 2].high) {
         shPrices.add(h);
       }
       final l = _candles[i].low;
-      if (l < _candles[i-1].low && l < _candles[i-2].low &&
-          l < _candles[i+1].low && l < _candles[i+2].low) {
+      if (l < _candles[i - 1].low &&
+          l < _candles[i - 2].low &&
+          l < _candles[i + 1].low &&
+          l < _candles[i + 2].low) {
         slPrices.add(l);
       }
     }
@@ -2270,8 +2553,10 @@ class SignalEngine extends ChangeNotifier {
 
       if (wasBearish && nowBullish) return 'change_of_character_bullish';
       if (wasBullish && nowBearish) return 'change_of_character_bearish';
-      if (nowBullish && _currentPrice > sh2) return 'break_of_structure_bullish';
-      if (nowBearish && _currentPrice < sl2) return 'break_of_structure_bearish';
+      if (nowBullish && _currentPrice > sh2)
+        return 'break_of_structure_bullish';
+      if (nowBearish && _currentPrice < sl2)
+        return 'break_of_structure_bearish';
     }
 
     if (nowBullish) return 'higher_high_higher_low';
@@ -2283,7 +2568,9 @@ class SignalEngine extends ChangeNotifier {
     if (_candles.length < 10) return 'none';
 
     double totalBody = 0;
-    for (final c in _candles) { totalBody += (c.close - c.open).abs(); }
+    for (final c in _candles) {
+      totalBody += (c.close - c.open).abs();
+    }
     final impulseThreshold = (totalBody / _candles.length) * 1.5;
 
     for (int i = _candles.length - 2; i >= 5; i--) {
@@ -2295,7 +2582,8 @@ class SignalEngine extends ChangeNotifier {
         for (int j = i - 1; j >= max(0, i - 5); j--) {
           final ob = _candles[j];
           if (ob.close < ob.open) {
-            if (_currentPrice >= ob.low && _currentPrice <= ob.high) return 'bullish';
+            if (_currentPrice >= ob.low && _currentPrice <= ob.high)
+              return 'bullish';
             break;
           }
         }
@@ -2303,7 +2591,8 @@ class SignalEngine extends ChangeNotifier {
         for (int j = i - 1; j >= max(0, i - 5); j--) {
           final ob = _candles[j];
           if (ob.close > ob.open) {
-            if (_currentPrice >= ob.low && _currentPrice <= ob.high) return 'bearish';
+            if (_currentPrice >= ob.low && _currentPrice <= ob.high)
+              return 'bearish';
             break;
           }
         }
@@ -2320,10 +2609,12 @@ class SignalEngine extends ChangeNotifier {
       final c3 = _candles[i];
 
       if (c3.low > c1.high) {
-        if (_currentPrice >= c1.high && _currentPrice <= c3.low) return 'bullish';
+        if (_currentPrice >= c1.high && _currentPrice <= c3.low)
+          return 'bullish';
       }
       if (c3.high < c1.low) {
-        if (_currentPrice >= c3.high && _currentPrice <= c1.low) return 'bearish';
+        if (_currentPrice >= c3.high && _currentPrice <= c1.low)
+          return 'bearish';
       }
     }
     return 'none';
@@ -2332,19 +2623,21 @@ class SignalEngine extends ChangeNotifier {
   String _detectLiquiditySweep() {
     if (_candles.length < 15) return 'none';
 
-    final refEnd   = _candles.length - 3;
+    final refEnd = _candles.length - 3;
     final refStart = max(0, _candles.length - 18);
 
     double refHigh = 0;
-    double refLow  = double.infinity;
+    double refLow = double.infinity;
     for (int i = refStart; i < refEnd; i++) {
       refHigh = max(refHigh, _candles[i].high);
-      refLow  = min(refLow,  _candles[i].low);
+      refLow = min(refLow, _candles[i].low);
     }
 
     final last3 = _candles.sublist(_candles.length - 3);
-    if (last3.any((c) => c.low  < refLow)  && _currentPrice > refLow)  return 'sell_side';
-    if (last3.any((c) => c.high > refHigh) && _currentPrice < refHigh) return 'buy_side';
+    if (last3.any((c) => c.low < refLow) && _currentPrice > refLow)
+      return 'sell_side';
+    if (last3.any((c) => c.high > refHigh) && _currentPrice < refHigh)
+      return 'buy_side';
     return 'none';
   }
 
@@ -2352,20 +2645,26 @@ class SignalEngine extends ChangeNotifier {
     if (_candles.length < 30) return 'none';
 
     final highPrices = <double>[];
-    final highIdxs   = <int>[];
-    final lowPrices  = <double>[];
-    final lowIdxs    = <int>[];
+    final highIdxs = <int>[];
+    final lowPrices = <double>[];
+    final lowIdxs = <int>[];
 
     for (int i = 2; i < _candles.length - 2; i++) {
       final h = _candles[i].high;
       final l = _candles[i].low;
-      if (h > _candles[i-1].high && h > _candles[i-2].high &&
-          h > _candles[i+1].high && h > _candles[i+2].high) {
-        highPrices.add(h); highIdxs.add(i);
+      if (h > _candles[i - 1].high &&
+          h > _candles[i - 2].high &&
+          h > _candles[i + 1].high &&
+          h > _candles[i + 2].high) {
+        highPrices.add(h);
+        highIdxs.add(i);
       }
-      if (l < _candles[i-1].low && l < _candles[i-2].low &&
-          l < _candles[i+1].low && l < _candles[i+2].low) {
-        lowPrices.add(l); lowIdxs.add(i);
+      if (l < _candles[i - 1].low &&
+          l < _candles[i - 2].low &&
+          l < _candles[i + 1].low &&
+          l < _candles[i + 2].low) {
+        lowPrices.add(l);
+        lowIdxs.add(i);
       }
     }
 
@@ -2375,40 +2674,47 @@ class SignalEngine extends ChangeNotifier {
     final phPrice = highPrices[highPrices.length - 2];
     final llPrice = lowPrices.last;
     final plPrice = lowPrices[lowPrices.length - 2];
-    final lhIdx   = highIdxs.last;
-    final llIdx   = lowIdxs.last;
+    final lhIdx = highIdxs.last;
+    final llIdx = lowIdxs.last;
 
     String detectedWave;
     String direction;
 
     if (lhIdx > llIdx) {
       // Last swing = HIGH → up move just completed
-      final impulse  = lhPrice - plPrice;
+      final impulse = lhPrice - plPrice;
       final prevDown = phPrice - llPrice;
       if (impulse > prevDown * 1.3 && lhPrice > phPrice && llPrice > plPrice) {
-        detectedWave = '3'; direction = 'bullish';
+        detectedWave = '3';
+        direction = 'bullish';
       } else if (lhPrice > phPrice) {
         detectedWave = impulse < prevDown ? '5' : '1';
         direction = 'bullish';
       } else {
-        detectedWave = 'B'; direction = 'bearish';
+        detectedWave = 'B';
+        direction = 'bearish';
       }
     } else {
       // Last swing = LOW → down move just completed
       final downSize = lhPrice - llPrice;
-      final prevUp   = lhPrice - plPrice;
-      final retrace  = prevUp > 0 ? downSize / prevUp : 0.5;
+      final prevUp = lhPrice - plPrice;
+      final retrace = prevUp > 0 ? downSize / prevUp : 0.5;
       if (llPrice < plPrice && lhPrice < phPrice) {
         detectedWave = downSize > prevUp * 1.3 ? '3' : 'C';
         direction = 'bearish';
       } else if (retrace >= 0.382 && retrace <= 0.786) {
-        detectedWave = '2'; direction = 'bearish';
+        detectedWave = '2';
+        direction = 'bearish';
       } else {
-        detectedWave = 'C'; direction = 'bearish';
+        detectedWave = 'C';
+        direction = 'bearish';
       }
     }
 
-    if (targetWave != null && targetWave.isNotEmpty && detectedWave != targetWave) return 'none';
+    if (targetWave != null &&
+        targetWave.isNotEmpty &&
+        detectedWave != targetWave)
+      return 'none';
     return direction;
   }
 
@@ -2419,7 +2725,9 @@ class SignalEngine extends ChangeNotifier {
   double _avgBodySize() {
     if (_candles.isEmpty) return 0.0001;
     double s = 0;
-    for (final c in _candles) { s += (c.close - c.open).abs(); }
+    for (final c in _candles) {
+      s += (c.close - c.open).abs();
+    }
     return s / _candles.length;
   }
 
@@ -2430,8 +2738,9 @@ class SignalEngine extends ChangeNotifier {
       double ch = _candles[i].high, cl = _candles[i].low;
       bool iH = true, iL = true;
       for (int k = 1; k <= str; k++) {
-        if (ch <= _candles[i-k].high || ch <= _candles[i+k].high) iH = false;
-        if (cl >= _candles[i-k].low  || cl >= _candles[i+k].low)  iL = false;
+        if (ch <= _candles[i - k].high || ch <= _candles[i + k].high)
+          iH = false;
+        if (cl >= _candles[i - k].low || cl >= _candles[i + k].low) iL = false;
       }
       if (iH) h.add(ch);
       if (iL) l.add(cl);
@@ -2444,7 +2753,8 @@ class SignalEngine extends ChangeNotifier {
     double rH = 0, rL = double.infinity;
     final lb = min(50, _candles.length);
     for (int i = _candles.length - lb; i < _candles.length; i++) {
-      rH = max(rH, _candles[i].high); rL = min(rL, _candles[i].low);
+      rH = max(rH, _candles[i].high);
+      rL = min(rL, _candles[i].low);
     }
     final range = rH - rL;
     return range > 0 ? ((_currentPrice - rL) / range) * 100 : 50;
@@ -2457,18 +2767,20 @@ class SignalEngine extends ChangeNotifier {
   String _detectInternalBos() {
     if (_candles.length < 8) return 'none';
     final sp = _swingPoints(lookback: 12, str: 1);
-    final h = sp['h']!; final l = sp['l']!;
+    final h = sp['h']!;
+    final l = sp['l']!;
     if (h.isNotEmpty && _currentPrice > h.last) return 'bullish';
-    if (l.isNotEmpty && _currentPrice < l.last)  return 'bearish';
+    if (l.isNotEmpty && _currentPrice < l.last) return 'bearish';
     return 'none';
   }
 
   String _detectExternalBos() {
     if (_candles.length < 20) return 'none';
     final sp = _swingPoints(lookback: _candles.length, str: 3);
-    final h = sp['h']!; final l = sp['l']!;
+    final h = sp['h']!;
+    final l = sp['l']!;
     if (h.length >= 2 && _currentPrice > h[h.length - 2]) return 'bullish';
-    if (l.length >= 2 && _currentPrice < l[l.length - 2])  return 'bearish';
+    if (l.length >= 2 && _currentPrice < l[l.length - 2]) return 'bearish';
     return 'none';
   }
 
@@ -2493,11 +2805,17 @@ class SignalEngine extends ChangeNotifier {
       final c = _candles[i];
       final range = c.high - c.low;
       if (range < 0.0001) continue;
-      final body   = (c.close - c.open).abs();
-      final upW    = c.high - max(c.open, c.close);
-      final dnW    = min(c.open, c.close) - c.low;
-      if (dnW > range * 0.6 && dnW > body * 2 && (_currentPrice - c.low).abs() < range * 0.4) return 'bullish';
-      if (upW > range * 0.6 && upW > body * 2 && (_currentPrice - c.high).abs() < range * 0.4) return 'bearish';
+      final body = (c.close - c.open).abs();
+      final upW = c.high - max(c.open, c.close);
+      final dnW = min(c.open, c.close) - c.low;
+      if (dnW > range * 0.6 &&
+          dnW > body * 2 &&
+          (_currentPrice - c.low).abs() < range * 0.4)
+        return 'bullish';
+      if (upW > range * 0.6 &&
+          upW > body * 2 &&
+          (_currentPrice - c.high).abs() < range * 0.4)
+        return 'bearish';
     }
     return 'none';
   }
@@ -2511,7 +2829,10 @@ class SignalEngine extends ChangeNotifier {
       final zH = max(c.open, c.close), zL = min(c.open, c.close);
       bool moved = false;
       for (int j = i + 1; j < min(i + 5, _candles.length - 1); j++) {
-        if ((_candles[j].close - c.close).abs() > avg * 3) { moved = true; break; }
+        if ((_candles[j].close - c.close).abs() > avg * 3) {
+          moved = true;
+          break;
+        }
       }
       if (moved && _currentPrice >= zL && _currentPrice <= zH) {
         return c.close > c.open ? 'bullish' : 'bearish';
@@ -2523,20 +2844,28 @@ class SignalEngine extends ChangeNotifier {
   String _detectInverseFvg() {
     if (_candles.length < 10) return 'none';
     for (int i = min(_candles.length - 4, _candles.length - 1); i >= 4; i--) {
-      final c1 = _candles[i-2], c3 = _candles[i];
+      final c1 = _candles[i - 2], c3 = _candles[i];
       if (c3.low > c1.high) {
         bool filled = false;
         for (int j = i + 1; j < _candles.length - 1; j++) {
-          if (_candles[j].low <= c1.high) { filled = true; break; }
+          if (_candles[j].low <= c1.high) {
+            filled = true;
+            break;
+          }
         }
-        if (filled && _currentPrice >= c1.high && _currentPrice <= c3.low) return 'bearish';
+        if (filled && _currentPrice >= c1.high && _currentPrice <= c3.low)
+          return 'bearish';
       }
       if (c3.high < c1.low) {
         bool filled = false;
         for (int j = i + 1; j < _candles.length - 1; j++) {
-          if (_candles[j].high >= c1.low) { filled = true; break; }
+          if (_candles[j].high >= c1.low) {
+            filled = true;
+            break;
+          }
         }
-        if (filled && _currentPrice >= c3.high && _currentPrice <= c1.low) return 'bullish';
+        if (filled && _currentPrice >= c3.high && _currentPrice <= c1.low)
+          return 'bullish';
       }
     }
     return 'none';
@@ -2546,14 +2875,21 @@ class SignalEngine extends ChangeNotifier {
     if (_candles.length < 10) return 'none';
     final bL = <double>[], bH = <double>[], sL = <double>[], sH = <double>[];
     for (int i = 2; i < _candles.length; i++) {
-      final c1 = _candles[i-2], c3 = _candles[i];
-      if (c3.low > c1.high) { bL.add(c1.high); bH.add(c3.low); }
-      if (c3.high < c1.low) { sL.add(c3.high); sH.add(c1.low); }
+      final c1 = _candles[i - 2], c3 = _candles[i];
+      if (c3.low > c1.high) {
+        bL.add(c1.high);
+        bH.add(c3.low);
+      }
+      if (c3.high < c1.low) {
+        sL.add(c3.high);
+        sH.add(c1.low);
+      }
     }
     for (int b = 0; b < bL.length; b++) {
       for (int s = 0; s < sL.length; s++) {
         final oL = max(bL[b], sL[s]), oH = min(bH[b], sH[s]);
-        if (oH > oL && _currentPrice >= oL && _currentPrice <= oH) return 'active';
+        if (oH > oL && _currentPrice >= oL && _currentPrice <= oH)
+          return 'active';
       }
     }
     return 'none';
@@ -2565,7 +2901,8 @@ class SignalEngine extends ChangeNotifier {
     if (h.length < 2) return 'none';
     const tol = 0.001;
     for (int i = h.length - 1; i >= 1; i--) {
-      if ((h[i] - h[i-1]).abs() < tol && _currentPrice >= h[i] - tol) return 'active';
+      if ((h[i] - h[i - 1]).abs() < tol && _currentPrice >= h[i] - tol)
+        return 'active';
     }
     return 'none';
   }
@@ -2576,13 +2913,16 @@ class SignalEngine extends ChangeNotifier {
     if (l.length < 2) return 'none';
     const tol = 0.001;
     for (int i = l.length - 1; i >= 1; i--) {
-      if ((l[i] - l[i-1]).abs() < tol && _currentPrice <= l[i] + tol) return 'active';
+      if ((l[i] - l[i - 1]).abs() < tol && _currentPrice <= l[i] + tol)
+        return 'active';
     }
     return 'none';
   }
 
-  String _detectPremiumZone() => _premiumDiscountPos() > 62 ? 'premium' : 'none';
-  String _detectDiscountZone() => _premiumDiscountPos() < 38 ? 'discount' : 'none';
+  String _detectPremiumZone() =>
+      _premiumDiscountPos() > 62 ? 'premium' : 'none';
+  String _detectDiscountZone() =>
+      _premiumDiscountPos() < 38 ? 'discount' : 'none';
 
   String _detectDealingRange() {
     final p = _premiumDiscountPos();
@@ -2593,11 +2933,18 @@ class SignalEngine extends ChangeNotifier {
 
   String _detectOte() {
     if (_candles.length < 20) return 'none';
-    double sH = 0, sL = double.infinity; int hIdx = 0, lIdx = 0;
+    double sH = 0, sL = double.infinity;
+    int hIdx = 0, lIdx = 0;
     final lb = min(30, _candles.length - 3);
     for (int i = _candles.length - lb; i < _candles.length - 3; i++) {
-      if (_candles[i].high > sH) { sH = _candles[i].high; hIdx = i; }
-      if (_candles[i].low  < sL) { sL = _candles[i].low;  lIdx = i; }
+      if (_candles[i].high > sH) {
+        sH = _candles[i].high;
+        hIdx = i;
+      }
+      if (_candles[i].low < sL) {
+        sL = _candles[i].low;
+        lIdx = i;
+      }
     }
     final range = sH - sL;
     if (range < 0.0001) return 'none';
@@ -2616,7 +2963,10 @@ class SignalEngine extends ChangeNotifier {
     final ms = _detectMarketStructure();
     final sweep = _detectLiquiditySweep();
     final exp = _detectExpansion();
-    final bearCtx = ms.contains('lower') || ms == 'change_of_character_bullish' || sweep == 'sell_side';
+    final bearCtx =
+        ms.contains('lower') ||
+        ms == 'change_of_character_bullish' ||
+        sweep == 'sell_side';
     return (bearCtx && exp == 'bullish') ? 'bullish' : 'none';
   }
 
@@ -2625,22 +2975,30 @@ class SignalEngine extends ChangeNotifier {
     final ms = _detectMarketStructure();
     final sweep = _detectLiquiditySweep();
     final exp = _detectExpansion();
-    final bullCtx = ms.contains('higher') || ms == 'change_of_character_bearish' || sweep == 'buy_side';
+    final bullCtx =
+        ms.contains('higher') ||
+        ms == 'change_of_character_bearish' ||
+        sweep == 'buy_side';
     return (bullCtx && exp == 'bearish') ? 'bearish' : 'none';
   }
 
   String _detectJudasSwing() {
     if (_candles.length < 8) return 'none';
     final hour = DateTime.now().toUtc().hour;
-    final inKZ = (hour >= 8 && hour <= 9) || (hour >= 13 && hour <= 14) || (hour >= 2 && hour <= 3);
+    final inKZ =
+        (hour >= 8 && hour <= 9) ||
+        (hour >= 13 && hour <= 14) ||
+        (hour >= 2 && hour <= 3);
     if (!inKZ) return 'none';
-    final atr  = _calculateAtr(5);
-    final rec  = _candles.sublist(max(0, _candles.length - 6));
-    final mxH  = rec.map((c) => c.high).reduce(max);
-    final mnL  = rec.map((c) => c.low).reduce(min);
-    final mid  = rec[rec.length ~/ 2].close;
-    if (mnL < rec.first.close - atr * 1.5 && _currentPrice > mid) return 'bullish';
-    if (mxH > rec.first.close + atr * 1.5 && _currentPrice < mid) return 'bearish';
+    final atr = _calculateAtr(5);
+    final rec = _candles.sublist(max(0, _candles.length - 6));
+    final mxH = rec.map((c) => c.high).reduce(max);
+    final mnL = rec.map((c) => c.low).reduce(min);
+    final mid = rec[rec.length ~/ 2].close;
+    if (mnL < rec.first.close - atr * 1.5 && _currentPrice > mid)
+      return 'bullish';
+    if (mxH > rec.first.close + atr * 1.5 && _currentPrice < mid)
+      return 'bearish';
     return 'none';
   }
 
@@ -2695,16 +3053,28 @@ class SignalEngine extends ChangeNotifier {
   String _detectAccumulation() {
     if (_candles.length < 20) return 'none';
     if (_calculateAtr(5) >= _calculateAtr(20) * 0.7) return 'none';
-    final rL = _candles.sublist(max(0, _candles.length - 5)).map((c) => c.low).reduce(min);
-    final pL = _candles.sublist(max(0, _candles.length - 20), _candles.length - 5).map((c) => c.low).reduce(min);
+    final rL = _candles
+        .sublist(max(0, _candles.length - 5))
+        .map((c) => c.low)
+        .reduce(min);
+    final pL = _candles
+        .sublist(max(0, _candles.length - 20), _candles.length - 5)
+        .map((c) => c.low)
+        .reduce(min);
     return rL > pL ? 'bullish' : 'none';
   }
 
   String _detectDistribution() {
     if (_candles.length < 20) return 'none';
     if (_calculateAtr(5) >= _calculateAtr(20) * 0.7) return 'none';
-    final rH = _candles.sublist(max(0, _candles.length - 5)).map((c) => c.high).reduce(max);
-    final pH = _candles.sublist(max(0, _candles.length - 20), _candles.length - 5).map((c) => c.high).reduce(max);
+    final rH = _candles
+        .sublist(max(0, _candles.length - 5))
+        .map((c) => c.high)
+        .reduce(max);
+    final pH = _candles
+        .sublist(max(0, _candles.length - 20), _candles.length - 5)
+        .map((c) => c.high)
+        .reduce(max);
     return rH < pH ? 'bearish' : 'none';
   }
 
@@ -2734,23 +3104,32 @@ class SignalEngine extends ChangeNotifier {
 
   String _detectKillZone() {
     final h = DateTime.now().toUtc().hour;
-    if (h >= 2  && h < 5)  return 'asian_killzone';
-    if (h >= 8  && h < 11) return 'london_killzone';
+    if (h >= 2 && h < 5) return 'asian_killzone';
+    if (h >= 8 && h < 11) return 'london_killzone';
     if (h >= 13 && h < 16) return 'newyork_killzone';
     return 'none';
   }
 
   String _detectDayOfWeek() {
     switch (DateTime.now().weekday) {
-      case 1: return 'monday';    case 2: return 'tuesday';
-      case 3: return 'wednesday'; case 4: return 'thursday';
-      case 5: return 'friday';    default: return 'weekend';
+      case 1:
+        return 'monday';
+      case 2:
+        return 'tuesday';
+      case 3:
+        return 'wednesday';
+      case 4:
+        return 'thursday';
+      case 5:
+        return 'friday';
+      default:
+        return 'weekend';
     }
   }
 
   String _detectSessionOverlap() {
     final h = DateTime.now().toUtc().hour;
-    if (h >= 8  && h < 9)  return 'asian_london';
+    if (h >= 8 && h < 9) return 'asian_london';
     if (h >= 13 && h < 17) return 'london_newyork';
     return 'none';
   }
@@ -2764,7 +3143,8 @@ class SignalEngine extends ChangeNotifier {
     final h = _swingPoints(lookback: 40, str: 2)['h']!;
     if (h.length < 2) return 'none';
     const tol = 0.0015;
-    if ((h.last - h[h.length - 2]).abs() < tol && _currentPrice < h.last - tol) return 'bearish';
+    if ((h.last - h[h.length - 2]).abs() < tol && _currentPrice < h.last - tol)
+      return 'bearish';
     return 'none';
   }
 
@@ -2773,7 +3153,8 @@ class SignalEngine extends ChangeNotifier {
     final l = _swingPoints(lookback: 40, str: 2)['l']!;
     if (l.length < 2) return 'none';
     const tol = 0.0015;
-    if ((l.last - l[l.length - 2]).abs() < tol && _currentPrice > l.last + tol) return 'bullish';
+    if ((l.last - l[l.length - 2]).abs() < tol && _currentPrice > l.last + tol)
+      return 'bullish';
     return 'none';
   }
 
@@ -2783,7 +3164,9 @@ class SignalEngine extends ChangeNotifier {
     if (h.length < 3) return 'none';
     final left = h[h.length - 3], head = h[h.length - 2], right = h.last;
     final shoulderAvg = (left + right) / 2;
-    if (head > left * 1.002 && head > right * 1.002 && (left - right).abs() < shoulderAvg * 0.003) {
+    if (head > left * 1.002 &&
+        head > right * 1.002 &&
+        (left - right).abs() < shoulderAvg * 0.003) {
       if (_currentPrice < shoulderAvg) return 'bearish';
     }
     return 'none';
@@ -2795,7 +3178,9 @@ class SignalEngine extends ChangeNotifier {
     if (l.length < 3) return 'none';
     final left = l[l.length - 3], head = l[l.length - 2], right = l.last;
     final shoulderAvg = (left + right) / 2;
-    if (head < left * 0.998 && head < right * 0.998 && (left - right).abs() < shoulderAvg * 0.003) {
+    if (head < left * 0.998 &&
+        head < right * 0.998 &&
+        (left - right).abs() < shoulderAvg * 0.003) {
       if (_currentPrice > shoulderAvg) return 'bullish';
     }
     return 'none';
@@ -2804,7 +3189,8 @@ class SignalEngine extends ChangeNotifier {
   String _detectAscendingTriangle() {
     if (_candles.length < 20) return 'none';
     final sp = _swingPoints(lookback: 30, str: 2);
-    final h = sp['h']!; final l = sp['l']!;
+    final h = sp['h']!;
+    final l = sp['l']!;
     if (h.length < 2 || l.length < 2) return 'none';
     final flatTop = (h.last - h[h.length - 2]).abs() < 0.0015;
     final risingLow = l.last > l[l.length - 2];
@@ -2815,7 +3201,8 @@ class SignalEngine extends ChangeNotifier {
   String _detectDescendingTriangle() {
     if (_candles.length < 20) return 'none';
     final sp = _swingPoints(lookback: 30, str: 2);
-    final h = sp['h']!; final l = sp['l']!;
+    final h = sp['h']!;
+    final l = sp['l']!;
     if (h.length < 2 || l.length < 2) return 'none';
     final flatBot = (l.last - l[l.length - 2]).abs() < 0.0015;
     final fallingHigh = h.last < h[h.length - 2];
@@ -2826,25 +3213,33 @@ class SignalEngine extends ChangeNotifier {
   String _detectSymmetricalTriangle() {
     if (_candles.length < 20) return 'none';
     final sp = _swingPoints(lookback: 30, str: 2);
-    final h = sp['h']!; final l = sp['l']!;
+    final h = sp['h']!;
+    final l = sp['l']!;
     if (h.length < 2 || l.length < 2) return 'none';
     final fallingH = h.last < h[h.length - 2];
-    final risingL  = l.last > l[l.length - 2];
+    final risingL = l.last > l[l.length - 2];
     if (!fallingH || !risingL) return 'none';
     if (_currentPrice > h.last) return 'bullish';
-    if (_currentPrice < l.last)  return 'bearish';
+    if (_currentPrice < l.last) return 'bearish';
     return 'none';
   }
 
   String _detectWedge(bool rising) {
     if (_candles.length < 20) return 'none';
     final sp = _swingPoints(lookback: 30, str: 2);
-    final h = sp['h']!; final l = sp['l']!;
+    final h = sp['h']!;
+    final l = sp['l']!;
     if (h.length < 2 || l.length < 2) return 'none';
     if (rising) {
-      if (h.last > h[h.length-2] && l.last > l[l.length-2] && _currentPrice < l.last) return 'bearish';
+      if (h.last > h[h.length - 2] &&
+          l.last > l[l.length - 2] &&
+          _currentPrice < l.last)
+        return 'bearish';
     } else {
-      if (h.last < h[h.length-2] && l.last < l[l.length-2] && _currentPrice > h.last) return 'bullish';
+      if (h.last < h[h.length - 2] &&
+          l.last < l[l.length - 2] &&
+          _currentPrice > h.last)
+        return 'bullish';
     }
     return 'none';
   }
@@ -2853,15 +3248,22 @@ class SignalEngine extends ChangeNotifier {
     if (_candles.length < 15) return 'none';
     final avg = _avgBodySize();
     // Strong impulse in first half, then consolidation
-    final first5 = _candles.sublist(max(0, _candles.length - 15), _candles.length - 5);
-    final last5  = _candles.sublist(_candles.length - 5);
+    final first5 = _candles.sublist(
+      max(0, _candles.length - 15),
+      _candles.length - 5,
+    );
+    final last5 = _candles.sublist(_candles.length - 5);
     final impulse = bull
         ? first5.last.close - first5.first.close
         : first5.first.close - first5.last.close;
-    final consol = last5.map((c) => c.high).reduce(max) - last5.map((c) => c.low).reduce(min);
+    final consol =
+        last5.map((c) => c.high).reduce(max) -
+        last5.map((c) => c.low).reduce(min);
     if (impulse > avg * 5 && consol < impulse * 0.4) {
-      if (bull  && _currentPrice > last5.map((c) => c.high).reduce(max)) return 'bullish';
-      if (!bull && _currentPrice < last5.map((c) => c.low).reduce(min))  return 'bearish';
+      if (bull && _currentPrice > last5.map((c) => c.high).reduce(max))
+        return 'bullish';
+      if (!bull && _currentPrice < last5.map((c) => c.low).reduce(min))
+        return 'bearish';
     }
     return 'none';
   }
@@ -2869,12 +3271,15 @@ class SignalEngine extends ChangeNotifier {
   String _detectChannel(bool up) {
     if (_candles.length < 20) return 'none';
     final sp = _swingPoints(lookback: 30, str: 2);
-    final h = sp['h']!; final l = sp['l']!;
+    final h = sp['h']!;
+    final l = sp['l']!;
     if (h.length < 2 || l.length < 2) return 'none';
     if (up) {
-      if (h.last > h[h.length-2] && l.last > l[l.length-2]) return 'bullish';
+      if (h.last > h[h.length - 2] && l.last > l[l.length - 2])
+        return 'bullish';
     } else {
-      if (h.last < h[h.length-2] && l.last < l[l.length-2]) return 'bearish';
+      if (h.last < h[h.length - 2] && l.last < l[l.length - 2])
+        return 'bearish';
     }
     return 'none';
   }
@@ -2882,14 +3287,15 @@ class SignalEngine extends ChangeNotifier {
   String _detectRectangle() {
     if (_candles.length < 20) return 'none';
     final sp = _swingPoints(lookback: 30, str: 2);
-    final h = sp['h']!; final l = sp['l']!;
+    final h = sp['h']!;
+    final l = sp['l']!;
     if (h.length < 2 || l.length < 2) return 'none';
     const tol = 0.0020;
-    final flatH = (h.last - h[h.length-2]).abs() < tol;
-    final flatL = (l.last - l[l.length-2]).abs() < tol;
+    final flatH = (h.last - h[h.length - 2]).abs() < tol;
+    final flatL = (l.last - l[l.length - 2]).abs() < tol;
     if (!flatH || !flatL) return 'none';
     if (_currentPrice > h.last) return 'bullish';
-    if (_currentPrice < l.last)  return 'bearish';
+    if (_currentPrice < l.last) return 'bearish';
     return 'none';
   }
 
@@ -2906,9 +3312,9 @@ class SignalEngine extends ChangeNotifier {
     // Simplified: use last 5 swing points alternating H/L
     // For bullish: X=L, A=H, B=L, C=H, D=L (current price near D)
     // Approximate ratios
-    final xL = l.length >= 3 ? l[l.length-3] : l.first;
-    final aH = h.length >= 2 ? h[h.length-2] : h.last;
-    final bL = l.length >= 2 ? l[l.length-2] : l.last;
+    final xL = l.length >= 3 ? l[l.length - 3] : l.first;
+    final aH = h.length >= 2 ? h[h.length - 2] : h.last;
+    final bL = l.length >= 2 ? l[l.length - 2] : l.last;
     final cH = h.last;
     final dTarget = _currentPrice;
 
@@ -2922,14 +3328,29 @@ class SignalEngine extends ChangeNotifier {
 
     bool matches = false;
     switch (type) {
-      case 'gartley':   matches = _inRange(abXa, 0.58, 0.65) && _inRange(bcAb, 0.36, 0.90); break;
-      case 'bat':       matches = _inRange(abXa, 0.38, 0.52) && _inRange(bcAb, 0.36, 0.90); break;
-      case 'butterfly': matches = _inRange(abXa, 0.74, 0.82) && _inRange(bcAb, 0.36, 0.90); break;
-      case 'crab':      matches = _inRange(abXa, 0.36, 0.62) && _inRange(bcAb, 0.36, 0.90); break;
-      case 'shark':     matches = _inRange(abXa, 0.44, 0.55) && bcAb > 1.13; break;
-      case 'cypher':    matches = _inRange(abXa, 0.38, 0.62) && _inRange(bcAb, 1.13, 1.41); break;
-      case 'ab_cd':     matches = _inRange(bcAb, 0.62, 0.79); break;
-      default: matches = false;
+      case 'gartley':
+        matches = _inRange(abXa, 0.58, 0.65) && _inRange(bcAb, 0.36, 0.90);
+        break;
+      case 'bat':
+        matches = _inRange(abXa, 0.38, 0.52) && _inRange(bcAb, 0.36, 0.90);
+        break;
+      case 'butterfly':
+        matches = _inRange(abXa, 0.74, 0.82) && _inRange(bcAb, 0.36, 0.90);
+        break;
+      case 'crab':
+        matches = _inRange(abXa, 0.36, 0.62) && _inRange(bcAb, 0.36, 0.90);
+        break;
+      case 'shark':
+        matches = _inRange(abXa, 0.44, 0.55) && bcAb > 1.13;
+        break;
+      case 'cypher':
+        matches = _inRange(abXa, 0.38, 0.62) && _inRange(bcAb, 1.13, 1.41);
+        break;
+      case 'ab_cd':
+        matches = _inRange(bcAb, 0.62, 0.79);
+        break;
+      default:
+        matches = false;
     }
 
     if (!matches) return 'none';
@@ -2949,13 +3370,13 @@ class SignalEngine extends ChangeNotifier {
     if (_candles.length < 5) return 'none';
     // Classic pivot: P = (H + L + C) / 3 from last session
     final c = _candles[_candles.length - 2]; // previous candle as "session"
-    final p  = (c.high + c.low + c.close) / 3;
+    final p = (c.high + c.low + c.close) / 3;
     final r1 = 2 * p - c.low;
     final s1 = 2 * p - c.high;
     if (_currentPrice > r1) return 'above_r1';
     if (_currentPrice < s1) return 'below_s1';
-    if (_currentPrice > p)  return 'above_pivot';
-    if (_currentPrice < p)  return 'below_pivot';
+    if (_currentPrice > p) return 'above_pivot';
+    if (_currentPrice < p) return 'below_pivot';
     return 'at_pivot';
   }
 
@@ -2978,7 +3399,8 @@ class SignalEngine extends ChangeNotifier {
   String _detectBreakoutSignal() {
     if (_candles.length < 20) return 'none';
     final sp = _swingPoints(lookback: 20, str: 2);
-    final h = sp['h']!; final l = sp['l']!;
+    final h = sp['h']!;
+    final l = sp['l']!;
     if (h.isEmpty || l.isEmpty) return 'none';
     final res = h.last, sup = l.last;
     final atr = _calculateAtr(14);
@@ -2997,7 +3419,7 @@ class SignalEngine extends ChangeNotifier {
 
   String _detectMeanReversionSignal() {
     if (_candles.length < 20) return 'none';
-    final rsi  = _calculateRsi(14);
+    final rsi = _calculateRsi(14);
     final bbPos = _premiumDiscountPos();
     if (rsi < 25 && bbPos < 10) return 'bullish';
     if (rsi > 75 && bbPos > 90) return 'bearish';
@@ -3008,13 +3430,13 @@ class SignalEngine extends ChangeNotifier {
     // NR4/NR7: Narrowest Range in last n bars
     if (_candles.length < n + 1) return 'none';
     final recent = _candles.sublist(_candles.length - n);
-    final ranges  = recent.map((c) => c.high - c.low).toList();
+    final ranges = recent.map((c) => c.high - c.low).toList();
     final lastRange = ranges.last;
     final isNr = ranges.every((r) => r >= lastRange);
     if (!isNr) return 'none';
     // Price direction after NR = breakout signal
     if (_currentPrice > recent.last.high) return 'bullish';
-    if (_currentPrice < recent.last.low)  return 'bearish';
+    if (_currentPrice < recent.last.low) return 'bearish';
     return 'active'; // Inside NR
   }
 
@@ -3022,9 +3444,9 @@ class SignalEngine extends ChangeNotifier {
     // Central Pivot Range: P±0.5*(H-L)
     if (_candles.length < 3) return 'none';
     final c = _candles[_candles.length - 2];
-    final p  = (c.high + c.low + c.close) / 3;
-    final tc = (c.high + c.low) / 2;   // top CPR
-    final bc = 2 * p - tc;             // bottom CPR
+    final p = (c.high + c.low + c.close) / 3;
+    final tc = (c.high + c.low) / 2; // top CPR
+    final bc = 2 * p - tc; // bottom CPR
     if (_currentPrice > max(tc, bc)) return 'above_cpr';
     if (_currentPrice < min(tc, bc)) return 'below_cpr';
     return 'inside_cpr';
@@ -3034,22 +3456,27 @@ class SignalEngine extends ChangeNotifier {
     // Volatility Contraction Pattern: sequential narrowing ranges
     if (_candles.length < 10) return 'none';
     final recent = _candles.sublist(_candles.length - 8);
-    final ranges  = recent.map((c) => c.high - c.low).toList();
+    final ranges = recent.map((c) => c.high - c.low).toList();
     bool contracting = true;
     for (int i = 1; i < ranges.length - 1; i++) {
-      if (ranges[i] >= ranges[i-1] * 1.1) { contracting = false; break; }
+      if (ranges[i] >= ranges[i - 1] * 1.1) {
+        contracting = false;
+        break;
+      }
     }
     if (!contracting) return 'none';
     if (_currentPrice > recent.last.high) return 'bullish';
-    if (_currentPrice < recent.last.low)  return 'bearish';
+    if (_currentPrice < recent.last.low) return 'bearish';
     return 'none';
   }
 
   String _detectOrbSignal() {
     // Opening Range Breakout: same as opening_range but as indicator
-    return _detectOpeningRange() == 'breakout_up' ? 'bullish'
-         : _detectOpeningRange() == 'breakout_down' ? 'bearish'
-         : 'none';
+    return _detectOpeningRange() == 'breakout_up'
+        ? 'bullish'
+        : _detectOpeningRange() == 'breakout_down'
+        ? 'bearish'
+        : 'none';
   }
 
   String _detectHeikinAshi() {
@@ -3058,9 +3485,11 @@ class SignalEngine extends ChangeNotifier {
     final c = _candles.last;
     final p = _candles[_candles.length - 2];
     final haClose = (c.open + c.high + c.low + c.close) / 4;
-    final haOpen  = (p.open + p.close) / 2;
-    if (haClose > haOpen && c.low == min(c.open, c.close)) return 'strong_bullish';
-    if (haClose < haOpen && c.high == max(c.open, c.close)) return 'strong_bearish';
+    final haOpen = (p.open + p.close) / 2;
+    if (haClose > haOpen && c.low == min(c.open, c.close))
+      return 'strong_bullish';
+    if (haClose < haOpen && c.high == max(c.open, c.close))
+      return 'strong_bearish';
     if (haClose > haOpen) return 'bullish';
     if (haClose < haOpen) return 'bearish';
     return 'none';
@@ -3078,11 +3507,11 @@ class SignalEngine extends ChangeNotifier {
   String _detectVwapBands() {
     if (_candles.length < 5) return 'none';
     final vwap = _calculateVwap();
-    final atr  = _calculateAtr(14);
+    final atr = _calculateAtr(14);
     if (_currentPrice > vwap + atr) return 'above_upper';
     if (_currentPrice < vwap - atr) return 'below_lower';
-    if (_currentPrice > vwap)       return 'above';
-    if (_currentPrice < vwap)       return 'below';
+    if (_currentPrice > vwap) return 'above';
+    if (_currentPrice < vwap) return 'below';
     return 'at';
   }
 
@@ -3091,7 +3520,7 @@ class SignalEngine extends ChangeNotifier {
     if (_candles.length < 10) return 'none';
     final n = min(10, _candles.length - 1);
     final startPrice = _candles[_candles.length - 1 - n].close;
-    final pipPerBar  = (_currentPrice - startPrice) / n;
+    final pipPerBar = (_currentPrice - startPrice) / n;
     if (pipPerBar.abs() < 0.00005) return 'equilibrium'; // near 1x1
     return pipPerBar > 0 ? 'bullish' : 'bearish';
   }
@@ -3106,16 +3535,19 @@ class SignalEngine extends ChangeNotifier {
     final c1 = _candles[_candles.length - 2];
     final c2 = _candles.length > 2 ? _candles[_candles.length - 3] : c1;
 
-    final range0  = c0.high - c0.low;
-    final body0   = (c0.close - c0.open).abs();
+    final range0 = c0.high - c0.low;
+    final body0 = (c0.close - c0.open).abs();
     final upWick0 = c0.high - max(c0.open, c0.close);
     final dnWick0 = min(c0.open, c0.close) - c0.low;
 
     // Doji family
     if (body0 < range0 * 0.1) {
-      if (dnWick0 > range0 * 0.6 && upWick0 < range0 * 0.1) return 'dragonfly_doji';
-      if (upWick0 > range0 * 0.6 && dnWick0 < range0 * 0.1) return 'gravestone_doji';
-      if (upWick0 > range0 * 0.3 && dnWick0 > range0 * 0.3) return 'long_legged_doji';
+      if (dnWick0 > range0 * 0.6 && upWick0 < range0 * 0.1)
+        return 'dragonfly_doji';
+      if (upWick0 > range0 * 0.6 && dnWick0 < range0 * 0.1)
+        return 'gravestone_doji';
+      if (upWick0 > range0 * 0.3 && dnWick0 > range0 * 0.3)
+        return 'long_legged_doji';
       return 'doji';
     }
 
@@ -3125,7 +3557,8 @@ class SignalEngine extends ChangeNotifier {
     }
 
     // Spinning Top
-    if (body0 < range0 * 0.3 && upWick0 > body0 && dnWick0 > body0) return 'spinning_top';
+    if (body0 < range0 * 0.3 && upWick0 > body0 && dnWick0 > body0)
+      return 'spinning_top';
 
     // Hammer / Hanging Man (single candle)
     if (dnWick0 > body0 * 2 && upWick0 < body0 * 0.5 && range0 > 0.0001) {
@@ -3140,48 +3573,132 @@ class SignalEngine extends ChangeNotifier {
     // Two-candle patterns
     final body1 = (c1.close - c1.open).abs();
     // Engulfing
-    if (c1.close < c1.open && c0.close > c0.open && c0.open <= c1.close && c0.close >= c1.open) return 'bullish_engulfing';
-    if (c1.close > c1.open && c0.close < c0.open && c0.open >= c1.close && c0.close <= c1.open) return 'bearish_engulfing';
+    if (c1.close < c1.open &&
+        c0.close > c0.open &&
+        c0.open <= c1.close &&
+        c0.close >= c1.open)
+      return 'bullish_engulfing';
+    if (c1.close > c1.open &&
+        c0.close < c0.open &&
+        c0.open >= c1.close &&
+        c0.close <= c1.open)
+      return 'bearish_engulfing';
 
     // Harami
-    if (c1.close < c1.open && c0.close > c0.open && c0.open > c1.close && c0.close < c1.open) return 'bullish_harami';
-    if (c1.close > c1.open && c0.close < c0.open && c0.open < c1.close && c0.close > c1.open) return 'bearish_harami';
-    if (c1.close < c1.open && body0 < body1 * 0.25 && c0.open > c1.close && c0.close < c1.open) return 'bullish_harami_cross';
-    if (c1.close > c1.open && body0 < body1 * 0.25 && c0.open < c1.close && c0.close > c1.open) return 'bearish_harami_cross';
+    if (c1.close < c1.open &&
+        c0.close > c0.open &&
+        c0.open > c1.close &&
+        c0.close < c1.open)
+      return 'bullish_harami';
+    if (c1.close > c1.open &&
+        c0.close < c0.open &&
+        c0.open < c1.close &&
+        c0.close > c1.open)
+      return 'bearish_harami';
+    if (c1.close < c1.open &&
+        body0 < body1 * 0.25 &&
+        c0.open > c1.close &&
+        c0.close < c1.open)
+      return 'bullish_harami_cross';
+    if (c1.close > c1.open &&
+        body0 < body1 * 0.25 &&
+        c0.open < c1.close &&
+        c0.close > c1.open)
+      return 'bearish_harami_cross';
 
     // Piercing Line / Dark Cloud Cover
-    if (c1.close < c1.open && c0.close > c0.open && c0.open < c1.close && c0.close > (c1.open + c1.close) / 2) return 'piercing_line';
-    if (c1.close > c1.open && c0.close < c0.open && c0.open > c1.close && c0.close < (c1.open + c1.close) / 2) return 'dark_cloud_cover';
+    if (c1.close < c1.open &&
+        c0.close > c0.open &&
+        c0.open < c1.close &&
+        c0.close > (c1.open + c1.close) / 2)
+      return 'piercing_line';
+    if (c1.close > c1.open &&
+        c0.close < c0.open &&
+        c0.open > c1.close &&
+        c0.close < (c1.open + c1.close) / 2)
+      return 'dark_cloud_cover';
 
     // Tweezers
-    if ((c1.high - c0.high).abs() < 0.0005 && c1.close > c1.open && c0.close < c0.open) return 'tweezer_top';
-    if ((c1.low  - c0.low).abs()  < 0.0005 && c1.close < c1.open && c0.close > c0.open) return 'tweezer_bottom';
+    if ((c1.high - c0.high).abs() < 0.0005 &&
+        c1.close > c1.open &&
+        c0.close < c0.open)
+      return 'tweezer_top';
+    if ((c1.low - c0.low).abs() < 0.0005 &&
+        c1.close < c1.open &&
+        c0.close > c0.open)
+      return 'tweezer_bottom';
 
     // Three-candle patterns
     if (_candles.length >= 3) {
       // Morning Star / Evening Star (simplified)
-      if (c2.close < c2.open && body1 < (c2.close - c2.open).abs() * 0.3 && c0.close > c0.open && c0.close > (c2.open + c2.close) / 2) return 'morning_star';
-      if (c2.close > c2.open && body1 < (c2.close - c2.open).abs() * 0.3 && c0.close < c0.open && c0.close < (c2.open + c2.close) / 2) return 'evening_star';
+      if (c2.close < c2.open &&
+          body1 < (c2.close - c2.open).abs() * 0.3 &&
+          c0.close > c0.open &&
+          c0.close > (c2.open + c2.close) / 2)
+        return 'morning_star';
+      if (c2.close > c2.open &&
+          body1 < (c2.close - c2.open).abs() * 0.3 &&
+          c0.close < c0.open &&
+          c0.close < (c2.open + c2.close) / 2)
+        return 'evening_star';
 
       // Three White Soldiers / Three Black Crows
-      if (c2.close > c2.open && c1.close > c1.open && c0.close > c0.open &&
-          c1.close > c2.close && c0.close > c1.close) return 'three_white_soldiers';
-      if (c2.close < c2.open && c1.close < c1.open && c0.close < c0.open &&
-          c1.close < c2.close && c0.close < c1.close) return 'three_black_crows';
+      if (c2.close > c2.open &&
+          c1.close > c1.open &&
+          c0.close > c0.open &&
+          c1.close > c2.close &&
+          c0.close > c1.close) {
+        return 'three_white_soldiers';
+      }
+      if (c2.close < c2.open &&
+          c1.close < c1.open &&
+          c0.close < c0.open &&
+          c1.close < c2.close &&
+          c0.close < c1.close) {
+        return 'three_black_crows';
+      }
 
       // Three Inside Up/Down
-      if (c2.close < c2.open && c1.close > c1.open && c1.open > c2.close && c1.close < c2.open &&
-          c0.close > c1.close) return 'three_inside_up';
-      if (c2.close > c2.open && c1.close < c1.open && c1.open < c2.close && c1.close > c2.open &&
-          c0.close < c1.close) return 'three_inside_down';
+      if (c2.close < c2.open &&
+          c1.close > c1.open &&
+          c1.open > c2.close &&
+          c1.close < c2.open &&
+          c0.close > c1.close) {
+        return 'three_inside_up';
+      }
+      if (c2.close > c2.open &&
+          c1.close < c1.open &&
+          c1.open < c2.close &&
+          c1.close > c2.open &&
+          c0.close < c1.close) {
+        return 'three_inside_down';
+      }
 
       // Kicker
-      if (c1.close < c1.open && c0.close > c0.open && c0.open >= c1.open && (c0.open - c1.open).abs() < 0.0002) return 'bullish_kicker';
-      if (c1.close > c1.open && c0.close < c0.open && c0.open <= c1.open && (c0.open - c1.open).abs() < 0.0002) return 'bearish_kicker';
+      if (c1.close < c1.open &&
+          c0.close > c0.open &&
+          c0.open >= c1.open &&
+          (c0.open - c1.open).abs() < 0.0002)
+        return 'bullish_kicker';
+      if (c1.close > c1.open &&
+          c0.close < c0.open &&
+          c0.open <= c1.open &&
+          (c0.open - c1.open).abs() < 0.0002)
+        return 'bearish_kicker';
 
       // Abandoned Baby (gap + doji)
-      if (c2.close < c2.open && body1 < range0 * 0.1 && c0.close > c0.open && c1.low > c2.low && c1.low > c0.low) return 'abandoned_baby_bullish';
-      if (c2.close > c2.open && body1 < range0 * 0.1 && c0.close < c0.open && c1.high < c2.high && c1.high < c0.high) return 'abandoned_baby_bearish';
+      if (c2.close < c2.open &&
+          body1 < range0 * 0.1 &&
+          c0.close > c0.open &&
+          c1.low > c2.low &&
+          c1.low > c0.low)
+        return 'abandoned_baby_bullish';
+      if (c2.close > c2.open &&
+          body1 < range0 * 0.1 &&
+          c0.close < c0.open &&
+          c1.high < c2.high &&
+          c1.high < c0.high)
+        return 'abandoned_baby_bearish';
     }
 
     return 'none';
@@ -3194,10 +3711,11 @@ class SignalEngine extends ChangeNotifier {
   String _detectDowTrend() {
     if (_candles.length < 20) return 'none';
     final sp = _swingPoints(lookback: 40, str: 2);
-    final h = sp['h']!; final l = sp['l']!;
+    final h = sp['h']!;
+    final l = sp['l']!;
     if (h.length < 2 || l.length < 2) return 'none';
-    final hhhl = h.last > h[h.length-2] && l.last > l[l.length-2];
-    final llhl = h.last < h[h.length-2] && l.last < l[l.length-2];
+    final hhhl = h.last > h[h.length - 2] && l.last > l[l.length - 2];
+    final llhl = h.last < h[h.length - 2] && l.last < l[l.length - 2];
     if (hhhl) return 'uptrend';
     if (llhl) return 'downtrend';
     return 'sideways';
@@ -3214,13 +3732,25 @@ class SignalEngine extends ChangeNotifier {
     final volRatio = (_analyzeVolumeProfile()['ratio'] as double);
 
     // No Demand: narrow spread + low volume + close near bottom = bearish
-    if (spread < _calculateAtr(5) * 0.5 && volRatio < 0.7 && c.close < (c.high + c.low) / 2) return 'no_demand';
+    if (spread < _calculateAtr(5) * 0.5 &&
+        volRatio < 0.7 &&
+        c.close < (c.high + c.low) / 2)
+      return 'no_demand';
     // No Supply: narrow spread + low volume + close near top = bullish
-    if (spread < _calculateAtr(5) * 0.5 && volRatio < 0.7 && c.close > (c.high + c.low) / 2) return 'no_supply';
+    if (spread < _calculateAtr(5) * 0.5 &&
+        volRatio < 0.7 &&
+        c.close > (c.high + c.low) / 2)
+      return 'no_supply';
     // Effort Up: wide spread + high vol + close near top = bullish
-    if (spread > _calculateAtr(5) * 1.3 && volRatio > 1.5 && c.close > (c.high + c.low) / 2) return 'effort_up';
+    if (spread > _calculateAtr(5) * 1.3 &&
+        volRatio > 1.5 &&
+        c.close > (c.high + c.low) / 2)
+      return 'effort_up';
     // Effort Down: wide spread + high vol + close near bottom = bearish
-    if (spread > _calculateAtr(5) * 1.3 && volRatio > 1.5 && c.close < (c.high + c.low) / 2) return 'effort_down';
+    if (spread > _calculateAtr(5) * 1.3 &&
+        volRatio > 1.5 &&
+        c.close < (c.high + c.low) / 2)
+      return 'effort_down';
     return 'none';
   }
 
@@ -3241,18 +3771,21 @@ class SignalEngine extends ChangeNotifier {
   String _detectWolfeWave() {
     if (_candles.length < 30) return 'none';
     final sp = _swingPoints(lookback: 40, str: 2);
-    final h = sp['h']!; final l = sp['l']!;
+    final h = sp['h']!;
+    final l = sp['l']!;
     if (h.length < 3 || l.length < 3) return 'none';
     // Bullish Wolfe: 5 waves down → point 5 near trendline 1-3 → reversal
-    final pt1 = l[l.length-3], pt3 = l[l.length-2], pt5 = l.last;
+    final pt1 = l[l.length - 3], pt3 = l[l.length - 2], pt5 = l.last;
     final trend13 = pt3 - pt1;
     final expected5 = pt3 + trend13;
-    if ((pt5 - expected5).abs() < (trend13 * 0.15).abs() && _currentPrice > pt5) return 'bullish';
+    if ((pt5 - expected5).abs() < (trend13 * 0.15).abs() && _currentPrice > pt5)
+      return 'bullish';
     // Bearish Wolfe: 5 waves up → reversal
-    final ph1 = h[h.length-3], ph3 = h[h.length-2], ph5 = h.last;
+    final ph1 = h[h.length - 3], ph3 = h[h.length - 2], ph5 = h.last;
     final trendH = ph3 - ph1;
     final expH5 = ph3 + trendH;
-    if ((ph5 - expH5).abs() < (trendH * 0.15).abs() && _currentPrice < ph5) return 'bearish';
+    if ((ph5 - expH5).abs() < (trendH * 0.15).abs() && _currentPrice < ph5)
+      return 'bearish';
     return 'none';
   }
 
@@ -3265,12 +3798,19 @@ class SignalEngine extends ChangeNotifier {
     // TD Setup: 9 consecutive closes above/below close 4 bars ago
     int upCount = 0, dnCount = 0;
     for (int i = 4; i < _candles.length; i++) {
-      if (_candles[i].close > _candles[i-4].close) upCount++;
-      else { upCount = 0; }
-      if (_candles[i].close < _candles[i-4].close) dnCount++;
-      else { dnCount = 0; }
+      if (_candles[i].close > _candles[i - 4].close) {
+        upCount++;
+      } else {
+        upCount = 0;
+      }
+      if (_candles[i].close < _candles[i - 4].close) {
+        dnCount++;
+      } else {
+        dnCount = 0;
+      }
     }
-    if (upCount >= 9) return 'sell_setup'; // 9-bar setup complete = potential reversal
+    if (upCount >= 9)
+      return 'sell_setup'; // 9-bar setup complete = potential reversal
     if (dnCount >= 9) return 'buy_setup';
     return 'none';
   }
@@ -3282,8 +3822,14 @@ class SignalEngine extends ChangeNotifier {
   String _detectDarvasBox() {
     if (_candles.length < 15) return 'none';
     final recent = _candles.sublist(max(0, _candles.length - 10));
-    final boxH = recent.sublist(0, recent.length - 3).map((c) => c.high).reduce(max);
-    final boxL = recent.sublist(0, recent.length - 3).map((c) => c.low).reduce(min);
+    final boxH = recent
+        .sublist(0, recent.length - 3)
+        .map((c) => c.high)
+        .reduce(max);
+    final boxL = recent
+        .sublist(0, recent.length - 3)
+        .map((c) => c.low)
+        .reduce(min);
     if (_currentPrice > boxH) return 'bullish';
     if (_currentPrice < boxL) return 'bearish';
     return 'inside';
@@ -3292,9 +3838,15 @@ class SignalEngine extends ChangeNotifier {
   String _detectCupAndHandle() {
     if (_candles.length < 30) return 'none';
     final mid = _candles.length ~/ 2;
-    final leftH  = _candles.sublist(0, mid ~/ 3).map((c) => c.high).reduce(max);
-    final bottomL = _candles.sublist(mid ~/ 3, mid * 2 ~/ 3).map((c) => c.low).reduce(min);
-    final rightH  = _candles.sublist(mid * 2 ~/ 3, mid).map((c) => c.high).reduce(max);
+    final leftH = _candles.sublist(0, mid ~/ 3).map((c) => c.high).reduce(max);
+    final bottomL = _candles
+        .sublist(mid ~/ 3, mid * 2 ~/ 3)
+        .map((c) => c.low)
+        .reduce(min);
+    final rightH = _candles
+        .sublist(mid * 2 ~/ 3, mid)
+        .map((c) => c.high)
+        .reduce(max);
     final handleL = _candles.sublist(mid).map((c) => c.low).reduce(min);
     final isU = (leftH - rightH).abs() < leftH * 0.01 && bottomL < leftH * 0.97;
     final isHandle = handleL > bottomL && handleL < leftH;
@@ -3309,15 +3861,19 @@ class SignalEngine extends ChangeNotifier {
   double _calculateKama(int period) {
     // Kaufman Adaptive Moving Average
     if (_candles.length < period + 1) return _currentPrice;
-    const fastSc = 2.0 / 3;   // 2/(2+1)
-    const slowSc = 2.0 / 31;  // 2/(30+1)
+    const fastSc = 2.0 / 3; // 2/(2+1)
+    const slowSc = 2.0 / 31; // 2/(30+1)
     final closes = _candles.map((c) => c.close).toList();
     final n = min(period, closes.length - 1);
     double kama = closes[closes.length - 1 - n];
     for (int i = closes.length - n; i < closes.length; i++) {
       double noise = 0;
-      for (int j = i - min(n, i); j < i; j++) { noise += (closes[j+1] - closes[j]).abs(); }
-      final er = noise > 0 ? (closes[i] - closes[i - min(n,i)]).abs() / noise : 0.0;
+      for (int j = i - min(n, i); j < i; j++) {
+        noise += (closes[j + 1] - closes[j]).abs();
+      }
+      final er = noise > 0
+          ? (closes[i] - closes[i - min(n, i)]).abs() / noise
+          : 0.0;
       final sc = pow(er * (fastSc - slowSc) + slowSc, 2).toDouble();
       kama += sc * (closes[i] - kama);
     }
@@ -3327,24 +3883,34 @@ class SignalEngine extends ChangeNotifier {
   double _calculateT3(int period) {
     // T3 = c1*e6 - c2*e5 + c3*e4 - c4*e3  (vFactor=0.7 default)
     const vf = 0.7;
-    final c1 = -(vf*vf*vf), c2 = 3*vf*vf + 3*vf*vf*vf, c3 = -6*vf*vf - 3*vf - 3*vf*vf*vf, c4 = 1 + 3*vf + vf*vf*vf + 3*vf*vf;
+    final c1 = -(vf * vf * vf),
+        c2 = 3 * vf * vf + 3 * vf * vf * vf,
+        c3 = -6 * vf * vf - 3 * vf - 3 * vf * vf * vf,
+        c4 = 1 + 3 * vf + vf * vf * vf + 3 * vf * vf;
     final e1 = _calculateEma(period);
     final e2 = _calculateEma(max(1, period ~/ 2));
     final e3 = _calculateEma(max(1, period ~/ 3));
-    return c4*e1 + c3*e2 + c2*e3 + c1*_calculateEma(max(1, period ~/ 4));
+    return c4 * e1 +
+        c3 * e2 +
+        c2 * e3 +
+        c1 * _calculateEma(max(1, period ~/ 4));
   }
 
-  String _detectChandeKrollStop({int atrPeriod = 10, double mult = 1.5, int stopPeriod = 9}) {
+  String _detectChandeKrollStop({
+    int atrPeriod = 10,
+    double mult = 1.5,
+    int stopPeriod = 9,
+  }) {
     if (_candles.length < atrPeriod + stopPeriod) return 'none';
     final atr = _calculateAtr(atrPeriod);
     // First stop lines
     final sub = _candles.sublist(_candles.length - stopPeriod);
     final hiH = sub.map((c) => c.high).reduce(max);
     final loL = sub.map((c) => c.low).reduce(min);
-    final stopLong  = hiH - mult * atr;
+    final stopLong = hiH - mult * atr;
     final stopShort = loL + mult * atr;
     if (_currentPrice > stopShort) return 'bullish';
-    if (_currentPrice < stopLong)  return 'bearish';
+    if (_currentPrice < stopLong) return 'bearish';
     return 'none';
   }
 
@@ -3357,8 +3923,12 @@ class SignalEngine extends ChangeNotifier {
     for (int i = 0; i < 5; i++) {
       final sub = _candles.sublist(0, _candles.length - i);
       double s5 = 0, s34 = 0;
-      for (int j = sub.length - 5;  j < sub.length;  j++) { s5  += (sub[j].high + sub[j].low) / 2; }
-      for (int j = sub.length - 34; j < sub.length;  j++) { s34 += (sub[j].high + sub[j].low) / 2; }
+      for (int j = sub.length - 5; j < sub.length; j++) {
+        s5 += (sub[j].high + sub[j].low) / 2;
+      }
+      for (int j = sub.length - 34; j < sub.length; j++) {
+        s34 += (sub[j].high + sub[j].low) / 2;
+      }
       aoSum += s5 / 5 - s34 / 34;
     }
     return ao - aoSum / 5;
@@ -3371,13 +3941,22 @@ class SignalEngine extends ChangeNotifier {
   String _detectSuperTrend({int period = 10, double mult = 3.0}) {
     if (_candles.length < period + 1) return 'none';
     final atr = _calculateAtr(period);
-    double upB = 0, dnB = 0; bool bull = true;
-    for (int i = max(1, _candles.length - period * 2); i < _candles.length; i++) {
+    double upB = 0, dnB = 0;
+    bool bull = true;
+    for (
+      int i = max(1, _candles.length - period * 2);
+      i < _candles.length;
+      i++
+    ) {
       final hl2 = (_candles[i].high + _candles[i].low) / 2;
       final up = hl2 + mult * atr, dn = hl2 - mult * atr;
-      upB = (up < upB || _candles[i-1].close > upB) ? up : upB;
-      dnB = (dn > dnB || _candles[i-1].close < dnB) ? dn : dnB;
-      bull = _candles[i].close > upB ? true : _candles[i].close < dnB ? false : bull;
+      upB = (up < upB || _candles[i - 1].close > upB) ? up : upB;
+      dnB = (dn > dnB || _candles[i - 1].close < dnB) ? dn : dnB;
+      bull = _candles[i].close > upB
+          ? true
+          : _candles[i].close < dnB
+          ? false
+          : bull;
     }
     return bull ? 'bullish' : 'bearish';
   }
@@ -3385,17 +3964,35 @@ class SignalEngine extends ChangeNotifier {
   String _detectIchimoku() {
     if (_candles.length < 52) return 'none';
     double hH, lL;
-    hH = _candles.sublist(max(0,_candles.length-9)).map((c)=>c.high).reduce(max);
-    lL = _candles.sublist(max(0,_candles.length-9)).map((c)=>c.low).reduce(min);
+    hH = _candles
+        .sublist(max(0, _candles.length - 9))
+        .map((c) => c.high)
+        .reduce(max);
+    lL = _candles
+        .sublist(max(0, _candles.length - 9))
+        .map((c) => c.low)
+        .reduce(min);
     final tenkan = (hH + lL) / 2;
-    hH = _candles.sublist(max(0,_candles.length-26)).map((c)=>c.high).reduce(max);
-    lL = _candles.sublist(max(0,_candles.length-26)).map((c)=>c.low).reduce(min);
-    final kijun  = (hH + lL) / 2;
-    hH = _candles.sublist(max(0,_candles.length-52)).map((c)=>c.high).reduce(max);
-    lL = _candles.sublist(max(0,_candles.length-52)).map((c)=>c.low).reduce(min);
+    hH = _candles
+        .sublist(max(0, _candles.length - 26))
+        .map((c) => c.high)
+        .reduce(max);
+    lL = _candles
+        .sublist(max(0, _candles.length - 26))
+        .map((c) => c.low)
+        .reduce(min);
+    final kijun = (hH + lL) / 2;
+    hH = _candles
+        .sublist(max(0, _candles.length - 52))
+        .map((c) => c.high)
+        .reduce(max);
+    lL = _candles
+        .sublist(max(0, _candles.length - 52))
+        .map((c) => c.low)
+        .reduce(min);
     final senkouB = (hH + lL) / 2;
     final senkouA = (tenkan + kijun) / 2;
-    final cloudH  = max(senkouA, senkouB), cloudL = min(senkouA, senkouB);
+    final cloudH = max(senkouA, senkouB), cloudL = min(senkouA, senkouB);
     if (_currentPrice > cloudH && tenkan > kijun) return 'strong_bullish';
     if (_currentPrice < cloudL && tenkan < kijun) return 'strong_bearish';
     if (_currentPrice > cloudH) return 'bullish';
@@ -3407,7 +4004,9 @@ class SignalEngine extends ChangeNotifier {
     final n = min(period, _candles.length);
     double sum = 0, wt = 0;
     for (int i = 0; i < n; i++) {
-      final w = n - i; sum += _candles[_candles.length-1-i].close * w; wt += w;
+      final w = n - i;
+      sum += _candles[_candles.length - 1 - i].close * w;
+      wt += w;
     }
     return wt > 0 ? sum / wt : _currentPrice;
   }
@@ -3416,8 +4015,12 @@ class SignalEngine extends ChangeNotifier {
     return 2 * _calculateWma(max(1, period ~/ 2)) - _calculateWma(period);
   }
 
-  double _calculateDema(int p) => 2 * _calculateEma(p) - _calculateEma(max(1, p ~/ 2));
-  double _calculateTema(int p) => 3*_calculateEma(p) - 3*_calculateEma(max(1,p~/2)) + _calculateEma(max(1,p~/3));
+  double _calculateDema(int p) =>
+      2 * _calculateEma(p) - _calculateEma(max(1, p ~/ 2));
+  double _calculateTema(int p) =>
+      3 * _calculateEma(p) -
+      3 * _calculateEma(max(1, p ~/ 2)) +
+      _calculateEma(max(1, p ~/ 3));
 
   double _calculateAlma(int period) {
     // Arnaud Legoux MA: Gaussian filter
@@ -3428,7 +4031,8 @@ class SignalEngine extends ChangeNotifier {
     double sum = 0, wt = 0;
     for (int i = 0; i < period; i++) {
       final w = exp(-pow(i - m, 2) / (2 * s * s));
-      sum += _candles[_candles.length - period + i].close * w; wt += w;
+      sum += _candles[_candles.length - period + i].close * w;
+      wt += w;
     }
     return wt > 0 ? sum / wt : _currentPrice;
   }
@@ -3436,12 +4040,21 @@ class SignalEngine extends ChangeNotifier {
   double _calculateLinearRegression(int period) {
     final n = min(period, _candles.length);
     if (n < 2) return _currentPrice;
-    final cl = _candles.sublist(_candles.length - n).map((c) => c.close).toList();
+    final cl = _candles
+        .sublist(_candles.length - n)
+        .map((c) => c.close)
+        .toList();
     double sx = 0, sy = 0, sxy = 0, sx2 = 0;
-    for (int i = 0; i < n; i++) { sx+=i; sy+=cl[i]; sxy+=i*cl[i]; sx2+=i*i; }
+    for (int i = 0; i < n; i++) {
+      sx += i;
+      sy += cl[i];
+      sxy += i * cl[i];
+      sx2 += i * i;
+    }
     final d = n * sx2 - sx * sx;
     if (d == 0) return _currentPrice;
-    return (sy - (n*sxy - sx*sy)/d * sx) / n + (n*sxy-sx*sy)/d*(n-1);
+    return (sy - (n * sxy - sx * sy) / d * sx) / n +
+        (n * sxy - sx * sy) / d * (n - 1);
   }
 
   Map<String, double> _calculateAroon(int period) {
@@ -3450,9 +4063,9 @@ class SignalEngine extends ChangeNotifier {
     int hi = 0, li = 0;
     for (int i = 0; i < sub.length; i++) {
       if (sub[i].high >= sub[hi].high) hi = i;
-      if (sub[i].low  <= sub[li].low)  li = i;
+      if (sub[i].low <= sub[li].low) li = i;
     }
-    return {'up': (hi / (n-1)) * 100, 'down': (li / (n-1)) * 100};
+    return {'up': (hi / (n - 1)) * 100, 'down': (li / (n - 1)) * 100};
   }
 
   Map<String, double> _calculateVortex(int period) {
@@ -3460,27 +4073,36 @@ class SignalEngine extends ChangeNotifier {
     if (n < 1) return {'plus': 1.0, 'minus': 1.0};
     double vp = 0, vm = 0, tr = 0;
     for (int i = _candles.length - n; i < _candles.length; i++) {
-      final c = _candles[i], p = _candles[i-1];
-      vp += (c.high - p.low).abs(); vm += (c.low - p.high).abs();
+      final c = _candles[i], p = _candles[i - 1];
+      vp += (c.high - p.low).abs();
+      vm += (c.low - p.high).abs();
       tr += max(c.high, p.close) - min(c.low, p.close);
     }
-    return tr > 0 ? {'plus': vp/tr, 'minus': vm/tr} : {'plus': 1.0, 'minus': 1.0};
+    return tr > 0
+        ? {'plus': vp / tr, 'minus': vm / tr}
+        : {'plus': 1.0, 'minus': 1.0};
   }
 
   String _detectAlligator() {
     if (_candles.length < 13) return 'sleeping';
-    final jaw=_calculateEma(min(13,_candles.length)), teeth=_calculateEma(min(8,_candles.length)), lips=_calculateEma(min(5,_candles.length));
-    if (lips>teeth && teeth>jaw) return 'bullish';
-    if (lips<teeth && teeth<jaw) return 'bearish';
+    final jaw = _calculateEma(min(13, _candles.length)),
+        teeth = _calculateEma(min(8, _candles.length)),
+        lips = _calculateEma(min(5, _candles.length));
+    if (lips > teeth && teeth > jaw) return 'bullish';
+    if (lips < teeth && teeth < jaw) return 'bearish';
     return 'sleeping';
   }
 
   double _calculateAo() {
     if (_candles.length < 34) return 0;
-    double s5=0, s34=0;
-    for (int i=_candles.length-5;  i<_candles.length;  i++) { s5  += (_candles[i].high+_candles[i].low)/2; }
-    for (int i=_candles.length-34; i<_candles.length;  i++) { s34 += (_candles[i].high+_candles[i].low)/2; }
-    return s5/5 - s34/34;
+    double s5 = 0, s34 = 0;
+    for (int i = _candles.length - 5; i < _candles.length; i++) {
+      s5 += (_candles[i].high + _candles[i].low) / 2;
+    }
+    for (int i = _candles.length - 34; i < _candles.length; i++) {
+      s34 += (_candles[i].high + _candles[i].low) / 2;
+    }
+    return s5 / 5 - s34 / 34;
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -3489,62 +4111,117 @@ class SignalEngine extends ChangeNotifier {
 
   double _calculateUltimateOscillator() {
     if (_candles.length < 29) return 50;
-    double bp7=0,tr7=0,bp14=0,tr14=0,bp28=0,tr28=0;
-    final n = min(28, _candles.length-1);
-    for (int i = _candles.length-n; i < _candles.length; i++) {
-      final c=_candles[i],p=_candles[i-1];
-      final bp=c.close-min(c.low,p.close), tr=max(c.high,p.close)-min(c.low,p.close);
-      final pos = _candles.length-i;
-      if(pos<=7){bp7+=bp;tr7+=tr;} if(pos<=14){bp14+=bp;tr14+=tr;} bp28+=bp;tr28+=tr;
+    double bp7 = 0, tr7 = 0, bp14 = 0, tr14 = 0, bp28 = 0, tr28 = 0;
+    final n = min(28, _candles.length - 1);
+    for (int i = _candles.length - n; i < _candles.length; i++) {
+      final c = _candles[i], p = _candles[i - 1];
+      final bp = c.close - min(c.low, p.close),
+          tr = max(c.high, p.close) - min(c.low, p.close);
+      final pos = _candles.length - i;
+      if (pos <= 7) {
+        bp7 += bp;
+        tr7 += tr;
+      }
+      if (pos <= 14) {
+        bp14 += bp;
+        tr14 += tr;
+      }
+      bp28 += bp;
+      tr28 += tr;
     }
-    return 100*(4*(tr7>0?bp7/tr7:0.5)+2*(tr14>0?bp14/tr14:0.5)+(tr28>0?bp28/tr28:0.5))/7;
+    return 100 *
+        (4 * (tr7 > 0 ? bp7 / tr7 : 0.5) +
+            2 * (tr14 > 0 ? bp14 / tr14 : 0.5) +
+            (tr28 > 0 ? bp28 / tr28 : 0.5)) /
+        7;
   }
 
   double _calculateTsi() {
     if (_candles.length < 26) return 0;
-    final n = min(25, _candles.length-1);
-    double ema1=0, aem1=0; final alpha=2.0/14;
-    for (int i = _candles.length-n; i < _candles.length; i++) {
-      final m = _candles[i].close - _candles[i-1].close;
-      ema1 = alpha*m + (1-alpha)*ema1; aem1 = alpha*m.abs() + (1-alpha)*aem1;
+    final n = min(25, _candles.length - 1);
+    double ema1 = 0, aem1 = 0;
+    final alpha = 2.0 / 14;
+    for (int i = _candles.length - n; i < _candles.length; i++) {
+      final m = _candles[i].close - _candles[i - 1].close;
+      ema1 = alpha * m + (1 - alpha) * ema1;
+      aem1 = alpha * m.abs() + (1 - alpha) * aem1;
     }
-    return aem1 > 0 ? 100*ema1/aem1 : 0;
+    return aem1 > 0 ? 100 * ema1 / aem1 : 0;
   }
 
   double _calculateFisherTransform(int period) {
     final n = min(period, _candles.length);
-    final sub = _candles.sublist(_candles.length-n);
-    final hi = sub.map((c)=>c.high).reduce(max), lo = sub.map((c)=>c.low).reduce(min);
-    final range = hi-lo; if (range < 0.0001) return 0;
-    final v = (2*((_currentPrice-lo)/range)-1).clamp(-0.999,0.999);
-    return 0.5 * log((1+v)/(1-v));
+    final sub = _candles.sublist(_candles.length - n);
+    final hi = sub.map((c) => c.high).reduce(max),
+        lo = sub.map((c) => c.low).reduce(min);
+    final range = hi - lo;
+    if (range < 0.0001) return 0;
+    final v = (2 * ((_currentPrice - lo) / range) - 1).clamp(-0.999, 0.999);
+    return 0.5 * log((1 + v) / (1 - v));
   }
 
   double _calculateCmo(int period) {
-    final n = min(period, _candles.length-1); double su=0,sd=0;
-    for (int i=_candles.length-n; i<_candles.length; i++) {
-      final d=_candles[i].close-_candles[i-1].close;
-      if(d>0) su+=d; else sd+=d.abs();
+    final n = min(period, _candles.length - 1);
+    double su = 0, sd = 0;
+    for (int i = _candles.length - n; i < _candles.length; i++) {
+      final d = _candles[i].close - _candles[i - 1].close;
+      if (d > 0) {
+        su += d;
+      } else {
+        sd += d.abs();
+      }
     }
-    return (su+sd)>0 ? 100*(su-sd)/(su+sd) : 0;
+    return (su + sd) > 0 ? 100 * (su - sd) / (su + sd) : 0;
   }
 
   double _calculateRvi(int period) {
-    if (_candles.length < period+3) return 0; double ns=0,ds=0;
-    for (int i=_candles.length-period; i<_candles.length-3; i++) {
-      ns+=(_candles[i].close-_candles[i].open)+2*(_candles[i+1].close-_candles[i+1].open)+2*(_candles[i+2].close-_candles[i+2].open)+(_candles[i+3].close-_candles[i+3].open);
-      ds+=(_candles[i].high-_candles[i].low)+2*(_candles[i+1].high-_candles[i+1].low)+2*(_candles[i+2].high-_candles[i+2].low)+(_candles[i+3].high-_candles[i+3].low);
+    if (_candles.length < period + 3) return 0;
+    double ns = 0, ds = 0;
+    for (int i = _candles.length - period; i < _candles.length - 3; i++) {
+      ns +=
+          (_candles[i].close - _candles[i].open) +
+          2 * (_candles[i + 1].close - _candles[i + 1].open) +
+          2 * (_candles[i + 2].close - _candles[i + 2].open) +
+          (_candles[i + 3].close - _candles[i + 3].open);
+      ds +=
+          (_candles[i].high - _candles[i].low) +
+          2 * (_candles[i + 1].high - _candles[i + 1].low) +
+          2 * (_candles[i + 2].high - _candles[i + 2].low) +
+          (_candles[i + 3].high - _candles[i + 3].low);
     }
-    return ds>0.0001 ? ns/ds : 0;
+    return ds > 0.0001 ? ns / ds : 0;
   }
 
-  double _calculateElderBullPower(int p) => _candles.last.high - _calculateEma(min(p,_candles.length));
-  double _calculateElderBearPower(int p) => _candles.last.low  - _calculateEma(min(p,_candles.length));
-  double _calculateElderForceIndex() => _candles.length>1 ? (_candles.last.close-_candles[_candles.length-2].close)*_candles.last.volume : 0;
-  double _calculateBop() { final c=_candles.last,r=c.high-c.low; return r>0?(c.close-c.open)/r:0; }
-  double _calculatePpo() { final e26=_calculateEma(min(26,_candles.length)); return e26>0?(_calculateEma(min(12,_candles.length))-e26)/e26*100:0; }
-  double _calculateTrix(int p) { final e=_calculateEma(p),e2=_calculateEma(max(1,p~/2)); return e2>0?(e-e2)/e2*100:0; }
-  double _calculateKst() => _calculateRoc(10)+_calculateRoc(15)*2+_calculateRoc(20)*3+_calculateRoc(30)*4;
+  double _calculateElderBullPower(int p) =>
+      _candles.last.high - _calculateEma(min(p, _candles.length));
+  double _calculateElderBearPower(int p) =>
+      _candles.last.low - _calculateEma(min(p, _candles.length));
+  double _calculateElderForceIndex() => _candles.length > 1
+      ? (_candles.last.close - _candles[_candles.length - 2].close) *
+            _candles.last.volume
+      : 0;
+  double _calculateBop() {
+    final c = _candles.last, r = c.high - c.low;
+    return r > 0 ? (c.close - c.open) / r : 0;
+  }
+
+  double _calculatePpo() {
+    final e26 = _calculateEma(min(26, _candles.length));
+    return e26 > 0
+        ? (_calculateEma(min(12, _candles.length)) - e26) / e26 * 100
+        : 0;
+  }
+
+  double _calculateTrix(int p) {
+    final e = _calculateEma(p), e2 = _calculateEma(max(1, p ~/ 2));
+    return e2 > 0 ? (e - e2) / e2 * 100 : 0;
+  }
+
+  double _calculateKst() =>
+      _calculateRoc(10) +
+      _calculateRoc(15) * 2 +
+      _calculateRoc(20) * 3 +
+      _calculateRoc(30) * 4;
 
   double _calculateDpo(int period) {
     // DPO = Close[i] - SMA(period)[i - period/2 - 1]
@@ -3552,25 +4229,36 @@ class SignalEngine extends ChangeNotifier {
     final shift = period ~/ 2 + 1;
     final refIdx = _candles.length - 1 - shift;
     if (refIdx < 0) return 0;
-    double sma = 0; final n = min(period, refIdx + 1);
-    for (int i = refIdx - n + 1; i <= refIdx; i++) { sma += _candles[i].close; }
+    double sma = 0;
+    final n = min(period, refIdx + 1);
+    for (int i = refIdx - n + 1; i <= refIdx; i++) {
+      sma += _candles[i].close;
+    }
     return _candles[refIdx].close - sma / n;
   }
 
   double _calculateConnorsRsi() {
     // Connors RSI = (RSI(3) + RSI(streak,2) + percentRank(ROC,100)) / 3
     final rsi3 = _calculateRsi(3);
-    final roc  = _calculateRoc(1);
-    final pr   = _candles.length > 100 ? ((_currentPrice - _candles[_candles.length-100].close) /
-                  _candles[_candles.length-100].close * 100).clamp(0,100) : 50;
+    final roc = _calculateRoc(1);
+    final pr = _candles.length > 100
+        ? ((_currentPrice - _candles[_candles.length - 100].close) /
+                  _candles[_candles.length - 100].close *
+                  100)
+              .clamp(0, 100)
+        : 50;
     return (rsi3 + (roc > 0 ? 100 : 0) + pr) / 3;
   }
 
   double _calculateStc() {
     // Schaff Trend Cycle: MACD smoothed by stochastic
     final macd = _calculateFullMacd()['macd']!;
-    final rsi  = _calculateRsi(14);
-    return (macd > 0 && rsi > 50) ? 75 : (macd < 0 && rsi < 50) ? 25 : 50;
+    final rsi = _calculateRsi(14);
+    return (macd > 0 && rsi > 50)
+        ? 75
+        : (macd < 0 && rsi < 50)
+        ? 25
+        : 50;
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -3578,48 +4266,67 @@ class SignalEngine extends ChangeNotifier {
   // ══════════════════════════════════════════════════════════════════════════
 
   String _detectKeltnerChannel() {
-    final mid=_calculateEma(min(20,_candles.length)), atr=_calculateAtr(10);
-    if (_currentPrice > mid + 2*atr) return 'above_upper';
-    if (_currentPrice < mid - 2*atr) return 'below_lower';
+    final mid = _calculateEma(min(20, _candles.length)),
+        atr = _calculateAtr(10);
+    if (_currentPrice > mid + 2 * atr) return 'above_upper';
+    if (_currentPrice < mid - 2 * atr) return 'below_lower';
     if (_currentPrice > mid) return 'upper_half';
     return 'lower_half';
   }
 
   String _detectDonchianChannel(int period) {
-    final n=min(period,_candles.length);
-    final hi=_candles.sublist(_candles.length-n).map((c)=>c.high).reduce(max);
-    final lo=_candles.sublist(_candles.length-n).map((c)=>c.low).reduce(min);
+    final n = min(period, _candles.length);
+    final hi = _candles
+        .sublist(_candles.length - n)
+        .map((c) => c.high)
+        .reduce(max);
+    final lo = _candles
+        .sublist(_candles.length - n)
+        .map((c) => c.low)
+        .reduce(min);
     if (_currentPrice >= hi) return 'at_upper';
     if (_currentPrice <= lo) return 'at_lower';
     return 'inside';
   }
 
   double _calculateMassIndex(int period) {
-    if (_candles.length < period+9) return 25;
-    double mi=0, e1=(_candles[_candles.length-period-9].high-_candles[_candles.length-period-9].low), e2=e1;
-    const alpha=2.0/10;
-    for (int i=_candles.length-period; i<_candles.length; i++) {
-      e1=alpha*(_candles[i].high-_candles[i].low)+(1-alpha)*e1; e2=alpha*e1+(1-alpha)*e2;
-      if(e2>0) mi+=e1/e2;
+    if (_candles.length < period + 9) return 25;
+    double mi = 0,
+        e1 =
+            (_candles[_candles.length - period - 9].high -
+            _candles[_candles.length - period - 9].low),
+        e2 = e1;
+    const alpha = 2.0 / 10;
+    for (int i = _candles.length - period; i < _candles.length; i++) {
+      e1 = alpha * (_candles[i].high - _candles[i].low) + (1 - alpha) * e1;
+      e2 = alpha * e1 + (1 - alpha) * e2;
+      if (e2 > 0) mi += e1 / e2;
     }
     return mi;
   }
 
   double _calculateHistoricalVolatility(int period) {
-    if (_candles.length < period+1) return 0;
-    final rets=<double>[];
-    for (int i=_candles.length-period; i<_candles.length; i++) { rets.add(log(_candles[i].close/_candles[i-1].close)); }
-    final mean=rets.reduce((a,b)=>a+b)/rets.length;
-    double v=0; for (final r in rets) { v+=pow(r-mean,2).toDouble(); }
-    return sqrt(v/rets.length)*sqrt(252)*100;
+    if (_candles.length < period + 1) return 0;
+    final rets = <double>[];
+    for (int i = _candles.length - period; i < _candles.length; i++) {
+      rets.add(log(_candles[i].close / _candles[i - 1].close));
+    }
+    final mean = rets.reduce((a, b) => a + b) / rets.length;
+    double v = 0;
+    for (final r in rets) {
+      v += pow(r - mean, 2).toDouble();
+    }
+    return sqrt(v / rets.length) * sqrt(252) * 100;
   }
 
   double _calculateUlcerIndex(int period) {
-    final n=min(period,_candles.length); double maxC=_candles.last.close, sq=0;
-    for (final c in _candles.sublist(_candles.length-n)) {
-      maxC=max(maxC,c.close); sq+=pow((c.close-maxC)/maxC*100,2).toDouble();
+    final n = min(period, _candles.length);
+    double maxC = _candles.last.close, sq = 0;
+    for (final c in _candles.sublist(_candles.length - n)) {
+      maxC = max(maxC, c.close);
+      sq += pow((c.close - maxC) / maxC * 100, 2).toDouble();
     }
-    return sqrt(sq/n);
+    return sqrt(sq / n);
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -3627,43 +4334,62 @@ class SignalEngine extends ChangeNotifier {
   // ══════════════════════════════════════════════════════════════════════════
 
   double _calculateEmv(int period) {
-    final n=min(period,_candles.length-1); double s=0;
-    for (int i=_candles.length-n; i<_candles.length; i++) {
-      final c=_candles[i],p=_candles[i-1];
-      final dist=((c.high+c.low)/2)-((p.high+p.low)/2);
-      final hl=c.high-c.low; final box=hl>0?(c.volume/1e8)/hl:0;
-      s+=box>0?dist/box:0;
+    final n = min(period, _candles.length - 1);
+    double s = 0;
+    for (int i = _candles.length - n; i < _candles.length; i++) {
+      final c = _candles[i], p = _candles[i - 1];
+      final dist = ((c.high + c.low) / 2) - ((p.high + p.low) / 2);
+      final hl = c.high - c.low;
+      final box = hl > 0 ? (c.volume / 1e8) / hl : 0;
+      s += box > 0 ? dist / box : 0;
     }
-    return s/n;
+    return s / n;
   }
 
   double _calculatePvt() {
-    if (_candles.length<2) return 0; double pvt=0;
-    for (int i=1; i<_candles.length; i++) { pvt+=(_candles[i].close-_candles[i-1].close)/_candles[i-1].close*_candles[i].volume; }
+    if (_candles.length < 2) return 0;
+    double pvt = 0;
+    for (int i = 1; i < _candles.length; i++) {
+      pvt +=
+          (_candles[i].close - _candles[i - 1].close) /
+          _candles[i - 1].close *
+          _candles[i].volume;
+    }
     return pvt;
   }
 
   double _calculateKlinger() {
-    if (_candles.length<15) return 0; double kvo=0;
-    for (int i=1; i<_candles.length; i++) { kvo+=_candles[i].volume*(_candles[i].close>_candles[i-1].close?1.0:-1.0); }
-    return kvo*2/(34+1) - kvo*2/(55+1);
+    if (_candles.length < 15) return 0;
+    double kvo = 0;
+    for (int i = 1; i < _candles.length; i++) {
+      kvo +=
+          _candles[i].volume *
+          (_candles[i].close > _candles[i - 1].close ? 1.0 : -1.0);
+    }
+    return kvo * 2 / (34 + 1) - kvo * 2 / (55 + 1);
   }
 
   double _calculateNvi() {
-    double nvi=1000;
-    for (int i=1; i<_candles.length; i++) {
-      if (_candles[i].volume < _candles[i-1].volume) {
-        nvi += nvi * (_candles[i].close-_candles[i-1].close)/_candles[i-1].close;
+    double nvi = 1000;
+    for (int i = 1; i < _candles.length; i++) {
+      if (_candles[i].volume < _candles[i - 1].volume) {
+        nvi +=
+            nvi *
+            (_candles[i].close - _candles[i - 1].close) /
+            _candles[i - 1].close;
       }
     }
     return nvi;
   }
 
   double _calculatePvi() {
-    double pvi=1000;
-    for (int i=1; i<_candles.length; i++) {
-      if (_candles[i].volume > _candles[i-1].volume) {
-        pvi += pvi * (_candles[i].close-_candles[i-1].close)/_candles[i-1].close;
+    double pvi = 1000;
+    for (int i = 1; i < _candles.length; i++) {
+      if (_candles[i].volume > _candles[i - 1].volume) {
+        pvi +=
+            pvi *
+            (_candles[i].close - _candles[i - 1].close) /
+            _candles[i - 1].close;
       }
     }
     return pvi;
@@ -3671,11 +4397,15 @@ class SignalEngine extends ChangeNotifier {
 
   double _calculateVolumeOscillator(int fast, int slow) {
     if (_candles.length < slow) return 0;
-    double sf=0,ss=0;
-    for (int i=_candles.length-fast;i<_candles.length;i++) { sf+=_candles[i].volume; }
-    for (int i=_candles.length-slow;i<_candles.length;i++) { ss+=_candles[i].volume; }
-    final avgFast=sf/fast, avgSlow=ss/slow;
-    return avgSlow>0?(avgFast-avgSlow)/avgSlow*100:0;
+    double sf = 0, ss = 0;
+    for (int i = _candles.length - fast; i < _candles.length; i++) {
+      sf += _candles[i].volume;
+    }
+    for (int i = _candles.length - slow; i < _candles.length; i++) {
+      ss += _candles[i].volume;
+    }
+    final avgFast = sf / fast, avgSlow = ss / slow;
+    return avgSlow > 0 ? (avgFast - avgSlow) / avgSlow * 100 : 0;
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -3683,32 +4413,46 @@ class SignalEngine extends ChangeNotifier {
   // ══════════════════════════════════════════════════════════════════════════
 
   String _detectFractals() {
-    if (_candles.length<5) return 'none';
-    final i=_candles.length-3;
-    final c=_candles[i];
-    if (c.high>_candles[i-1].high&&c.high>_candles[i-2].high&&c.high>_candles[i+1].high&&c.high>_candles[i+2].high) return 'bearish_fractal';
-    if (c.low<_candles[i-1].low&&c.low<_candles[i-2].low&&c.low<_candles[i+1].low&&c.low<_candles[i+2].low) return 'bullish_fractal';
+    if (_candles.length < 5) return 'none';
+    final i = _candles.length - 3;
+    final c = _candles[i];
+    if (c.high > _candles[i - 1].high &&
+        c.high > _candles[i - 2].high &&
+        c.high > _candles[i + 1].high &&
+        c.high > _candles[i + 2].high)
+      return 'bearish_fractal';
+    if (c.low < _candles[i - 1].low &&
+        c.low < _candles[i - 2].low &&
+        c.low < _candles[i + 1].low &&
+        c.low < _candles[i + 2].low)
+      return 'bullish_fractal';
     return 'none';
   }
 
   String _detectInsideBar() {
-    if (_candles.length<2) return 'none';
-    final c=_candles.last,p=_candles[_candles.length-2];
-    return (c.high<p.high&&c.low>p.low) ? (c.close>c.open?'bullish':'bearish') : 'none';
+    if (_candles.length < 2) return 'none';
+    final c = _candles.last, p = _candles[_candles.length - 2];
+    return (c.high < p.high && c.low > p.low)
+        ? (c.close > c.open ? 'bullish' : 'bearish')
+        : 'none';
   }
 
   String _detectOutsideBar() {
-    if (_candles.length<2) return 'none';
-    final c=_candles.last,p=_candles[_candles.length-2];
-    return (c.high>p.high&&c.low<p.low) ? (c.close>c.open?'bullish':'bearish') : 'none';
+    if (_candles.length < 2) return 'none';
+    final c = _candles.last, p = _candles[_candles.length - 2];
+    return (c.high > p.high && c.low < p.low)
+        ? (c.close > c.open ? 'bullish' : 'bearish')
+        : 'none';
   }
 
   String _detectFakeyPattern() {
-    if (_candles.length<4) return 'none';
-    final c0=_candles.last,c1=_candles[_candles.length-2],c2=_candles[_candles.length-3];
-    if (!(c1.high<c2.high&&c1.low>c2.low)) return 'none';
-    if (c0.high>c2.high&&c0.close<c2.high) return 'bearish';
-    if (c0.low<c2.low&&c0.close>c2.low) return 'bullish';
+    if (_candles.length < 4) return 'none';
+    final c0 = _candles.last,
+        c1 = _candles[_candles.length - 2],
+        c2 = _candles[_candles.length - 3];
+    if (!(c1.high < c2.high && c1.low > c2.low)) return 'none';
+    if (c0.high > c2.high && c0.close < c2.high) return 'bearish';
+    if (c0.low < c2.low && c0.close > c2.low) return 'bullish';
     return 'none';
   }
 
@@ -3717,55 +4461,70 @@ class SignalEngine extends ChangeNotifier {
   // ══════════════════════════════════════════════════════════════════════════
 
   String _detectPowerOfThree() {
-    if (_candles.length<15) return 'none';
-    final sweep=_detectLiquiditySweep(), exp=_detectExpansion();
-    if (sweep=='sell_side'&&exp=='bullish') return 'distribution_bullish';
-    if (sweep=='buy_side'&&exp=='bearish')  return 'distribution_bearish';
-    if (_calculateAtr(5)<_calculateAtr(14)*0.7) return 'accumulation';
+    if (_candles.length < 15) return 'none';
+    final sweep = _detectLiquiditySweep(), exp = _detectExpansion();
+    if (sweep == 'sell_side' && exp == 'bullish') return 'distribution_bullish';
+    if (sweep == 'buy_side' && exp == 'bearish') return 'distribution_bearish';
+    if (_calculateAtr(5) < _calculateAtr(14) * 0.7) return 'accumulation';
     return 'none';
   }
 
   String _detectTurtleSoup() {
-    if (_candles.length<22) return 'none';
-    final ref=_candles.sublist(_candles.length-22,_candles.length-2);
-    final rH=ref.map((c)=>c.high).reduce(max),rL=ref.map((c)=>c.low).reduce(min);
-    final l2=_candles.sublist(_candles.length-2);
-    if (l2.any((c)=>c.high>rH)&&_currentPrice<rH) return 'bearish';
-    if (l2.any((c)=>c.low<rL)&&_currentPrice>rL)  return 'bullish';
+    if (_candles.length < 22) return 'none';
+    final ref = _candles.sublist(_candles.length - 22, _candles.length - 2);
+    final rH = ref.map((c) => c.high).reduce(max),
+        rL = ref.map((c) => c.low).reduce(min);
+    final l2 = _candles.sublist(_candles.length - 2);
+    if (l2.any((c) => c.high > rH) && _currentPrice < rH) return 'bearish';
+    if (l2.any((c) => c.low < rL) && _currentPrice > rL) return 'bullish';
     return 'none';
   }
 
   String _detectCisd() {
-    if (_candles.length<5) return 'none';
-    final c=_candles.last, body=(c.close-c.open).abs();
-    if (body<_avgBodySize()*2.5) return 'none';
-    final sp=_swingPoints(lookback:10,str:1);
-    if (c.close>c.open&&sp['h']!.isNotEmpty&&c.close>sp['h']!.last) return 'bullish';
-    if (c.close<c.open&&sp['l']!.isNotEmpty&&c.close<sp['l']!.last) return 'bearish';
+    if (_candles.length < 5) return 'none';
+    final c = _candles.last, body = (c.close - c.open).abs();
+    if (body < _avgBodySize() * 2.5) return 'none';
+    final sp = _swingPoints(lookback: 10, str: 1);
+    if (c.close > c.open && sp['h']!.isNotEmpty && c.close > sp['h']!.last)
+      return 'bullish';
+    if (c.close < c.open && sp['l']!.isNotEmpty && c.close < sp['l']!.last)
+      return 'bearish';
     return 'none';
   }
 
   String _detectConsequentEncroachment() {
-    if (_candles.length<5) return 'none';
-    for (int i=_candles.length-1; i>=2; i--) {
-      final c1=_candles[i-2],c3=_candles[i];
-      if (c3.low>c1.high) { final ce=(c3.low+c1.high)/2; if ((_currentPrice-ce).abs()<(c3.low-c1.high)*0.1) return 'bullish_ce'; }
-      if (c3.high<c1.low) { final ce=(c1.low+c3.high)/2; if ((_currentPrice-ce).abs()<(c1.low-c3.high)*0.1) return 'bearish_ce'; }
+    if (_candles.length < 5) return 'none';
+    for (int i = _candles.length - 1; i >= 2; i--) {
+      final c1 = _candles[i - 2], c3 = _candles[i];
+      if (c3.low > c1.high) {
+        final ce = (c3.low + c1.high) / 2;
+        if ((_currentPrice - ce).abs() < (c3.low - c1.high) * 0.1)
+          return 'bullish_ce';
+      }
+      if (c3.high < c1.low) {
+        final ce = (c1.low + c3.high) / 2;
+        if ((_currentPrice - ce).abs() < (c1.low - c3.high) * 0.1)
+          return 'bearish_ce';
+      }
     }
     return 'none';
   }
 
   String _detectInducement() {
     // Inducement: intermediate swing high/low used to draw liquidity before BOS
-    if (_candles.length<15) return 'none';
-    final sp=_swingPoints(lookback:15,str:1);
-    final h=sp['h']!,l=sp['l']!;
-    if (h.length>=2&&l.length>=1) {
+    if (_candles.length < 15) return 'none';
+    final sp = _swingPoints(lookback: 15, str: 1);
+    final h = sp['h']!, l = sp['l']!;
+    if (h.length >= 2 && l.isNotEmpty) {
       // Inducement high: intermediate high between two lows (draw liquidity above)
-      if (h.last<h[h.length-2]&&(_currentPrice-h.last).abs()<_calculateAtr(5)) return 'inducement_high';
+      if (h.last < h[h.length - 2] &&
+          (_currentPrice - h.last).abs() < _calculateAtr(5))
+        return 'inducement_high';
     }
-    if (l.length>=2&&h.length>=1) {
-      if (l.last>l[l.length-2]&&(_currentPrice-l.last).abs()<_calculateAtr(5)) return 'inducement_low';
+    if (l.length >= 2 && h.isNotEmpty) {
+      if (l.last > l[l.length - 2] &&
+          (_currentPrice - l.last).abs() < _calculateAtr(5))
+        return 'inducement_low';
     }
     return 'none';
   }
@@ -3775,24 +4534,30 @@ class SignalEngine extends ChangeNotifier {
   // ══════════════════════════════════════════════════════════════════════════
 
   String _detectWyckoffPhase() {
-    if (_candles.length<30) return 'none';
-    final sp=_swingPoints(lookback:40,str:2);
-    final highs=sp['h']!,lows=sp['l']!;
-    if (highs.length<2||lows.length<2) return 'none';
-    final isDown=highs.last<highs[highs.length-2]&&lows.last<lows[lows.length-2];
-    final isUp=highs.last>highs[highs.length-2]&&lows.last>lows[lows.length-2];
-    final vr=(_analyzeVolumeProfile()['ratio'] as double);
-    final atrR=_calculateAtr(5)/_calculateAtr(20);
-    final lastClose=_candles.last.close,lastHL=(_candles.last.high+_candles.last.low)/2;
-    if (isDown&&vr>2.0&&atrR>1.5&&lastClose>lastHL) return 'sc';
-    if (isDown&&lastClose>_candles[_candles.length-3].close*1.005) return 'ar';
-    if (_detectWyckoffSpring()=='bullish') return 'spring_test';
-    if (!isDown&&isUp&&vr>1.5) return 'sos';
-    if (isUp&&atrR<0.7) return 'lps';
-    if (isUp&&vr>2.0&&atrR>1.5&&lastClose<lastHL) return 'bc';
-    if (_detectWyckoffUpthrust()=='bearish') return 'utad';
-    if (vr<0.7) return 'st';
-    if (isDown&&vr>1.2) return 'ps';
+    if (_candles.length < 30) return 'none';
+    final sp = _swingPoints(lookback: 40, str: 2);
+    final highs = sp['h']!, lows = sp['l']!;
+    if (highs.length < 2 || lows.length < 2) return 'none';
+    final isDown =
+        highs.last < highs[highs.length - 2] &&
+        lows.last < lows[lows.length - 2];
+    final isUp =
+        highs.last > highs[highs.length - 2] &&
+        lows.last > lows[lows.length - 2];
+    final vr = (_analyzeVolumeProfile()['ratio'] as double);
+    final atrR = _calculateAtr(5) / _calculateAtr(20);
+    final lastClose = _candles.last.close,
+        lastHL = (_candles.last.high + _candles.last.low) / 2;
+    if (isDown && vr > 2.0 && atrR > 1.5 && lastClose > lastHL) return 'sc';
+    if (isDown && lastClose > _candles[_candles.length - 3].close * 1.005)
+      return 'ar';
+    if (_detectWyckoffSpring() == 'bullish') return 'spring_test';
+    if (!isDown && isUp && vr > 1.5) return 'sos';
+    if (isUp && atrR < 0.7) return 'lps';
+    if (isUp && vr > 2.0 && atrR > 1.5 && lastClose < lastHL) return 'bc';
+    if (_detectWyckoffUpthrust() == 'bearish') return 'utad';
+    if (vr < 0.7) return 'st';
+    if (isDown && vr > 1.2) return 'ps';
     return 'none';
   }
 
@@ -3801,28 +4566,46 @@ class SignalEngine extends ChangeNotifier {
   // ══════════════════════════════════════════════════════════════════════════
 
   Map<String, double> _calculateMarketProfile() {
-    final lb=min(50,_candles.length);
-    final sub=_candles.sublist(_candles.length-lb);
-    final hi=sub.map((c)=>c.high).reduce(max),lo=sub.map((c)=>c.low).reduce(min);
-    final range=hi-lo; if(range<0.0001) return {'poc':_currentPrice,'vah':_currentPrice,'val':_currentPrice};
-    final buckets=List<double>.filled(10,0);
-    for (final c in sub) { buckets[((c.close-lo)/range*9).round().clamp(0,9)]+=c.volume; }
-    int pocB=0; for(int i=1;i<10;i++) { if(buckets[i]>buckets[pocB]) pocB=i; }
-    final poc=lo+pocB/9*range;
-    final tot=buckets.reduce((a,b)=>a+b); double acc=buckets[pocB]; int lB=pocB,hB=pocB;
-    while(acc<tot*0.7&&(lB>0||hB<9)) {
-      final aH=hB<9?buckets[hB+1]:0, aL=lB>0?buckets[lB-1]:0;
-      if(aH>=aL&&hB<9){hB++;acc+=buckets[hB];}else if(lB>0){lB--;acc+=buckets[lB];}else hB++;
+    final lb = min(50, _candles.length);
+    final sub = _candles.sublist(_candles.length - lb);
+    final hi = sub.map((c) => c.high).reduce(max),
+        lo = sub.map((c) => c.low).reduce(min);
+    final range = hi - lo;
+    if (range < 0.0001)
+      return {'poc': _currentPrice, 'vah': _currentPrice, 'val': _currentPrice};
+    final buckets = List<double>.filled(10, 0);
+    for (final c in sub) {
+      buckets[((c.close - lo) / range * 9).round().clamp(0, 9)] += c.volume;
     }
-    return {'poc':poc,'vah':lo+hB/9*range,'val':lo+lB/9*range};
+    int pocB = 0;
+    for (int i = 1; i < 10; i++) {
+      if (buckets[i] > buckets[pocB]) pocB = i;
+    }
+    final poc = lo + pocB / 9 * range;
+    final tot = buckets.reduce((a, b) => a + b);
+    double acc = buckets[pocB];
+    int lB = pocB, hB = pocB;
+    while (acc < tot * 0.7 && (lB > 0 || hB < 9)) {
+      final aH = hB < 9 ? buckets[hB + 1] : 0,
+          aL = lB > 0 ? buckets[lB - 1] : 0;
+      if (aH >= aL && hB < 9) {
+        hB++;
+        acc += buckets[hB];
+      } else if (lB > 0) {
+        lB--;
+        acc += buckets[lB];
+      } else
+        hB++;
+    }
+    return {'poc': poc, 'vah': lo + hB / 9 * range, 'val': lo + lB / 9 * range};
   }
 
   String _detectMarketProfileZone() {
-    final mp=_calculateMarketProfile();
-    if (_currentPrice>mp['vah']!) return 'above_vah';
-    if (_currentPrice<mp['val']!) return 'below_val';
-    if ((_currentPrice-mp['poc']!).abs()<_calculateAtr(5)) return 'at_poc';
-    return _currentPrice>mp['poc']!?'above_poc':'below_poc';
+    final mp = _calculateMarketProfile();
+    if (_currentPrice > mp['vah']!) return 'above_vah';
+    if (_currentPrice < mp['val']!) return 'below_val';
+    if ((_currentPrice - mp['poc']!).abs() < _calculateAtr(5)) return 'at_poc';
+    return _currentPrice > mp['poc']! ? 'above_poc' : 'below_poc';
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -3830,35 +4613,43 @@ class SignalEngine extends ChangeNotifier {
   // ══════════════════════════════════════════════════════════════════════════
 
   String _detectCamarillaPivot() {
-    if (_candles.length<2) return 'none';
-    final c=_candles[_candles.length-2],r=c.high-c.low;
-    final h4=c.close+r*1.1/2,h3=c.close+r*1.1/4,l3=c.close-r*1.1/4,l4=c.close-r*1.1/2;
-    if (_currentPrice>h4) return 'above_h4';
-    if (_currentPrice<l4) return 'below_l4';
-    if (_currentPrice>h3) return 'above_h3';
-    if (_currentPrice<l3) return 'below_l3';
+    if (_candles.length < 2) return 'none';
+    final c = _candles[_candles.length - 2], r = c.high - c.low;
+    final h4 = c.close + r * 1.1 / 2,
+        h3 = c.close + r * 1.1 / 4,
+        l3 = c.close - r * 1.1 / 4,
+        l4 = c.close - r * 1.1 / 2;
+    if (_currentPrice > h4) return 'above_h4';
+    if (_currentPrice < l4) return 'below_l4';
+    if (_currentPrice > h3) return 'above_h3';
+    if (_currentPrice < l3) return 'below_l3';
     return 'inside';
   }
 
   String _detectWoodiePivot() {
-    if (_candles.length<2) return 'none';
-    final c=_candles[_candles.length-2];
-    final p=(c.high+c.low+2*c.close)/4,r1=2*p-c.low,s1=2*p-c.high;
-    if (_currentPrice>r1) return 'above_r1';
-    if (_currentPrice<s1) return 'below_s1';
-    return _currentPrice>p?'above_p':'below_p';
+    if (_candles.length < 2) return 'none';
+    final c = _candles[_candles.length - 2];
+    final p = (c.high + c.low + 2 * c.close) / 4,
+        r1 = 2 * p - c.low,
+        s1 = 2 * p - c.high;
+    if (_currentPrice > r1) return 'above_r1';
+    if (_currentPrice < s1) return 'below_s1';
+    return _currentPrice > p ? 'above_p' : 'below_p';
   }
 
   String _detectFibPivot() {
-    if (_candles.length<2) return 'none';
-    final c=_candles[_candles.length-2];
-    final p=(c.high+c.low+c.close)/3,r=c.high-c.low;
-    final r2=p+0.618*r,r1=p+0.382*r,s1=p-0.382*r,s2=p-0.618*r;
-    if (_currentPrice>r2) return 'above_r2';
-    if (_currentPrice<s2) return 'below_s2';
-    if (_currentPrice>r1) return 'above_r1';
-    if (_currentPrice<s1) return 'below_s1';
-    return _currentPrice>p?'above_p':'below_p';
+    if (_candles.length < 2) return 'none';
+    final c = _candles[_candles.length - 2];
+    final p = (c.high + c.low + c.close) / 3, r = c.high - c.low;
+    final r2 = p + 0.618 * r,
+        r1 = p + 0.382 * r,
+        s1 = p - 0.382 * r,
+        s2 = p - 0.618 * r;
+    if (_currentPrice > r2) return 'above_r2';
+    if (_currentPrice < s2) return 'below_s2';
+    if (_currentPrice > r1) return 'above_r1';
+    if (_currentPrice < s1) return 'below_s1';
+    return _currentPrice > p ? 'above_p' : 'below_p';
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -3866,48 +4657,65 @@ class SignalEngine extends ChangeNotifier {
   // ══════════════════════════════════════════════════════════════════════════
 
   String _detectBroadeningWedge() {
-    if (_candles.length<20) return 'none';
-    final sp=_swingPoints(lookback:30,str:2);
-    final h=sp['h']!,l=sp['l']!;
-    if (h.length<2||l.length<2) return 'none';
-    if (h.last>h[h.length-2]&&l.last<l[l.length-2]) {
-      if (_currentPrice>h.last) return 'bearish';
-      if (_currentPrice<l.last) return 'bullish';
+    if (_candles.length < 20) return 'none';
+    final sp = _swingPoints(lookback: 30, str: 2);
+    final h = sp['h']!, l = sp['l']!;
+    if (h.length < 2 || l.length < 2) return 'none';
+    if (h.last > h[h.length - 2] && l.last < l[l.length - 2]) {
+      if (_currentPrice > h.last) return 'bearish';
+      if (_currentPrice < l.last) return 'bullish';
       return 'active';
     }
     return 'none';
   }
 
   String _detectIslandReversal() {
-    if (_candles.length<6) return 'none';
-    final atr=_calculateAtr(14);
-    for (int i=2; i<_candles.length-2; i++) {
-      if (_candles[i].low>_candles[i-1].high+atr*0.5&&_candles[i+1].high<_candles[i].low-atr*0.5) return 'bearish';
-      if (_candles[i].high<_candles[i-1].low-atr*0.5&&_candles[i+1].low>_candles[i].high+atr*0.5) return 'bullish';
+    if (_candles.length < 6) return 'none';
+    final atr = _calculateAtr(14);
+    for (int i = 2; i < _candles.length - 2; i++) {
+      if (_candles[i].low > _candles[i - 1].high + atr * 0.5 &&
+          _candles[i + 1].high < _candles[i].low - atr * 0.5)
+        return 'bearish';
+      if (_candles[i].high < _candles[i - 1].low - atr * 0.5 &&
+          _candles[i + 1].low > _candles[i].high + atr * 0.5)
+        return 'bullish';
     }
     return 'none';
   }
 
   String _detectDiamondPattern() {
-    if (_candles.length<30) return 'none';
-    final sp=_swingPoints(lookback:30,str:2);
-    final h=sp['h']!,l=sp['l']!;
-    if (h.length<4||l.length<4) return 'none';
-    if (h[h.length-3]>h[h.length-4]&&l[l.length-3]<l[l.length-4]&&h.last<h[h.length-2]&&l.last>l[l.length-2]) {
-      if (_currentPrice>h.last) return 'bullish';
-      if (_currentPrice<l.last) return 'bearish';
+    if (_candles.length < 30) return 'none';
+    final sp = _swingPoints(lookback: 30, str: 2);
+    final h = sp['h']!, l = sp['l']!;
+    if (h.length < 4 || l.length < 4) return 'none';
+    if (h[h.length - 3] > h[h.length - 4] &&
+        l[l.length - 3] < l[l.length - 4] &&
+        h.last < h[h.length - 2] &&
+        l.last > l[l.length - 2]) {
+      if (_currentPrice > h.last) return 'bullish';
+      if (_currentPrice < l.last) return 'bearish';
     }
     return 'none';
   }
 
   String _detectRoundingPattern(bool bottom) {
-    if (_candles.length<20) return 'none';
-    final n=min(20,_candles.length);
-    final sub=_candles.sublist(_candles.length-n);
-    final first=sub.first.close, last=sub.last.close;
-    final extreme=bottom?sub.map((c)=>c.low).reduce(min):sub.map((c)=>c.high).reduce(max);
-    if (bottom&&extreme<first*0.998&&extreme<last*0.998&&_currentPrice>last) return 'bullish';
-    if (!bottom&&extreme>first*1.002&&extreme>last*1.002&&_currentPrice<last) return 'bearish';
+    if (_candles.length < 20) return 'none';
+    final n = min(20, _candles.length);
+    final sub = _candles.sublist(_candles.length - n);
+    final first = sub.first.close, last = sub.last.close;
+    final extreme = bottom
+        ? sub.map((c) => c.low).reduce(min)
+        : sub.map((c) => c.high).reduce(max);
+    if (bottom &&
+        extreme < first * 0.998 &&
+        extreme < last * 0.998 &&
+        _currentPrice > last)
+      return 'bullish';
+    if (!bottom &&
+        extreme > first * 1.002 &&
+        extreme > last * 1.002 &&
+        _currentPrice < last)
+      return 'bearish';
     return 'none';
   }
 
@@ -3916,17 +4724,17 @@ class SignalEngine extends ChangeNotifier {
   // ══════════════════════════════════════════════════════════════════════════
 
   String _detectOpeningGap() {
-    if (_candles.length<2) return 'none';
-    final atr=_calculateAtr(14);
-    final gap=_candles.last.open-_candles[_candles.length-2].close;
-    if (gap>atr*0.5) return 'gap_up';
-    if (gap<-atr*0.5) return 'gap_down';
+    if (_candles.length < 2) return 'none';
+    final atr = _calculateAtr(14);
+    final gap = _candles.last.open - _candles[_candles.length - 2].close;
+    if (gap > atr * 0.5) return 'gap_up';
+    if (gap < -atr * 0.5) return 'gap_down';
     return 'none';
   }
 
   String _detectFibTimeZone() {
-    const fibs=[1,2,3,5,8,13,21,34,55,89];
-    return fibs.contains(_candles.length%90)?'fib_zone':'none';
+    const fibs = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89];
+    return fibs.contains(_candles.length % 90) ? 'fib_zone' : 'none';
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -3934,13 +4742,13 @@ class SignalEngine extends ChangeNotifier {
   // ══════════════════════════════════════════════════════════════════════════
 
   String _detectGannFan() {
-    if (_candles.length<10) return 'none';
-    final n=min(10,_candles.length-1);
-    final pips=(_currentPrice-_candles[_candles.length-1-n].low)/n;
-    final atr=_calculateAtr(14);
-    if (pips.abs()>=atr*0.8&&pips.abs()<=atr*1.2) return 'on_1x1';
-    if (pips>atr*1.2) return 'above_1x1';
-    if (pips>0) return 'below_1x1';
+    if (_candles.length < 10) return 'none';
+    final n = min(10, _candles.length - 1);
+    final pips = (_currentPrice - _candles[_candles.length - 1 - n].low) / n;
+    final atr = _calculateAtr(14);
+    if (pips.abs() >= atr * 0.8 && pips.abs() <= atr * 1.2) return 'on_1x1';
+    if (pips > atr * 1.2) return 'above_1x1';
+    if (pips > 0) return 'below_1x1';
     return 'none';
   }
 
@@ -3949,16 +4757,24 @@ class SignalEngine extends ChangeNotifier {
   // ══════════════════════════════════════════════════════════════════════════
 
   String _detectTdCombo() {
-    if (_candles.length<14) return 'none';
-    int up=0,dn=0;
-    for (int i=2; i<_candles.length; i++) {
-      if (_candles[i].close>_candles[i-2].close&&_candles[i].close>_candles[i-1].close) up++;
-      else { up=0; }
-      if (_candles[i].close<_candles[i-2].close&&_candles[i].close<_candles[i-1].close) dn++;
-      else { dn=0; }
+    if (_candles.length < 14) return 'none';
+    int up = 0, dn = 0;
+    for (int i = 2; i < _candles.length; i++) {
+      if (_candles[i].close > _candles[i - 2].close &&
+          _candles[i].close > _candles[i - 1].close) {
+        up++;
+      } else {
+        up = 0;
+      }
+      if (_candles[i].close < _candles[i - 2].close &&
+          _candles[i].close < _candles[i - 1].close) {
+        dn++;
+      } else {
+        dn = 0;
+      }
     }
-    if (up>=13) return 'sell_signal';
-    if (dn>=13) return 'buy_signal';
+    if (up >= 13) return 'sell_signal';
+    if (dn >= 13) return 'buy_signal';
     return 'none';
   }
 
@@ -3967,11 +4783,18 @@ class SignalEngine extends ChangeNotifier {
   // ══════════════════════════════════════════════════════════════════════════
 
   double _calculateZScore(int period) {
-    final n=min(period,_candles.length);
-    final cl=_candles.sublist(_candles.length-n).map((c)=>c.close).toList();
-    final mean=cl.reduce((a,b)=>a+b)/cl.length;
-    double v=0; for (final c in cl) { v+=pow(c-mean,2).toDouble(); }
-    final sd=sqrt(v/cl.length); return sd>0?(_currentPrice-mean)/sd:0;
+    final n = min(period, _candles.length);
+    final cl = _candles
+        .sublist(_candles.length - n)
+        .map((c) => c.close)
+        .toList();
+    final mean = cl.reduce((a, b) => a + b) / cl.length;
+    double v = 0;
+    for (final c in cl) {
+      v += pow(c - mean, 2).toDouble();
+    }
+    final sd = sqrt(v / cl.length);
+    return sd > 0 ? (_currentPrice - mean) / sd : 0;
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -3980,45 +4803,55 @@ class SignalEngine extends ChangeNotifier {
 
   String _detectStarcBands() {
     // STARC = SMA(5) ± 1.5 * ATR(15)
-    final mid  = _calculateSma(min(5,_candles.length));
-    final atr  = _calculateAtr(min(15,_candles.length));
-    if (_currentPrice > mid + 1.5*atr) return 'above_upper';
-    if (_currentPrice < mid - 1.5*atr) return 'below_lower';
+    final mid = _calculateSma(min(5, _candles.length));
+    final atr = _calculateAtr(min(15, _candles.length));
+    if (_currentPrice > mid + 1.5 * atr) return 'above_upper';
+    if (_currentPrice < mid - 1.5 * atr) return 'below_lower';
     return _currentPrice > mid ? 'upper_half' : 'lower_half';
   }
 
   double _calculateChaikinVolatility(int period) {
     // % change in (H-L) EMA over period
-    if (_candles.length < period*2) return 0;
-    double ema1=0, ema2=0; final alpha=2.0/(period+1);
-    final n = min(period*2, _candles.length);
-    for (int i=_candles.length-n; i<_candles.length-period; i++) {
-      ema2 = alpha*(_candles[i].high-_candles[i].low) + (1-alpha)*ema2;
+    if (_candles.length < period * 2) return 0;
+    double ema1 = 0, ema2 = 0;
+    final alpha = 2.0 / (period + 1);
+    final n = min(period * 2, _candles.length);
+    for (int i = _candles.length - n; i < _candles.length - period; i++) {
+      ema2 = alpha * (_candles[i].high - _candles[i].low) + (1 - alpha) * ema2;
     }
-    for (int i=_candles.length-period; i<_candles.length; i++) {
-      ema1 = alpha*(_candles[i].high-_candles[i].low) + (1-alpha)*ema1;
+    for (int i = _candles.length - period; i < _candles.length; i++) {
+      ema1 = alpha * (_candles[i].high - _candles[i].low) + (1 - alpha) * ema1;
     }
-    return ema2>0 ? (ema1-ema2)/ema2*100 : 0;
+    return ema2 > 0 ? (ema1 - ema2) / ema2 * 100 : 0;
   }
 
   String _detectNr4() {
     // Narrow Range 4: current bar has the smallest range of last 4 bars
-    if (_candles.length<4) return 'none';
-    final ranges = List.generate(4, (i) => _candles[_candles.length-1-i].high - _candles[_candles.length-1-i].low);
-    return (ranges[0] <= ranges[1] && ranges[0] <= ranges[2] && ranges[0] <= ranges[3]) ? 'nr4' : 'none';
+    if (_candles.length < 4) return 'none';
+    final ranges = List.generate(
+      4,
+      (i) =>
+          _candles[_candles.length - 1 - i].high -
+          _candles[_candles.length - 1 - i].low,
+    );
+    return (ranges[0] <= ranges[1] &&
+            ranges[0] <= ranges[2] &&
+            ranges[0] <= ranges[3])
+        ? 'nr4'
+        : 'none';
   }
 
   String _detectIdnr4() {
     // IDNR4 = Inside Bar + NR4
-    if (_detectInsideBar()=='none') return 'none';
-    return _detectNr4()=='nr4' ? 'idnr4' : 'none';
+    if (_detectInsideBar() == 'none') return 'none';
+    return _detectNr4() == 'nr4' ? 'idnr4' : 'none';
   }
 
   String _detectInitialBalance() {
     // Initial Balance: first 2 candles of session approximate the range
-    if (_candles.length<3) return 'none';
+    if (_candles.length < 3) return 'none';
     final ibH = max(_candles[0].high, _candles[1].high);
-    final ibL = min(_candles[0].low,  _candles[1].low);
+    final ibL = min(_candles[0].low, _candles[1].low);
     if (_currentPrice > ibH) return 'above_ibh';
     if (_currentPrice < ibL) return 'below_ibl';
     return 'inside_ib';
@@ -4031,79 +4864,88 @@ class SignalEngine extends ChangeNotifier {
     if (ts != 'new_york') return 'none';
     final now = DateTime.now().toUtc().subtract(const Duration(hours: 4)); // NY
     final h = now.hour, m = now.minute;
-    if ((h==10&&m<0)||(h==10&&m>=0&&h<11)) return 'window_10_11';
-    if (h==14||(h==15&&m<0)) return 'window_14_15';
-    if (h==15) return 'window_15_16';
+    if ((h == 10 && m < 0) || (h == 10 && m >= 0 && h < 11))
+      return 'window_10_11';
+    if (h == 14 || (h == 15 && m < 0)) return 'window_14_15';
+    if (h == 15) return 'window_15_16';
     return 'none';
   }
 
   String _detectInstitutionalCandle() {
     // Large body candle ≥ 2.5x average body
-    final c=_candles.last, body=(c.close-c.open).abs();
-    if (body<_avgBodySize()*2.5) return 'none';
-    return c.close>c.open?'bullish_institutional':'bearish_institutional';
+    final c = _candles.last, body = (c.close - c.open).abs();
+    if (body < _avgBodySize() * 2.5) return 'none';
+    return c.close > c.open ? 'bullish_institutional' : 'bearish_institutional';
   }
 
   String _detectReaccumulation() {
     // Reaccumulation: consolidation within uptrend (pullback with low volume)
-    if (_candles.length<20) return 'none';
-    final sp=_swingPoints(lookback:20,str:2);
-    final h=sp['h']!,l=sp['l']!;
-    if (h.length<2||l.length<2) return 'none';
-    final isUp=h.last>h[h.length-2]&&l.last>l[l.length-2];
-    final vr=(_analyzeVolumeProfile()['ratio'] as double);
-    final atrR=_calculateAtr(5)/_calculateAtr(14);
-    return isUp&&vr<0.8&&atrR<0.7?'reaccumulation':'none';
+    if (_candles.length < 20) return 'none';
+    final sp = _swingPoints(lookback: 20, str: 2);
+    final h = sp['h']!, l = sp['l']!;
+    if (h.length < 2 || l.length < 2) return 'none';
+    final isUp = h.last > h[h.length - 2] && l.last > l[l.length - 2];
+    final vr = (_analyzeVolumeProfile()['ratio'] as double);
+    final atrR = _calculateAtr(5) / _calculateAtr(14);
+    return isUp && vr < 0.8 && atrR < 0.7 ? 'reaccumulation' : 'none';
   }
 
   String _detectRedistribution() {
     // Redistribution: consolidation within downtrend
-    if (_candles.length<20) return 'none';
-    final sp=_swingPoints(lookback:20,str:2);
-    final h=sp['h']!,l=sp['l']!;
-    if (h.length<2||l.length<2) return 'none';
-    final isDown=h.last<h[h.length-2]&&l.last<l[l.length-2];
-    final vr=(_analyzeVolumeProfile()['ratio'] as double);
-    final atrR=_calculateAtr(5)/_calculateAtr(14);
-    return isDown&&vr<0.8&&atrR<0.7?'redistribution':'none';
+    if (_candles.length < 20) return 'none';
+    final sp = _swingPoints(lookback: 20, str: 2);
+    final h = sp['h']!, l = sp['l']!;
+    if (h.length < 2 || l.length < 2) return 'none';
+    final isDown = h.last < h[h.length - 2] && l.last < l[l.length - 2];
+    final vr = (_analyzeVolumeProfile()['ratio'] as double);
+    final atrR = _calculateAtr(5) / _calculateAtr(14);
+    return isDown && vr < 0.8 && atrR < 0.7 ? 'redistribution' : 'none';
   }
 
   String _detectPipePattern(bool top) {
     // Pipe Top/Bottom: two adjacent candles with nearly equal high (top) or low (bottom)
-    if (_candles.length<2) return 'none';
-    final c=_candles.last, p=_candles[_candles.length-2];
-    final atr=_calculateAtr(14), thresh=atr*0.15;
-    if (top&&(c.high-p.high).abs()<thresh) return 'pipe_top';
-    if (!top&&(c.low-p.low).abs()<thresh) return 'pipe_bottom';
+    if (_candles.length < 2) return 'none';
+    final c = _candles.last, p = _candles[_candles.length - 2];
+    final atr = _calculateAtr(14), thresh = atr * 0.15;
+    if (top && (c.high - p.high).abs() < thresh) return 'pipe_top';
+    if (!top && (c.low - p.low).abs() < thresh) return 'pipe_bottom';
     return 'none';
   }
 
   String _detectBumpAndRun() {
     // Bump: steep acceleration (large range), Run: reversal back to trend line
-    if (_candles.length<25) return 'none';
-    final lead = _candles.sublist(_candles.length-25, _candles.length-10);
-    final bump = _candles.sublist(_candles.length-10, _candles.length-2);
-    final atrLead = lead.map((c)=>c.high-c.low).reduce((a,b)=>a+b)/lead.length;
-    final atrBump = bump.map((c)=>c.high-c.low).reduce((a,b)=>a+b)/bump.length;
+    if (_candles.length < 25) return 'none';
+    final lead = _candles.sublist(_candles.length - 25, _candles.length - 10);
+    final bump = _candles.sublist(_candles.length - 10, _candles.length - 2);
+    final atrLead =
+        lead.map((c) => c.high - c.low).reduce((a, b) => a + b) / lead.length;
+    final atrBump =
+        bump.map((c) => c.high - c.low).reduce((a, b) => a + b) / bump.length;
     if (atrBump < atrLead * 2) return 'none';
     // Run: price reverting toward trend line
-    final leadAvg = lead.map((c)=>c.close).reduce((a,b)=>a+b)/lead.length;
-    if (_currentPrice < leadAvg && bump.last.close < bump.first.close) return 'bearish_run';
-    if (_currentPrice > leadAvg && bump.last.close > bump.first.close) return 'bullish_run';
+    final leadAvg =
+        lead.map((c) => c.close).reduce((a, b) => a + b) / lead.length;
+    if (_currentPrice < leadAvg && bump.last.close < bump.first.close)
+      return 'bearish_run';
+    if (_currentPrice > leadAvg && bump.last.close > bump.first.close)
+      return 'bullish_run';
     return 'none';
   }
 
   String _detectDemarkPivot() {
-    if (_candles.length<2) return 'none';
-    final c=_candles[_candles.length-2];
+    if (_candles.length < 2) return 'none';
+    final c = _candles[_candles.length - 2];
     double x;
-    if (c.close<c.open)       x=c.high+2*c.low+c.close;
-    else if (c.close>c.open)  x=2*c.high+c.low+c.close;
-    else                      x=c.high+c.low+2*c.close;
-    final p=x/4, r1=x/2-c.low, s1=x/2-c.high;
-    if (_currentPrice>r1) return 'above_r1';
-    if (_currentPrice<s1) return 'below_s1';
-    return _currentPrice>p?'above_p':'below_p';
+    if (c.close < c.open) {
+      x = c.high + 2 * c.low + c.close;
+    } else if (c.close > c.open)
+      x = 2 * c.high + c.low + c.close;
+    else
+      x = c.high + c.low + 2 * c.close;
+    final p = x / 4, r1 = x / 2 - c.low, s1 = x / 2 - c.high;
+    if (_currentPrice > r1) return 'above_r1';
+    if (_currentPrice < s1) return 'below_s1';
+    return _currentPrice > p ? 'above_p' : 'below_p';
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -4113,17 +4955,27 @@ class SignalEngine extends ChangeNotifier {
   double _calculateHurstExponent() {
     if (_candles.length < 20) return 0.5;
     final n = min(40, _candles.length);
-    final prices = _candles.sublist(_candles.length - n).map((c) => c.close).toList();
+    final prices = _candles
+        .sublist(_candles.length - n)
+        .map((c) => c.close)
+        .toList();
     final rets = <double>[];
-    for (int i = 1; i < prices.length; i++) { rets.add(prices[i] - prices[i-1]); }
+    for (int i = 1; i < prices.length; i++) {
+      rets.add(prices[i] - prices[i - 1]);
+    }
     if (rets.isEmpty) return 0.5;
     final mean = rets.reduce((a, b) => a + b) / rets.length;
     double cum = 0;
     final cumDev = <double>[];
-    for (final r in rets) { cum += r - mean; cumDev.add(cum); }
+    for (final r in rets) {
+      cum += r - mean;
+      cumDev.add(cum);
+    }
     final R = cumDev.reduce(max) - cumDev.reduce(min);
     double variance = 0;
-    for (final r in rets) { variance += pow(r - mean, 2).toDouble(); }
+    for (final r in rets) {
+      variance += pow(r - mean, 2).toDouble();
+    }
     final S = sqrt(variance / rets.length);
     if (S < 1e-10 || R <= 0) return 0.5;
     return (log(R / S) / log(rets.length.toDouble())).clamp(0.0, 1.0);
@@ -4134,14 +4986,22 @@ class SignalEngine extends ChangeNotifier {
     final n = min(30, _candles.length - 1);
     int up = 0, dn = 0, flat = 0;
     for (int i = _candles.length - n; i < _candles.length - 1; i++) {
-      final d = _candles[i+1].close - _candles[i].close;
-      if (d > 0.00005) up++; else if (d < -0.00005) dn++; else flat++;
+      final d = _candles[i + 1].close - _candles[i].close;
+      if (d > 0.00005) {
+        up++;
+      } else if (d < -0.00005)
+        dn++;
+      else
+        flat++;
     }
     final total = (up + dn + flat).toDouble();
     if (total == 0) return 'none';
     double entropy = 0;
     for (final cnt in [up, dn, flat]) {
-      if (cnt > 0) { final p = cnt / total; entropy -= p * log(p); }
+      if (cnt > 0) {
+        final p = cnt / total;
+        entropy -= p * log(p);
+      }
     }
     final norm = entropy / log(3);
     if (norm > 0.95) return 'high_entropy';
@@ -4151,7 +5011,7 @@ class SignalEngine extends ChangeNotifier {
 
   String _detectMarketRegime() {
     if (_candles.length < 20) return 'none';
-    final adx  = _calculateAdxFull(14)['adx']!;
+    final adx = _calculateAdxFull(14)['adx']!;
     final rAtr = _calculateAtr(5);
     final lAtr = _calculateAtr(20);
     if (adx > 30 && rAtr > lAtr * 1.2) return 'trending_volatile';
@@ -4172,14 +5032,19 @@ class SignalEngine extends ChangeNotifier {
   String _detectAnomaly() {
     if (_candles.length < 20) return 'none';
     final n = min(20, _candles.length);
-    final closes = _candles.sublist(_candles.length - n).map((c) => c.close).toList();
+    final closes = _candles
+        .sublist(_candles.length - n)
+        .map((c) => c.close)
+        .toList();
     final mean = closes.reduce((a, b) => a + b) / closes.length;
     double variance = 0;
-    for (final c in closes) { variance += pow(c - mean, 2).toDouble(); }
+    for (final c in closes) {
+      variance += pow(c - mean, 2).toDouble();
+    }
     final sd = sqrt(variance / closes.length);
     if (sd < 1e-10) return 'none';
     final z = (_currentPrice - mean) / sd;
-    if (z >  2.5) return 'anomaly_up';
+    if (z > 2.5) return 'anomaly_up';
     if (z < -2.5) return 'anomaly_down';
     return 'normal';
   }
@@ -4188,10 +5053,16 @@ class SignalEngine extends ChangeNotifier {
     if (_candles.length < 5) return 'none';
     final atr = _calculateAtr(14);
     for (int i = _candles.length - 2; i >= 1; i--) {
-      final gapUp   = _candles[i].low   - _candles[i-1].high;
-      final gapDown = _candles[i-1].low - _candles[i].high;
-      if (gapUp > atr * 3 && _currentPrice >= _candles[i-1].high && _currentPrice <= _candles[i].low) return 'bullish';
-      if (gapDown > atr * 3 && _currentPrice >= _candles[i].high && _currentPrice <= _candles[i-1].low) return 'bearish';
+      final gapUp = _candles[i].low - _candles[i - 1].high;
+      final gapDown = _candles[i - 1].low - _candles[i].high;
+      if (gapUp > atr * 3 &&
+          _currentPrice >= _candles[i - 1].high &&
+          _currentPrice <= _candles[i].low)
+        return 'bullish';
+      if (gapDown > atr * 3 &&
+          _currentPrice >= _candles[i].high &&
+          _currentPrice <= _candles[i - 1].low)
+        return 'bearish';
     }
     return 'none';
   }
@@ -4199,17 +5070,22 @@ class SignalEngine extends ChangeNotifier {
   String _detectSpectralCycle() {
     if (_candles.length < 20) return 'none';
     final n = min(30, _candles.length);
-    final series = _candles.sublist(_candles.length - n).map((c) => c.close).toList();
+    final series = _candles
+        .sublist(_candles.length - n)
+        .map((c) => c.close)
+        .toList();
     final mean = series.reduce((a, b) => a + b) / series.length;
-    double maxCorr = 0; int domPeriod = 0;
+    double maxCorr = 0;
+    int domPeriod = 0;
     for (int lag = 2; lag <= min(15, n ~/ 2); lag++) {
       double corr = 0, denom = 0;
       for (int i = lag; i < series.length; i++) {
-        corr  += (series[i] - mean) * (series[i-lag] - mean);
+        corr += (series[i] - mean) * (series[i - lag] - mean);
         denom += pow(series[i] - mean, 2).toDouble();
       }
       if (denom > 0 && (corr / denom).abs() > maxCorr) {
-        maxCorr = (corr / denom).abs(); domPeriod = lag;
+        maxCorr = (corr / denom).abs();
+        domPeriod = lag;
       }
     }
     if (domPeriod <= 0) return 'none';
@@ -4220,26 +5096,30 @@ class SignalEngine extends ChangeNotifier {
 
   String _detectMonteCarlo() {
     if (_candles.length < 20) return 'none';
-    final vol   = _calculateAtr(14) / _currentPrice;
-    final lb    = min(14, _candles.length - 1);
-    final drift = (_candles.last.close - _candles[_candles.length - 1 - lb].close) /
-                  _candles[_candles.length - 1 - lb].close / lb;
+    final vol = _calculateAtr(14) / _currentPrice;
+    final lb = min(14, _candles.length - 1);
+    final drift =
+        (_candles.last.close - _candles[_candles.length - 1 - lb].close) /
+        _candles[_candles.length - 1 - lb].close /
+        lb;
     int upCount = 0;
     for (int s = 0; s < 200; s++) {
       final u1 = _random.nextDouble().clamp(1e-10, 1.0);
       final u2 = _random.nextDouble();
-      final z  = sqrt(-2 * log(u1)) * cos(2 * pi * u2);
-      final fp = _currentPrice * exp((drift - 0.5 * vol * vol) * 5 + vol * sqrt(5.0) * z);
+      final z = sqrt(-2 * log(u1)) * cos(2 * pi * u2);
+      final fp =
+          _currentPrice *
+          exp((drift - 0.5 * vol * vol) * 5 + vol * sqrt(5.0) * z);
       if (fp > _currentPrice) upCount++;
     }
     if (upCount > 130) return 'bullish';
-    if (upCount < 70)  return 'bearish';
+    if (upCount < 70) return 'bearish';
     return 'neutral';
   }
 
   String _detectWaveletTrend() {
     if (_candles.length < 34) return 'none';
-    final f = _calculateEma(min(5,  _candles.length));
+    final f = _calculateEma(min(5, _candles.length));
     final m = _calculateEma(min(13, _candles.length));
     final s = _calculateEma(min(34, _candles.length));
     final bull = (f > m ? 1 : 0) + (m > s ? 1 : 0) + (f > s ? 1 : 0);
@@ -4283,21 +5163,27 @@ class SignalEngine extends ChangeNotifier {
 
     final recent = _candles.sublist(max(0, _candles.length - 30));
     double swingHigh = recent.map((c) => c.high).reduce(max);
-    double swingLow  = recent.map((c) => c.low).reduce(min);
+    double swingLow = recent.map((c) => c.low).reduce(min);
     final range = swingHigh - swingLow;
     if (range < 0.0001) return 'none';
 
-    final fibUp   = swingLow  + range * level;
+    final fibUp = swingLow + range * level;
     final fibDown = swingHigh - range * level;
-    final tol     = range * 0.05;
+    final tol = range * 0.05;
 
     final last = _candles.last;
     final prev = _candles.length > 1 ? _candles[_candles.length - 2] : last;
 
     if ((_currentPrice - fibUp).abs() < tol &&
-        last.close > last.open && last.close > prev.close) { return 'bullish_rejection'; }
+        last.close > last.open &&
+        last.close > prev.close) {
+      return 'bullish_rejection';
+    }
     if ((_currentPrice - fibDown).abs() < tol &&
-        last.close < last.open && last.close < prev.close) { return 'bearish_rejection'; }
+        last.close < last.open &&
+        last.close < prev.close) {
+      return 'bearish_rejection';
+    }
     return 'none';
   }
 
@@ -4311,20 +5197,27 @@ class SignalEngine extends ChangeNotifier {
   String _detectInstitutionalActivity() {
     final volRatio = (_analyzeVolumeProfile()['ratio'] as double);
     final volDelta = _calculateVolumeDelta();
-    final cmf      = _calculateCmf(20);
-    if (volRatio > 1.5 && volDelta > 0 && cmf >  0.05) return 'institutional_buying';
-    if (volRatio > 1.5 && volDelta < 0 && cmf < -0.05) return 'institutional_selling';
+    final cmf = _calculateCmf(20);
+    if (volRatio > 1.5 && volDelta > 0 && cmf > 0.05)
+      return 'institutional_buying';
+    if (volRatio > 1.5 && volDelta < 0 && cmf < -0.05)
+      return 'institutional_selling';
     return 'none';
   }
 
   String _detectTimeSession(String session) {
     final hour = DateTime.now().toUtc().hour;
     switch (session) {
-      case 'london_newyork_overlap': return (hour >= 13 && hour < 17) ? 'active' : 'inactive';
-      case 'london':                 return (hour >=  8 && hour < 16) ? 'active' : 'inactive';
-      case 'new_york':               return (hour >= 13 && hour < 22) ? 'active' : 'inactive';
-      case 'tokyo':                  return (hour >=  0 && hour <  9) ? 'active' : 'inactive';
-      default:                       return 'inactive';
+      case 'london_newyork_overlap':
+        return (hour >= 13 && hour < 17) ? 'active' : 'inactive';
+      case 'london':
+        return (hour >= 8 && hour < 16) ? 'active' : 'inactive';
+      case 'new_york':
+        return (hour >= 13 && hour < 22) ? 'active' : 'inactive';
+      case 'tokyo':
+        return (hour >= 0 && hour < 9) ? 'active' : 'inactive';
+      default:
+        return 'inactive';
     }
   }
 
@@ -4357,7 +5250,9 @@ class SignalEngine extends ChangeNotifier {
           totalLoss -= change;
         }
       }
-      double rs = totalLoss == 0 ? 100.0 : (totalGain / 14.0) / (totalLoss / 14.0);
+      double rs = totalLoss == 0
+          ? 100.0
+          : (totalGain / 14.0) / (totalLoss / 14.0);
       rsiValues.add(100.0 - (100.0 / (1.0 + rs)));
     }
 
@@ -4366,9 +5261,12 @@ class SignalEngine extends ChangeNotifier {
     // Compare first half vs second half
     int mid = prices.length ~/ 2;
     double priceFirst = prices.sublist(0, mid).reduce((a, b) => a + b) / mid;
-    double priceLast = prices.sublist(mid).reduce((a, b) => a + b) / (prices.length - mid);
+    double priceLast =
+        prices.sublist(mid).reduce((a, b) => a + b) / (prices.length - mid);
     double rsiFirst = rsiValues.sublist(0, mid).reduce((a, b) => a + b) / mid;
-    double rsiLast = rsiValues.sublist(mid).reduce((a, b) => a + b) / (rsiValues.length - mid);
+    double rsiLast =
+        rsiValues.sublist(mid).reduce((a, b) => a + b) /
+        (rsiValues.length - mid);
 
     // Bullish divergence: price making lower lows but RSI making higher lows
     if (priceLast < priceFirst && rsiLast > rsiFirst + 3) return 'bullish';
@@ -4416,12 +5314,16 @@ class SignalEngine extends ChangeNotifier {
     double upperWick = last.high - max(last.open, last.close);
 
     // Hammer (bullish reversal)
-    if (lowerWick / lastRange > 0.6 && upperWick / lastRange < 0.15 && lastBody / lastRange > 0.1) {
+    if (lowerWick / lastRange > 0.6 &&
+        upperWick / lastRange < 0.15 &&
+        lastBody / lastRange > 0.1) {
       return 'hammer';
     }
 
     // Shooting Star (bearish reversal)
-    if (upperWick / lastRange > 0.6 && lowerWick / lastRange < 0.15 && lastBody / lastRange > 0.1) {
+    if (upperWick / lastRange > 0.6 &&
+        lowerWick / lastRange < 0.15 &&
+        lastBody / lastRange > 0.1) {
       return 'shooting_star';
     }
 
@@ -4442,14 +5344,20 @@ class SignalEngine extends ChangeNotifier {
     }
 
     // Three White Soldiers
-    if (prev2.close > prev2.open && prev.close > prev.open && last.close > last.open &&
-        prev.close > prev2.close && last.close > prev.close) {
+    if (prev2.close > prev2.open &&
+        prev.close > prev.open &&
+        last.close > last.open &&
+        prev.close > prev2.close &&
+        last.close > prev.close) {
       return 'three_white_soldiers';
     }
 
     // Three Black Crows
-    if (prev2.close < prev2.open && prev.close < prev.open && last.close < last.open &&
-        prev.close < prev2.close && last.close < prev.close) {
+    if (prev2.close < prev2.open &&
+        prev.close < prev.open &&
+        last.close < last.open &&
+        prev.close < prev2.close &&
+        last.close < prev.close) {
       return 'three_black_crows';
     }
 
@@ -4531,17 +5439,61 @@ class SignalEngine extends ChangeNotifier {
     int bullSignals = 0;
     int bearSignals = 0;
 
-    if (_rsiVal > 50) { bullSignals++; } else { bearSignals++; }
-    if (_macdHistogram > 0) { bullSignals++; } else { bearSignals++; }
-    if (_currentPrice > _vwapVal) { bullSignals++; } else { bearSignals++; }
-    if (_stochK > 50) { bullSignals++; } else { bearSignals++; }
-    if (_cmfVal > 0) { bullSignals++; } else { bearSignals++; }
-    if (_volumeDelta > 0) { bullSignals++; } else { bearSignals++; }
-    if (_currentPrice > _ema50) { bullSignals++; } else { bearSignals++; }
-    if (_mfiVal > 50) { bullSignals++; } else { bearSignals++; }
-    if (_cciVal > 0) { bullSignals++; } else { bearSignals++; }
-    if (_williamsR > -50) { bullSignals++; } else { bearSignals++; }
-    if (_plusDi > _minusDi) { bullSignals++; } else { bearSignals++; }
+    if (_rsiVal > 50) {
+      bullSignals++;
+    } else {
+      bearSignals++;
+    }
+    if (_macdHistogram > 0) {
+      bullSignals++;
+    } else {
+      bearSignals++;
+    }
+    if (_currentPrice > _vwapVal) {
+      bullSignals++;
+    } else {
+      bearSignals++;
+    }
+    if (_stochK > 50) {
+      bullSignals++;
+    } else {
+      bearSignals++;
+    }
+    if (_cmfVal > 0) {
+      bullSignals++;
+    } else {
+      bearSignals++;
+    }
+    if (_volumeDelta > 0) {
+      bullSignals++;
+    } else {
+      bearSignals++;
+    }
+    if (_currentPrice > _ema50) {
+      bullSignals++;
+    } else {
+      bearSignals++;
+    }
+    if (_mfiVal > 50) {
+      bullSignals++;
+    } else {
+      bearSignals++;
+    }
+    if (_cciVal > 0) {
+      bullSignals++;
+    } else {
+      bearSignals++;
+    }
+    if (_williamsR > -50) {
+      bullSignals++;
+    } else {
+      bearSignals++;
+    }
+    if (_plusDi > _minusDi) {
+      bullSignals++;
+    } else {
+      bearSignals++;
+    }
 
     if (_rsiVal > 70 && _stochK > 80 && _mfiVal > 80) {
       _marketSentiment = 'Strong Overbought (Sell)';
@@ -4560,7 +5512,6 @@ class SignalEngine extends ChangeNotifier {
     }
   }
 
-
   // Build initial candles. Pass [realPrice] to anchor the chart to a live price.
   void _initChart({double? realPrice}) {
     _candles.clear();
@@ -4571,33 +5522,43 @@ class SignalEngine extends ChangeNotifier {
       DateTime time = DateTime.now().subtract(Duration(seconds: 30 * rollSecs));
       for (int i = 0; i < 30; i++) {
         double change = (_random.nextDouble() - 0.5) * (base * 0.001);
-        double open   = base;
-        double close  = base + change;
-        double high   = max(open, close) + _random.nextDouble() * (base * 0.0003);
-        double low    = min(open, close) - _random.nextDouble() * (base * 0.0003);
-        double volume = 500.0 + _random.nextDouble() * 2000.0 +
+        double open = base;
+        double close = base + change;
+        double high = max(open, close) + _random.nextDouble() * (base * 0.0003);
+        double low = min(open, close) - _random.nextDouble() * (base * 0.0003);
+        double volume =
+            500.0 +
+            _random.nextDouble() * 2000.0 +
             ((high - low) / base) * 50000.0;
-        _candles.add(Candle(open: open, high: high, low: low, close: close,
-            time: time, volume: volume));
-        base  = close;
-        time  = time.add(Duration(seconds: rollSecs));
+        _candles.add(
+          Candle(
+            open: open,
+            high: high,
+            low: low,
+            close: close,
+            time: time,
+            volume: volume,
+          ),
+        );
+        base = close;
+        time = time.add(Duration(seconds: rollSecs));
       }
       _currentPrice = base;
       return;
     }
     double basePrice = 1.08450;
-    
+
     // Distribute base prices — most specific checks first to avoid substring conflicts
     // BCH must precede BTC; ZAR/USD vs USD/ZAR need separate branches, etc.
     if (_activePair.contains('BCH')) {
       if (_activePair.contains('JPY')) {
         basePrice = 58000.0 + _random.nextDouble() * 2000.0;
       } else if (_activePair.contains('EUR')) {
-        basePrice = 350.0  + _random.nextDouble() * 10.0;
+        basePrice = 350.0 + _random.nextDouble() * 10.0;
       } else if (_activePair.contains('GBP')) {
-        basePrice = 300.0  + _random.nextDouble() * 10.0;
+        basePrice = 300.0 + _random.nextDouble() * 10.0;
       } else {
-        basePrice = 380.0  + _random.nextDouble() * 15.0;
+        basePrice = 380.0 + _random.nextDouble() * 15.0;
       }
     } else if (_activePair.contains('BTC')) {
       if (_activePair.contains('JPY')) {
@@ -4610,92 +5571,110 @@ class SignalEngine extends ChangeNotifier {
     } else if (_activePair.contains('ETH')) {
       basePrice = 3450.0 + _random.nextDouble() * 150.0;
     } else if (_activePair.contains('SOL')) {
-      basePrice = 142.0  + _random.nextDouble() * 8.0;
+      basePrice = 142.0 + _random.nextDouble() * 8.0;
     } else if (_activePair.contains('BNB')) {
-      basePrice = 572.0  + _random.nextDouble() * 20.0;
+      basePrice = 572.0 + _random.nextDouble() * 20.0;
     } else if (_activePair.contains('XRP')) {
       basePrice = 0.4900 + _random.nextDouble() * 0.0500;
     } else if (_activePair.contains('ADA')) {
-      basePrice = 0.35   + _random.nextDouble() * 0.10;
+      basePrice = 0.35 + _random.nextDouble() * 0.10;
     } else if (_activePair.contains('DOGE')) {
-      basePrice = 0.11   + _random.nextDouble() * 0.04;
+      basePrice = 0.11 + _random.nextDouble() * 0.04;
     } else if (_activePair.contains('LTC')) {
-      basePrice = 75.0   + _random.nextDouble() * 10.0;
+      basePrice = 75.0 + _random.nextDouble() * 10.0;
     } else if (_activePair.contains('LINK')) {
-      basePrice = 14.0   + _random.nextDouble() * 2.0;
+      basePrice = 14.0 + _random.nextDouble() * 2.0;
     } else if (_activePair.contains('DOT')) {
-      basePrice = 6.50   + _random.nextDouble() * 0.50;
+      basePrice = 6.50 + _random.nextDouble() * 0.50;
     } else if (_activePair.contains('AVAX')) {
-      basePrice = 32.0   + _random.nextDouble() * 3.0;
+      basePrice = 32.0 + _random.nextDouble() * 3.0;
     } else if (_activePair.contains('TRX')) {
-      basePrice = 0.12   + _random.nextDouble() * 0.01;
+      basePrice = 0.12 + _random.nextDouble() * 0.01;
     } else if (_activePair.contains('MATIC')) {
-      basePrice = 0.60   + _random.nextDouble() * 0.05;
+      basePrice = 0.60 + _random.nextDouble() * 0.05;
     } else if (_activePair.contains('TON')) {
-      basePrice = 5.80   + _random.nextDouble() * 0.40;
+      basePrice = 5.80 + _random.nextDouble() * 0.40;
     } else if (_activePair.contains('DASH')) {
-      basePrice = 28.0   + _random.nextDouble() * 2.0;
-    } else if ((_activePair.contains('XAU') || _activePair.contains('Gold')) && _activePair.contains('EUR')) {
+      basePrice = 28.0 + _random.nextDouble() * 2.0;
+    } else if ((_activePair.contains('XAU') || _activePair.contains('Gold')) &&
+        _activePair.contains('EUR')) {
       basePrice = 2160.0 + _random.nextDouble() * 40.0;
-    } else if ((_activePair.contains('XAG') || _activePair.contains('Silver')) && _activePair.contains('EUR')) {
-      basePrice = 27.0   + _random.nextDouble() * 1.0;
+    } else if ((_activePair.contains('XAG') ||
+            _activePair.contains('Silver')) &&
+        _activePair.contains('EUR')) {
+      basePrice = 27.0 + _random.nextDouble() * 1.0;
     } else if (_activePair.contains('Gold') || _activePair.contains('XAU')) {
       basePrice = 2335.0 + _random.nextDouble() * 40.0;
     } else if (_activePair.contains('Silver') || _activePair.contains('XAG')) {
-      basePrice = 29.20  + _random.nextDouble() * 1.50;
-    } else if (_activePair.contains('Palladium') || _activePair.contains('XPD')) {
+      basePrice = 29.20 + _random.nextDouble() * 1.50;
+    } else if (_activePair.contains('Palladium') ||
+        _activePair.contains('XPD')) {
       basePrice = 1000.0 + _random.nextDouble() * 40.0;
-    } else if (_activePair.contains('PLATINUM') || _activePair.contains('Platinum') || _activePair.contains('XPT')) {
-      basePrice = 950.0  + _random.nextDouble() * 30.0;
-    } else if (_activePair.contains('BRENT') || _activePair.contains('Oil') || _activePair.contains('CRUDE') || _activePair.contains('WTI')) {
-      basePrice = 75.0   + _random.nextDouble() * 5.0;
-    } else if (_activePair.contains('GAS') || _activePair.contains('Gas') || _activePair.contains('NATURAL')) {
-      basePrice = 2.10   + _random.nextDouble() * 0.80;
-    } else if (_activePair.contains('COPPER') || _activePair.contains('Copper')) {
-      basePrice = 4.10   + _random.nextDouble() * 0.60;
-    // --- Forex cross pairs (order: specifics before broad JPY/EUR/USD checks) ---
+    } else if (_activePair.contains('PLATINUM') ||
+        _activePair.contains('Platinum') ||
+        _activePair.contains('XPT')) {
+      basePrice = 950.0 + _random.nextDouble() * 30.0;
+    } else if (_activePair.contains('BRENT') ||
+        _activePair.contains('Oil') ||
+        _activePair.contains('CRUDE') ||
+        _activePair.contains('WTI')) {
+      basePrice = 75.0 + _random.nextDouble() * 5.0;
+    } else if (_activePair.contains('GAS') ||
+        _activePair.contains('Gas') ||
+        _activePair.contains('NATURAL')) {
+      basePrice = 2.10 + _random.nextDouble() * 0.80;
+    } else if (_activePair.contains('COPPER') ||
+        _activePair.contains('Copper')) {
+      basePrice = 4.10 + _random.nextDouble() * 0.60;
+      // --- Forex cross pairs (order: specifics before broad JPY/EUR/USD checks) ---
     } else if (_activePair.contains('CHF') && _activePair.contains('JPY')) {
-      basePrice = 173.0  + _random.nextDouble() * 3.0;
+      basePrice = 173.0 + _random.nextDouble() * 3.0;
     } else if (_activePair.contains('JPY')) {
-      basePrice = 155.0  + _random.nextDouble() * 3.0;
+      basePrice = 155.0 + _random.nextDouble() * 3.0;
     } else if (_activePair.contains('EUR/CAD')) {
-      basePrice = 1.475  + _random.nextDouble() * 0.010;
+      basePrice = 1.475 + _random.nextDouble() * 0.010;
     } else if (_activePair.contains('EUR/AUD')) {
-      basePrice = 1.65   + _random.nextDouble() * 0.02;
+      basePrice = 1.65 + _random.nextDouble() * 0.02;
     } else if (_activePair.contains('EUR/CHF')) {
-      basePrice = 0.965  + _random.nextDouble() * 0.010;
+      basePrice = 0.965 + _random.nextDouble() * 0.010;
     } else if (_activePair.contains('EUR/NZD')) {
-      basePrice = 1.78   + _random.nextDouble() * 0.02;
+      basePrice = 1.78 + _random.nextDouble() * 0.02;
     } else if (_activePair.contains('EUR/RUB')) {
-      basePrice = 97.0   + _random.nextDouble() * 2.0;
+      basePrice = 97.0 + _random.nextDouble() * 2.0;
     } else if (_activePair.contains('EUR/TRY')) {
-      basePrice = 36.0   + _random.nextDouble() * 1.0;
-    } else if (_activePair.contains('EUR/USD') || _activePair.contains('GBP/USD') || _activePair.contains('EUR/GBP') || _activePair.contains('AUD/USD') || _activePair.contains('NZD/USD') || _activePair.contains('USD/CAD')) {
+      basePrice = 36.0 + _random.nextDouble() * 1.0;
+    } else if (_activePair.contains('EUR/USD') ||
+        _activePair.contains('GBP/USD') ||
+        _activePair.contains('EUR/GBP') ||
+        _activePair.contains('AUD/USD') ||
+        _activePair.contains('NZD/USD') ||
+        _activePair.contains('USD/CAD')) {
       basePrice = 1.08000 + _random.nextDouble() * 0.02000;
     } else if (_activePair.contains('GBP/AUD')) {
-      basePrice = 1.93   + _random.nextDouble() * 0.02;
+      basePrice = 1.93 + _random.nextDouble() * 0.02;
     } else if (_activePair.contains('GBP/CAD')) {
-      basePrice = 1.72   + _random.nextDouble() * 0.02;
+      basePrice = 1.72 + _random.nextDouble() * 0.02;
     } else if (_activePair.contains('GBP/CHF')) {
-      basePrice = 1.14   + _random.nextDouble() * 0.02;
+      basePrice = 1.14 + _random.nextDouble() * 0.02;
     } else if (_activePair.contains('GBP/NZD')) {
-      basePrice = 2.08   + _random.nextDouble() * 0.03;
+      basePrice = 2.08 + _random.nextDouble() * 0.03;
     } else if (_activePair.contains('AUD/NZD')) {
-      basePrice = 1.075  + _random.nextDouble() * 0.010;
+      basePrice = 1.075 + _random.nextDouble() * 0.010;
     } else if (_activePair.contains('AUD/CAD')) {
-      basePrice = 0.89   + _random.nextDouble() * 0.01;
+      basePrice = 0.89 + _random.nextDouble() * 0.01;
     } else if (_activePair.contains('AUD/CHF')) {
-      basePrice = 0.60   + _random.nextDouble() * 0.01;
+      basePrice = 0.60 + _random.nextDouble() * 0.01;
     } else if (_activePair.contains('CAD/CHF')) {
-      basePrice = 0.66   + _random.nextDouble() * 0.01;
-    } else if (_activePair.contains('NZD/CHF') || _activePair.contains('NZD/CAD')) {
-      basePrice = 0.57   + _random.nextDouble() * 0.01;
+      basePrice = 0.66 + _random.nextDouble() * 0.01;
+    } else if (_activePair.contains('NZD/CHF') ||
+        _activePair.contains('NZD/CAD')) {
+      basePrice = 0.57 + _random.nextDouble() * 0.01;
     } else if (_activePair.contains('USD/CHF')) {
       basePrice = 0.8900 + _random.nextDouble() * 0.0100;
     } else if (_activePair.contains('ZAR/USD')) {
-      basePrice = 0.054  + _random.nextDouble() * 0.002;
+      basePrice = 0.054 + _random.nextDouble() * 0.002;
     } else if (_activePair.contains('ZAR') || _activePair.contains('MXN')) {
-      basePrice = 18.0   + _random.nextDouble() * 0.5;
+      basePrice = 18.0 + _random.nextDouble() * 0.5;
     } else if (_activePair.contains('NGN/USD')) {
       basePrice = 0.00067 + _random.nextDouble() * 0.00002;
     } else if (_activePair.contains('NGN')) {
@@ -4703,92 +5682,96 @@ class SignalEngine extends ChangeNotifier {
     } else if (_activePair.contains('KES')) {
       basePrice = 0.0077 + _random.nextDouble() * 0.0002;
     } else if (_activePair.contains('UAH')) {
-      basePrice = 0.025  + _random.nextDouble() * 0.001;
+      basePrice = 0.025 + _random.nextDouble() * 0.001;
     } else if (_activePair.contains('TND')) {
-      basePrice = 0.322  + _random.nextDouble() * 0.005;
+      basePrice = 0.322 + _random.nextDouble() * 0.005;
     } else if (_activePair.contains('CLP')) {
-      basePrice = 925.0  + _random.nextDouble() * 15.0;
+      basePrice = 925.0 + _random.nextDouble() * 15.0;
     } else if (_activePair.contains('SGD')) {
-      basePrice = 1.34   + _random.nextDouble() * 0.02;
+      basePrice = 1.34 + _random.nextDouble() * 0.02;
     } else if (_activePair.contains('THB')) {
-      basePrice = 36.5   + _random.nextDouble() * 0.5;
+      basePrice = 36.5 + _random.nextDouble() * 0.5;
     } else if (_activePair.contains('IDR')) {
       basePrice = 16000.0 + _random.nextDouble() * 200.0;
     } else if (_activePair.contains('OMR')) {
-      basePrice = 18.8   + _random.nextDouble() * 0.3;
+      basePrice = 18.8 + _random.nextDouble() * 0.3;
     } else if (_activePair.contains('DZD')) {
-      basePrice = 134.0  + _random.nextDouble() * 2.0;
+      basePrice = 134.0 + _random.nextDouble() * 2.0;
     } else if (_activePair.contains('MYR')) {
-      basePrice = 4.70   + _random.nextDouble() * 0.10;
+      basePrice = 4.70 + _random.nextDouble() * 0.10;
     } else if (_activePair.contains('RUB')) {
-      basePrice = 90.0   + _random.nextDouble() * 2.0;
+      basePrice = 90.0 + _random.nextDouble() * 2.0;
     } else if (_activePair.contains('CNH')) {
-      basePrice = 7.26   + _random.nextDouble() * 0.04;
+      basePrice = 7.26 + _random.nextDouble() * 0.04;
     } else if (_activePair.contains('INR')) {
-      basePrice = 84.0   + _random.nextDouble() * 1.0;
+      basePrice = 84.0 + _random.nextDouble() * 1.0;
     } else if (_activePair.contains('AED')) {
-      basePrice = 1.97   + _random.nextDouble() * 0.02;
+      basePrice = 1.97 + _random.nextDouble() * 0.02;
     } else if (_activePair.contains('QAR')) {
-      basePrice = 1.97   + _random.nextDouble() * 0.02;
+      basePrice = 1.97 + _random.nextDouble() * 0.02;
     } else if (_activePair.contains('NOK')) {
-      basePrice = 11.80  + _random.nextDouble() * 0.20;
+      basePrice = 11.80 + _random.nextDouble() * 0.20;
     } else if (_activePair.contains('YER')) {
       basePrice = 0.00399 + _random.nextDouble() * 0.0001;
     } else if (_activePair.contains('MAD')) {
       basePrice = 0.0997 + _random.nextDouble() * 0.002;
     } else if (_activePair.contains('HUF')) {
-      basePrice = 388.0  + _random.nextDouble() * 5.0;
+      basePrice = 388.0 + _random.nextDouble() * 5.0;
     } else if (_activePair.contains('EGP')) {
-      basePrice = 48.50  + _random.nextDouble() * 0.50;
+      basePrice = 48.50 + _random.nextDouble() * 0.50;
     } else if (_activePair.contains('COP')) {
       basePrice = 3940.0 + _random.nextDouble() * 40.0;
     } else if (_activePair.contains('BHD')) {
-      basePrice = 19.20  + _random.nextDouble() * 0.30;
+      basePrice = 19.20 + _random.nextDouble() * 0.30;
     } else if (_activePair.contains('SAR')) {
-      basePrice = 1.93   + _random.nextDouble() * 0.02;
+      basePrice = 1.93 + _random.nextDouble() * 0.02;
     } else if (_activePair.contains('JOD')) {
-      basePrice = 10.22  + _random.nextDouble() * 0.10;
+      basePrice = 10.22 + _random.nextDouble() * 0.10;
     } else if (_activePair.contains('MRY')) {
-      basePrice = 39.50  + _random.nextDouble() * 0.50;
+      basePrice = 39.50 + _random.nextDouble() * 0.50;
     } else if (_activePair.contains('VND')) {
       basePrice = 25100.0 + _random.nextDouble() * 100.0;
     } else if (_activePair.contains('LBP')) {
       basePrice = 89500.0 + _random.nextDouble() * 500.0;
     } else if (_activePair.contains('ARS')) {
-      basePrice = 900.0  + _random.nextDouble() * 20.0;
+      basePrice = 900.0 + _random.nextDouble() * 20.0;
     } else if (_activePair.contains('PKR')) {
-      basePrice = 278.0  + _random.nextDouble() * 5.0;
+      basePrice = 278.0 + _random.nextDouble() * 5.0;
     } else if (_activePair.contains('BDT')) {
-      basePrice = 117.0  + _random.nextDouble() * 3.0;
+      basePrice = 117.0 + _random.nextDouble() * 3.0;
     } else if (_activePair.contains('PHP')) {
-      basePrice = 58.0   + _random.nextDouble() * 2.0;
+      basePrice = 58.0 + _random.nextDouble() * 2.0;
     } else if (_activePair.contains('BRL')) {
-      basePrice = 5.4    + _random.nextDouble() * 0.2;
+      basePrice = 5.4 + _random.nextDouble() * 0.2;
     }
-    
+
     _currentPrice = basePrice;
-    
+
     final int rollSecs = timeframeSeconds;
     DateTime time = DateTime.now().subtract(Duration(seconds: 30 * rollSecs));
     for (int i = 0; i < 30; i++) {
       double change = (_random.nextDouble() - 0.5) * (basePrice * 0.001);
       double open = basePrice;
       double close = basePrice + change;
-      double high = max(open, close) + _random.nextDouble() * (basePrice * 0.0003);
-      double low = min(open, close) - _random.nextDouble() * (basePrice * 0.0003);
+      double high =
+          max(open, close) + _random.nextDouble() * (basePrice * 0.0003);
+      double low =
+          min(open, close) - _random.nextDouble() * (basePrice * 0.0003);
       // Realistic volume simulation (higher on bigger candles, random base)
       double baseVolume = 500.0 + _random.nextDouble() * 2000.0;
       double volatilityBonus = ((high - low) / basePrice) * 50000.0;
       double volume = baseVolume + volatilityBonus;
-      
-      _candles.add(Candle(
-        open: open,
-        high: high,
-        low: low,
-        close: close,
-        time: time,
-        volume: volume,
-      ));
+
+      _candles.add(
+        Candle(
+          open: open,
+          high: high,
+          low: low,
+          close: close,
+          time: time,
+          volume: volume,
+        ),
+      );
       basePrice = close;
       time = time.add(Duration(seconds: rollSecs));
     }
@@ -4813,9 +5796,11 @@ class SignalEngine extends ChangeNotifier {
       }
 
       double volatility = _currentPrice * 0.00025;
-      double priceChange = (_random.nextDouble() - 0.492) * volatility; // slight upward drift
+      double priceChange =
+          (_random.nextDouble() - 0.492) * volatility; // slight upward drift
 
-      // Guaranteed win: keep natural movement, only fix in last seconds if losing
+      // Guaranteed win: tiny additive bias keeps Dart's internal price trending toward win
+      // (visual guaranteed win is handled by chart.js's own tick micro-bias via _trade.gwin)
       if (_isGuaranteedWin &&
           _activeSignal != null &&
           _activeSignal!.status == 'ACTIVE') {
@@ -4823,24 +5808,14 @@ class SignalEngine extends ChangeNotifier {
         final isCall = signal.direction == 'CALL';
         final diff = _currentPrice - signal.entryPrice;
         final losing = isCall ? diff <= 0 : diff >= 0;
-
-        if (_secondsRemaining <= 6) {
-          // Last 6 s: if still losing, apply a minimal nudge to cross entry
-          if (losing) {
-            final nudge = volatility * (0.25 + _random.nextDouble() * 0.15);
-            priceChange = isCall ? nudge : -nudge;
-          }
-          // Already winning → touch nothing, let it close naturally
-        } else if (_secondsRemaining <= 20 && losing) {
-          // Last 20 s and losing: add a tiny invisible bias on top of natural move
-          priceChange += isCall ? volatility * 0.12 : -volatility * 0.12;
+        if (losing) {
+          priceChange += isCall ? volatility * 0.08 : -volatility * 0.08;
         }
-        // Before last 20 s → 100% natural movement, no intervention at all
       }
 
       // Update price
       _currentPrice += priceChange;
-      
+
       // Update active candle (the last one)
       Candle activeCandle = _candles.last;
       activeCandle.close = _currentPrice;
@@ -4855,7 +5830,9 @@ class SignalEngine extends ChangeNotifier {
       // Update active signal countdown using real-time difference from expiry
       if (_activeSignal != null && _activeSignal!.status == 'ACTIVE') {
         _activeSignal!.currentPrice = _currentPrice;
-        final difference = _activeSignal!.expiryTime.difference(DateTime.now()).inSeconds;
+        final difference = _activeSignal!.expiryTime
+            .difference(DateTime.now())
+            .inSeconds;
         _secondsRemaining = difference > 0 ? difference : 0;
         if (_secondsRemaining <= 0) {
           _evaluateSignalResult();
@@ -4866,15 +5843,17 @@ class SignalEngine extends ChangeNotifier {
       DateTime now = DateTime.now();
       if (now.difference(activeCandle.time).inSeconds >= timeframeSeconds) {
         _candles.removeAt(0);
-        _candles.add(Candle(
-          open: _currentPrice,
-          high: _currentPrice,
-          low: _currentPrice,
-          close: _currentPrice,
-          time: now,
-          volume: 0.0,
-        ));
-        
+        _candles.add(
+          Candle(
+            open: _currentPrice,
+            high: _currentPrice,
+            low: _currentPrice,
+            close: _currentPrice,
+            time: now,
+            volume: 0.0,
+          ),
+        );
+
         // Re-evaluate signal dynamically at candle boundary
         _reEvaluateActiveSignalDirection();
       }
@@ -4886,16 +5865,55 @@ class SignalEngine extends ChangeNotifier {
   // Infinite social feed wins simulation
   void _startSocialFeed() {
     _socialTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
-      final names = ['Tariq', 'Ahmed', 'VIP_Trader', 'FX_King', 'Youssef', 'Omar', 'Amr', 'Saeed', 'Ziad', 'Karam'];
-      final ids = ['2948', '3840', '1947', '8302', '5512', '7492', '1093', '6738', '4802', '3819'];
+      // Market/weekend closed — clear any stale entries and notify UI
+      if (isWeekendClosed) {
+        if (_socialWinLogs.isNotEmpty) {
+          _socialWinLogs.clear();
+          notifyListeners();
+        } else {
+          // No entries but UI still needs to know it's closed
+          notifyListeners();
+        }
+        return;
+      }
+      final names = [
+        'Tariq',
+        'Ahmed',
+        'VIP_Trader',
+        'FX_King',
+        'Youssef',
+        'Omar',
+        'Amr',
+        'Saeed',
+        'Ziad',
+        'Karam',
+      ];
+      final ids = [
+        '2948',
+        '3840',
+        '1947',
+        '8302',
+        '5512',
+        '7492',
+        '1093',
+        '6738',
+        '4802',
+        '3819',
+      ];
       final name = names[_random.nextInt(names.length)];
       final id = ids[_random.nextInt(ids.length)];
       final profit = 50 + _random.nextInt(250);
       if (AppConstants.currencyPairs.isEmpty) return;
-      final asset = AppConstants.currencyPairs[_random.nextInt(AppConstants.currencyPairs.length)]['symbol'];
+      final asset =
+          AppConstants.currencyPairs[_random.nextInt(
+            AppConstants.currencyPairs.length,
+          )]['symbol'];
       final direction = _random.nextBool() ? 'CALL \u{1F7E2}' : 'PUT \u{1F534}';
 
-      _socialWinLogs.insert(0, 'VIP $name ($id***) won +\$$profit on $asset $direction');
+      _socialWinLogs.insert(
+        0,
+        'VIP $name ($id***) won +\$$profit on ${(asset as String).replaceAll(' (OTC)', '')} $direction',
+      );
       if (_socialWinLogs.length > 20) {
         _socialWinLogs.removeLast();
       }
@@ -4917,25 +5935,100 @@ class SignalEngine extends ChangeNotifier {
     // 13 wins and 2 losses to keep a high win rate (~86%)
     final mockData = [
       // Today (5 signals)
-      {'pair': 'EUR/USD (OTC)', 'dir': 'CALL', 'isWin': true, 'age': const Duration(minutes: 45)},
-      {'pair': 'BTC/USD', 'dir': 'PUT', 'isWin': true, 'age': const Duration(hours: 2)},
-      {'pair': 'GBP/USD (OTC)', 'dir': 'CALL', 'isWin': false, 'age': const Duration(hours: 3, minutes: 20)},
-      {'pair': 'USD/JPY (OTC)', 'dir': 'PUT', 'isWin': true, 'age': const Duration(hours: 5)},
-      {'pair': 'Gold (OTC)', 'dir': 'CALL', 'isWin': true, 'age': const Duration(hours: 8)},
+      {
+        'pair': 'EUR/USD (OTC)',
+        'dir': 'CALL',
+        'isWin': true,
+        'age': const Duration(minutes: 45),
+      },
+      {
+        'pair': 'BTC/USD',
+        'dir': 'PUT',
+        'isWin': true,
+        'age': const Duration(hours: 2),
+      },
+      {
+        'pair': 'GBP/USD (OTC)',
+        'dir': 'CALL',
+        'isWin': false,
+        'age': const Duration(hours: 3, minutes: 20),
+      },
+      {
+        'pair': 'USD/JPY (OTC)',
+        'dir': 'PUT',
+        'isWin': true,
+        'age': const Duration(hours: 5),
+      },
+      {
+        'pair': 'Gold (OTC)',
+        'dir': 'CALL',
+        'isWin': true,
+        'age': const Duration(hours: 8),
+      },
 
       // Yesterday (5 signals)
-      {'pair': 'EUR/USD (OTC)', 'dir': 'PUT', 'isWin': true, 'age': const Duration(days: 1, hours: 1)},
-      {'pair': 'GBP/USD (OTC)', 'dir': 'CALL', 'isWin': true, 'age': const Duration(days: 1, hours: 4)},
-      {'pair': 'BTC/USD', 'dir': 'CALL', 'isWin': true, 'age': const Duration(days: 1, hours: 7)},
-      {'pair': 'USD/JPY (OTC)', 'dir': 'CALL', 'isWin': false, 'age': const Duration(days: 1, hours: 10)},
-      {'pair': 'Gold (OTC)', 'dir': 'PUT', 'isWin': true, 'age': const Duration(days: 1, hours: 14)},
+      {
+        'pair': 'EUR/USD (OTC)',
+        'dir': 'PUT',
+        'isWin': true,
+        'age': const Duration(days: 1, hours: 1),
+      },
+      {
+        'pair': 'GBP/USD (OTC)',
+        'dir': 'CALL',
+        'isWin': true,
+        'age': const Duration(days: 1, hours: 4),
+      },
+      {
+        'pair': 'BTC/USD',
+        'dir': 'CALL',
+        'isWin': true,
+        'age': const Duration(days: 1, hours: 7),
+      },
+      {
+        'pair': 'USD/JPY (OTC)',
+        'dir': 'CALL',
+        'isWin': false,
+        'age': const Duration(days: 1, hours: 10),
+      },
+      {
+        'pair': 'Gold (OTC)',
+        'dir': 'PUT',
+        'isWin': true,
+        'age': const Duration(days: 1, hours: 14),
+      },
 
       // Previous days (5 signals)
-      {'pair': 'EUR/USD (OTC)', 'dir': 'CALL', 'isWin': true, 'age': const Duration(days: 2, hours: 3)},
-      {'pair': 'GBP/USD (OTC)', 'dir': 'PUT', 'isWin': true, 'age': const Duration(days: 2, hours: 11)},
-      {'pair': 'BTC/USD', 'dir': 'PUT', 'isWin': true, 'age': const Duration(days: 3, hours: 2)},
-      {'pair': 'USD/JPY (OTC)', 'dir': 'CALL', 'isWin': true, 'age': const Duration(days: 3, hours: 16)},
-      {'pair': 'Gold (OTC)', 'dir': 'CALL', 'isWin': true, 'age': const Duration(days: 4, hours: 5)},
+      {
+        'pair': 'EUR/USD (OTC)',
+        'dir': 'CALL',
+        'isWin': true,
+        'age': const Duration(days: 2, hours: 3),
+      },
+      {
+        'pair': 'GBP/USD (OTC)',
+        'dir': 'PUT',
+        'isWin': true,
+        'age': const Duration(days: 2, hours: 11),
+      },
+      {
+        'pair': 'BTC/USD',
+        'dir': 'PUT',
+        'isWin': true,
+        'age': const Duration(days: 3, hours: 2),
+      },
+      {
+        'pair': 'USD/JPY (OTC)',
+        'dir': 'CALL',
+        'isWin': true,
+        'age': const Duration(days: 3, hours: 16),
+      },
+      {
+        'pair': 'Gold (OTC)',
+        'dir': 'CALL',
+        'isWin': true,
+        'age': const Duration(days: 4, hours: 5),
+      },
     ];
 
     for (final item in mockData) {
@@ -4943,34 +6036,40 @@ class SignalEngine extends ChangeNotifier {
       final String direction = item['dir'] as String;
       final bool isWin = item['isWin'] as bool;
       final Duration age = item['age'] as Duration;
-      
+
       final entryTime = now.subtract(age);
       final duration = 5;
       final expiryTime = entryTime.add(Duration(minutes: duration));
-      
+
       final double base = basePrices[pair] ?? 1.0;
       final double variation = (_random.nextDouble() - 0.5) * (base * 0.005);
       final double entryPrice = base + variation;
-      
+
       double exitPrice;
       if (direction == 'CALL') {
-        exitPrice = isWin ? entryPrice + (base * 0.001) : entryPrice - (base * 0.001);
+        exitPrice = isWin
+            ? entryPrice + (base * 0.001)
+            : entryPrice - (base * 0.001);
       } else {
-        exitPrice = isWin ? entryPrice - (base * 0.001) : entryPrice + (base * 0.001);
+        exitPrice = isWin
+            ? entryPrice - (base * 0.001)
+            : entryPrice + (base * 0.001);
       }
 
-      _signalHistory.add(TradingSignal(
-        pair: pair,
-        direction: direction,
-        durationMinutes: duration,
-        entryPrice: entryPrice,
-        currentPrice: exitPrice,
-        confidence: 93.0 + _random.nextDouble() * 5.0,
-        entryTime: entryTime,
-        expiryTime: expiryTime,
-        status: isWin ? 'WIN' : 'LOSS',
-        exitPrice: exitPrice,
-      ));
+      _signalHistory.add(
+        TradingSignal(
+          pair: pair,
+          direction: direction,
+          durationMinutes: duration,
+          entryPrice: entryPrice,
+          currentPrice: exitPrice,
+          confidence: 93.0 + _random.nextDouble() * 5.0,
+          entryTime: entryTime,
+          expiryTime: expiryTime,
+          status: isWin ? 'WIN' : 'LOSS',
+          exitPrice: exitPrice,
+        ),
+      );
     }
   }
 
@@ -4996,7 +6095,9 @@ class SignalEngine extends ChangeNotifier {
     final emaP = c.emaPeriods;
     final ema1 = _calculateEma(emaP[0]);
     final ema2 = _calculateEma(emaP.length > 1 ? emaP[1] : 21);
-    final ema3 = _calculateEma(min(emaP.length > 2 ? emaP[2] : 50, _candles.length));
+    final ema3 = _calculateEma(
+      min(emaP.length > 2 ? emaP[2] : 50, _candles.length),
+    );
     final rsi = _calculateRsi(c.rsiPeriod);
     final fullMacd = _calculateFullMacd();
     final macdHist = fullMacd['histogram']!;
@@ -5049,9 +6150,17 @@ class SignalEngine extends ChangeNotifier {
     }
 
     if (adx > c.adxStrong) {
-      if (pDi > mDi) { callScore += w1; } else { putScore += w1; }
+      if (pDi > mDi) {
+        callScore += w1;
+      } else {
+        putScore += w1;
+      }
     } else if (adx > c.adxModerate) {
-      if (pDi > mDi) { callScore += w1 / 3; } else { putScore += w1 / 3; }
+      if (pDi > mDi) {
+        callScore += w1 / 3;
+      } else {
+        putScore += w1 / 3;
+      }
     }
 
     // TIER 2: Momentum
@@ -5069,8 +6178,11 @@ class SignalEngine extends ChangeNotifier {
       putScore += w2 * 0.2;
     }
 
-    if (divergence == 'bullish') { callScore += w2; }
-    else if (divergence == 'bearish') { putScore += w2; }
+    if (divergence == 'bullish') {
+      callScore += w2;
+    } else if (divergence == 'bearish') {
+      putScore += w2;
+    }
 
     final stochK = stoch['k']!;
     final stochD = stoch['d']!;
@@ -5138,12 +6250,19 @@ class SignalEngine extends ChangeNotifier {
     }
 
     final obvDir = volProfile['trend'] as String;
-    if (obvDir == 'bullish') { callScore += w3; }
-    else if (obvDir == 'bearish') { putScore += w3; }
+    if (obvDir == 'bullish') {
+      callScore += w3;
+    } else if (obvDir == 'bearish') {
+      putScore += w3;
+    }
 
     final hasSpike = volProfile['spike'] as bool;
     if (hasSpike) {
-      if (callScore > putScore) { callScore += w3; } else { putScore += w3; }
+      if (callScore > putScore) {
+        callScore += w3;
+      } else {
+        putScore += w3;
+      }
     }
 
     // TIER 4: Price Action
@@ -5155,14 +6274,22 @@ class SignalEngine extends ChangeNotifier {
       final bbRange = bb['upper']! - bb['lower']!;
       if (bbRange > 0) {
         final bbPos = (_currentPrice - bb['lower']!) / bbRange;
-        if (bbPos > 0.75) { putScore += w4 / 2; }
-        if (bbPos < 0.25) { callScore += w4 / 2; }
+        if (bbPos > 0.75) {
+          putScore += w4 / 2;
+        }
+        if (bbPos < 0.25) {
+          callScore += w4 / 2;
+        }
       }
     }
 
     final srThreshold = _currentPrice * c.srProximity;
-    if ((_currentPrice - sr['support']!).abs() <= srThreshold) { callScore += w4; }
-    if ((_currentPrice - sr['resistance']!).abs() <= srThreshold) { putScore += w4; }
+    if ((_currentPrice - sr['support']!).abs() <= srThreshold) {
+      callScore += w4;
+    }
+    if ((_currentPrice - sr['resistance']!).abs() <= srThreshold) {
+      putScore += w4;
+    }
 
     final vwapDist = ((_currentPrice - vwap) / vwap).abs();
     if (_currentPrice > vwap) {
@@ -5182,12 +6309,16 @@ class SignalEngine extends ChangeNotifier {
     }
 
     // TIER 5: Confirmation
-    if (pattern == 'bullish_engulfing' || pattern == 'hammer' ||
-        pattern == 'morning_star' || pattern == 'three_white_soldiers' ||
+    if (pattern == 'bullish_engulfing' ||
+        pattern == 'hammer' ||
+        pattern == 'morning_star' ||
+        pattern == 'three_white_soldiers' ||
         pattern == 'pin_bar_bullish') {
       callScore += w5;
-    } else if (pattern == 'bearish_engulfing' || pattern == 'shooting_star' ||
-        pattern == 'evening_star' || pattern == 'three_black_crows' ||
+    } else if (pattern == 'bearish_engulfing' ||
+        pattern == 'shooting_star' ||
+        pattern == 'evening_star' ||
+        pattern == 'three_black_crows' ||
         pattern == 'pin_bar_bearish') {
       putScore += w5;
     }
@@ -5227,10 +6358,11 @@ class SignalEngine extends ChangeNotifier {
   }
 
   void _generateNextSignal(int selectedMinutes) {
-    _pyramidRejectReason = ''; // reset before scoring
-    double netScore = _userRole == 'vip' ? _scoreV3VipEngine() : _scoreV2Engine();
-    // If pyramid rejected → don't generate signal (caller already handles WAIT)
-    if (_pyramidRejectReason.isNotEmpty) return;
+    _pyramidRejectReason = '';
+    double netScore = _userRole == 'vip'
+        ? _scoreV3VipEngine()
+        : _scoreV2Engine();
+    // Pyramid rejection was already handled in requestNextSignal — ignore here
     bool isCall = netScore >= 0;
     double absScore = netScore.abs();
 
@@ -5239,37 +6371,57 @@ class SignalEngine extends ChangeNotifier {
       confidence = _vipLastResult?.confidence ?? 70.0;
     } else {
       final confBase = _activeDynamic?.confidenceBase ?? _cfg.confidenceBase;
-      final confMax  = _activeDynamic?.confidenceMax  ?? _cfg.confidenceMax;
+      final confMax = _activeDynamic?.confidenceMax ?? _cfg.confidenceMax;
       confidence = confBase + (absScore / 45.0) * (confMax - confBase);
       confidence = confidence.clamp(confBase, confMax);
     }
 
-    final durationSeconds = selectedMinutes * 60;
+    // Align expiry to the candle boundary so the trade ends exactly at a candle close.
+    // After the wait loop we are at (or just past) the opening of a new candle, so we
+    // snap the expiry to: start-of-current-candle + durationMinutes * candleDuration.
+    // Use integer-second arithmetic (same as chart.js) to compute expiry
+    final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final cs = timeframeSeconds;
+    final cStartSec = (nowSec ~/ cs) * cs;
+    final expirySec = cStartSec + selectedMinutes * cs;
+    final alignedExpiry = DateTime.fromMillisecondsSinceEpoch(expirySec * 1000);
+    final alignedDuration = (expirySec - nowSec).clamp(
+      1,
+      selectedMinutes * cs + cs,
+    );
+
+    // Use live chart price as entry — it's always correct for both sim and TV modes
+    final liveNow = _tvPriceGetter?.call() ?? 0;
+    final entryP = liveNow > 0 ? liveNow : _currentPrice;
 
     _activeSignal = TradingSignal(
       pair: _activePair,
       direction: isCall ? 'CALL' : 'PUT',
       durationMinutes: selectedMinutes,
-      entryPrice: _currentPrice,
-      currentPrice: _currentPrice,
+      entryPrice: entryP,
+      currentPrice: entryP,
       confidence: confidence,
-      entryTime: DateTime.now(),
-      expiryTime: DateTime.now().add(Duration(seconds: durationSeconds)),
+      entryTime: DateTime.fromMillisecondsSinceEpoch(cStartSec * 1000),
+      expiryTime: alignedExpiry,
       status: 'ACTIVE',
       marketCondition: _userRole == 'vip'
           ? '${_vipLastResult?.grade ?? "VIP"} | Score: ${_vipLastResult?.overallScore.toStringAsFixed(0) ?? "—"}/100 | ${_vipLastResult?.riskAssessment ?? ""}'
           : (isCall
-              ? 'اتجاه صاعد مستقر وقوي مدعوم بسيولة ممتازة ✅'
-              : 'اتجاه هابط حاد وضغط بيعي قوي مدعوم بسيولة ممتازة ✅'),
+                ? 'اتجاه صاعد مستقر وقوي مدعوم بسيولة ممتازة ✅'
+                : 'اتجاه هابط حاد وضغط بيعي قوي مدعوم بسيولة ممتازة ✅'),
       recommendation: _userRole == 'vip'
           ? '${isCall ? "VIP CALL ✅" : "VIP PUT ✅"} | ${_vipLastResult?.historical?.summary ?? "تحليل مزدوج مؤكد"}'
           : (isCall
-              ? 'دخول صفقة صعود (CALL) فوراً - فرصة دخول آمنة ونسبة نجاح عالية.'
-              : 'دخول صفقة هبوط (PUT) فوراً - فرصة دخول آمنة ونسبة نجاح عالية.'),
+                ? 'دخول صفقة صعود (CALL) فوراً - فرصة دخول آمنة ونسبة نجاح عالية.'
+                : 'دخول صفقة هبوط (PUT) فوراً - فرصة دخول آمنة ونسبة نجاح عالية.'),
     );
 
-    _secondsRemaining = durationSeconds;
+    _secondsRemaining = alignedDuration;
     _playNewSignalSound();
+    // Draw entry line directly on ALL chart instances — bypasses Flutter widget tree
+    evalJs(
+      "CandleChart.setGlobalEntryLine(${_activeSignal!.entryPrice}, '${isCall ? 'CALL' : 'PUT'}')",
+    );
     notifyListeners();
   }
 
@@ -5277,9 +6429,14 @@ class SignalEngine extends ChangeNotifier {
   void _reEvaluateActiveSignalDirection() {
     if (_activeSignal == null || _activeSignal!.status != 'ACTIVE') return;
 
-    double netScore = _userRole == 'vip' ? _scoreV3VipEngine() : _scoreV2Engine();
+    double netScore = _userRole == 'vip'
+        ? _scoreV3VipEngine()
+        : _scoreV2Engine();
     // VIP: skip direction flip if consensus engine rejected the setup
-    if (_userRole == 'vip' && _vipLastResult != null && !_vipLastResult!.isApproved) return;
+    if (_userRole == 'vip' &&
+        _vipLastResult != null &&
+        !_vipLastResult!.isApproved)
+      return;
     bool isCall = netScore >= 0;
     double absScore = netScore.abs();
 
@@ -5288,7 +6445,7 @@ class SignalEngine extends ChangeNotifier {
       confidence = _vipLastResult?.confidence ?? 70.0;
     } else {
       final confBase = _activeDynamic?.confidenceBase ?? _cfg.confidenceBase;
-      final confMax  = _activeDynamic?.confidenceMax  ?? _cfg.confidenceMax;
+      final confMax = _activeDynamic?.confidenceMax ?? _cfg.confidenceMax;
       confidence = confBase + (absScore / 45.0) * (confMax - confBase);
       confidence = confidence.clamp(confBase, confMax);
     }
@@ -5308,20 +6465,25 @@ class SignalEngine extends ChangeNotifier {
         marketCondition: _userRole == 'vip'
             ? '${_vipLastResult?.grade ?? "VIP"} | Score: ${_vipLastResult?.overallScore.toStringAsFixed(0) ?? "—"}/100 | ${_vipLastResult?.riskAssessment ?? ""}'
             : (newDirection == 'CALL'
-                ? 'تم تحديث الاتجاه إلى صعود قوي ✅'
-                : 'تم تحديث الاتجاه إلى هبوط قوي ✅'),
+                  ? 'تم تحديث الاتجاه إلى صعود قوي ✅'
+                  : 'تم تحديث الاتجاه إلى هبوط قوي ✅'),
         recommendation: _userRole == 'vip'
             ? '${newDirection == "CALL" ? "VIP CALL ✅" : "VIP PUT ✅"} | ${_vipLastResult?.historical?.summary ?? "تحليل مزدوج مؤكد"}'
             : (newDirection == 'CALL'
-                ? 'تحديث التوصية: دخول صفقة صعود (CALL) مع الشمعة الحالية.'
-                : 'تحديث التوصية: دخول صفقة هبوط (PUT) مع الشمعة الحالية.'),
+                  ? 'تحديث التوصية: دخول صفقة صعود (CALL) مع الشمعة الحالية.'
+                  : 'تحديث التوصية: دخول صفقة هبوط (PUT) مع الشمعة الحالية.'),
       );
 
       String tfLabel = 'دقيقة واحدة';
-      if (_chartTimeframe == '5m') { tfLabel = '5 دقائق'; }
-      else if (_chartTimeframe == '15m') { tfLabel = '15 دقيقة'; }
-      else if (_chartTimeframe == '30m') { tfLabel = '30 دقيقة'; }
-      else if (_chartTimeframe == '1h') { tfLabel = 'ساعة واحدة'; }
+      if (_chartTimeframe == '5m') {
+        tfLabel = '5 دقائق';
+      } else if (_chartTimeframe == '15m') {
+        tfLabel = '15 دقيقة';
+      } else if (_chartTimeframe == '30m') {
+        tfLabel = '30 دقيقة';
+      } else if (_chartTimeframe == '1h') {
+        tfLabel = 'ساعة واحدة';
+      }
 
       _signalChangeNotice = _userRole == 'vip'
           ? 'تنبيه VIP: تم تصحيح مسار الإشارة وتحديث الاتجاه فوراً ($tfLabel)'
@@ -5332,32 +6494,40 @@ class SignalEngine extends ChangeNotifier {
     }
   }
 
-
   void _evaluateSignalResult() {
     if (_activeSignal == null) return;
 
-    double diff = _currentPrice - _activeSignal!.entryPrice;
+    // Guaranteed win: use Dart's nudged price (chart.js bias may not have converged at exact expiry)
+    // Normal: use live chart price so result matches what user sees on chart
+    final liveExit = (!_isGuaranteedWin
+        ? (_tvPriceGetter?.call() ?? 0.0)
+        : 0.0);
+    final exitP = (_isGuaranteedWin || liveExit == 0.0)
+        ? _currentPrice
+        : liveExit;
+
+    double diff = exitP - _activeSignal!.entryPrice;
     bool isWin = true;
 
-    // If signal is PUT (PUT) and price went up (diff > 0), it's a loss.
-    // If signal is CALL (CALL) and price went down (diff < 0), it's a loss.
-    // Otherwise, it's a win.
     if (_activeSignal!.direction == 'PUT' && diff > 0) {
       isWin = false;
     } else if (_activeSignal!.direction == 'CALL' && diff < 0) {
       isWin = false;
     }
 
-    // Set exitPrice and capture static snapshot of candle history BEFORE marking status as WIN/LOSS
-    _activeSignal!.exitPrice = _currentPrice;
-    _activeSignal!.candlesSnapshot = _candles.map((c) => Candle(
-      open: c.open,
-      high: c.high,
-      low: c.low,
-      close: c.close,
-      time: c.time,
-      volume: c.volume,
-    )).toList();
+    _activeSignal!.exitPrice = exitP;
+    _activeSignal!.candlesSnapshot = _candles
+        .map(
+          (c) => Candle(
+            open: c.open,
+            high: c.high,
+            low: c.low,
+            close: c.close,
+            time: c.time,
+            volume: c.volume,
+          ),
+        )
+        .toList();
 
     _activeSignal!.status = isWin ? 'WIN' : 'LOSS';
     _signalHistory.insert(0, _activeSignal!);
@@ -5478,14 +6648,16 @@ class SignalEngine extends ChangeNotifier {
     final result = <Candle>[];
     for (int i = 0; i + factor <= _candles.length; i += factor) {
       final g = _candles.sublist(i, i + factor);
-      result.add(Candle(
-        open:   g.first.open,
-        high:   g.map((c) => c.high).reduce(max),
-        low:    g.map((c) => c.low).reduce(min),
-        close:  g.last.close,
-        time:   g.first.time,
-        volume: g.fold(0.0, (s, c) => s + c.volume),
-      ));
+      result.add(
+        Candle(
+          open: g.first.open,
+          high: g.map((c) => c.high).reduce(max),
+          low: g.map((c) => c.low).reduce(min),
+          close: g.last.close,
+          time: g.first.time,
+          volume: g.fold(0.0, (s, c) => s + c.volume),
+        ),
+      );
     }
     return result;
   }
@@ -5495,7 +6667,9 @@ class SignalEngine extends ChangeNotifier {
     int p = period.clamp(1, c.length);
     double k = 2.0 / (p + 1);
     double ema = c.sublist(0, p).fold(0.0, (s, x) => s + x.close) / p;
-    for (int i = p; i < c.length; i++) { ema = c[i].close * k + ema * (1 - k); }
+    for (int i = p; i < c.length; i++) {
+      ema = c[i].close * k + ema * (1 - k);
+    }
     return ema;
   }
 
@@ -5505,7 +6679,11 @@ class SignalEngine extends ChangeNotifier {
     double g = 0, l = 0;
     for (int i = c.length - p; i < c.length; i++) {
       double ch = c[i].close - c[i - 1].close;
-      if (ch > 0) { g += ch; } else { l -= ch; }
+      if (ch > 0) {
+        g += ch;
+      } else {
+        l -= ch;
+      }
     }
     if (l == 0) return 100;
     return 100 - 100 / (1 + (g / p) / (l / p));
@@ -5516,68 +6694,118 @@ class SignalEngine extends ChangeNotifier {
   // ══════════════════════════════════════════════════════════════════════
   EngineResult _runMarketStructureEngine() {
     if (_candles.length < 20) {
-      return const EngineResult(passed: false, quality: 0, status: 'FAIL',
-          evidence: ['Insufficient candle data (<20)'],
-          summary: 'FAIL: بيانات غير كافية — رفض');
+      return const EngineResult(
+        passed: false,
+        quality: 0,
+        status: 'FAIL',
+        evidence: ['Insufficient candle data (<20)'],
+        summary: 'FAIL: بيانات غير كافية — رفض',
+      );
     }
     final adxD = _calculateAdxFull(14);
-    final adx  = adxD['adx']!;
-    final atr  = _calculateAtr(14);
-    final avgR = _candles.map((c) => c.high - c.low).reduce((a, b) => a + b) / _candles.length;
+    final adx = adxD['adx']!;
+    final atr = _calculateAtr(14);
+    final avgR =
+        _candles.map((c) => c.high - c.low).reduce((a, b) => a + b) /
+        _candles.length;
 
     int dirChanges = 0;
     for (int i = max(2, _candles.length - 8); i < _candles.length; i++) {
-      if ((_candles[i].close > _candles[i-1].close) != (_candles[i-1].close > _candles[i-2].close)) dirChanges++;
+      if ((_candles[i].close > _candles[i - 1].close) !=
+          (_candles[i - 1].close > _candles[i - 2].close))
+        dirChanges++;
     }
     if (adx < 15 && dirChanges >= 4) {
-      return const EngineResult(passed: false, quality: 0, status: 'FAIL',
-          evidence: ['ADX < 15 + Erratic moves — Chaotic'],
-          summary: 'FAIL: سوق عشوائي فوضوي — رفض فوري');
+      return const EngineResult(
+        passed: false,
+        quality: 0,
+        status: 'FAIL',
+        evidence: ['ADX < 15 + Erratic moves — Chaotic'],
+        summary: 'FAIL: سوق عشوائي فوضوي — رفض فوري',
+      );
     }
     if (adx < 15 && atr < avgR * 0.4) {
-      return const EngineResult(passed: false, quality: 0, status: 'FAIL',
-          evidence: ['ADX < 15 + Tight ATR — Sideways/Range'],
-          summary: 'FAIL: سوق عرضي مضغوط — رفض');
+      return const EngineResult(
+        passed: false,
+        quality: 0,
+        status: 'FAIL',
+        evidence: ['ADX < 15 + Tight ATR — Sideways/Range'],
+        summary: 'FAIL: سوق عرضي مضغوط — رفض',
+      );
     }
 
     final sHigh = <double>[], sLow = <double>[];
     for (int i = 2; i < _candles.length - 2; i++) {
-      if (_candles[i].high > _candles[i-1].high && _candles[i].high > _candles[i+1].high &&
-          _candles[i].high > _candles[i-2].high && _candles[i].high > _candles[i+2].high) {
+      if (_candles[i].high > _candles[i - 1].high &&
+          _candles[i].high > _candles[i + 1].high &&
+          _candles[i].high > _candles[i - 2].high &&
+          _candles[i].high > _candles[i + 2].high) {
         sHigh.add(_candles[i].high);
       }
-      if (_candles[i].low < _candles[i-1].low && _candles[i].low < _candles[i+1].low &&
-          _candles[i].low < _candles[i-2].low && _candles[i].low < _candles[i+2].low) {
+      if (_candles[i].low < _candles[i - 1].low &&
+          _candles[i].low < _candles[i + 1].low &&
+          _candles[i].low < _candles[i - 2].low &&
+          _candles[i].low < _candles[i + 2].low) {
         sLow.add(_candles[i].low);
       }
     }
 
     if (sHigh.length < 2 || sLow.length < 2) {
-      double q = adx > 20 ? 62 : adx > 17 ? 45 : 35;
-      return EngineResult(passed: true, quality: q, status: 'PASS',
-          evidence: ['Limited pivots', 'ADX ${adx.toStringAsFixed(0)}'],
-          summary: 'PASS: Limited Structure | ADX ${adx.toStringAsFixed(0)} | Q: ${q.toStringAsFixed(0)}');
+      double q = adx > 20
+          ? 62
+          : adx > 17
+          ? 45
+          : 35;
+      return EngineResult(
+        passed: true,
+        quality: q,
+        status: 'PASS',
+        evidence: ['Limited pivots', 'ADX ${adx.toStringAsFixed(0)}'],
+        summary:
+            'PASS: Limited Structure | ADX ${adx.toStringAsFixed(0)} | Q: ${q.toStringAsFixed(0)}',
+      );
     }
 
     bool hh = sHigh.last > sHigh[sHigh.length - 2];
-    bool hl = sLow.last  > sLow[sLow.length - 2];
+    bool hl = sLow.last > sLow[sLow.length - 2];
     bool lh = sHigh.last < sHigh[sHigh.length - 2];
-    bool ll = sLow.last  < sLow[sLow.length - 2];
+    bool ll = sLow.last < sLow[sLow.length - 2];
     bool bosBull = _currentPrice > sHigh.last;
     bool bosBear = _currentPrice < sLow.last;
 
-    String state; double quality;
-    if      (bosBull && hh && hl && adx > 25) { state = 'Strong Bull (BOS+HH+HL)'; quality = 95; }
-    else if (bosBear && lh && ll && adx > 25) { state = 'Strong Bear (BOS+LH+LL)'; quality = 95; }
-    else if (hh && hl && adx > 20)            { state = 'Healthy Bull (HH+HL)';    quality = 82; }
-    else if (lh && ll && adx > 20)            { state = 'Healthy Bear (LH+LL)';    quality = 82; }
-    else if (adx >= 17)                        { state = 'Partial Trend';           quality = 55; }
-    else                                       { state = 'Weak Trend';              quality = 38; }
+    String state;
+    double quality;
+    if (bosBull && hh && hl && adx > 25) {
+      state = 'Strong Bull (BOS+HH+HL)';
+      quality = 95;
+    } else if (bosBear && lh && ll && adx > 25) {
+      state = 'Strong Bear (BOS+LH+LL)';
+      quality = 95;
+    } else if (hh && hl && adx > 20) {
+      state = 'Healthy Bull (HH+HL)';
+      quality = 82;
+    } else if (lh && ll && adx > 20) {
+      state = 'Healthy Bear (LH+LL)';
+      quality = 82;
+    } else if (adx >= 17) {
+      state = 'Partial Trend';
+      quality = 55;
+    } else {
+      state = 'Weak Trend';
+      quality = 38;
+    }
 
     return EngineResult(
-      passed: true, quality: quality, status: 'PASS',
-      evidence: ['Structure: $state', 'ADX: ${adx.toStringAsFixed(0)}', 'BOS-Bull:$bosBull BOS-Bear:$bosBear'],
-      summary: 'PASS: $state | ADX ${adx.toStringAsFixed(0)} | Q: ${quality.toStringAsFixed(0)}',
+      passed: true,
+      quality: quality,
+      status: 'PASS',
+      evidence: [
+        'Structure: $state',
+        'ADX: ${adx.toStringAsFixed(0)}',
+        'BOS-Bull:$bosBull BOS-Bear:$bosBear',
+      ],
+      summary:
+          'PASS: $state | ADX ${adx.toStringAsFixed(0)} | Q: ${quality.toStringAsFixed(0)}',
     );
   }
 
@@ -5586,44 +6814,85 @@ class SignalEngine extends ChangeNotifier {
   // ══════════════════════════════════════════════════════════════════════
   EngineResult _runMarketRegimeEngine() {
     final adxD = _calculateAdxFull(14);
-    final adx  = adxD['adx']!;
-    final atr  = _calculateAtr(14);
+    final adx = adxD['adx']!;
+    final atr = _calculateAtr(14);
     final avgR = _candles.isNotEmpty
-        ? _candles.map((c) => c.high - c.low).reduce((a, b) => a + b) / _candles.length
+        ? _candles.map((c) => c.high - c.low).reduce((a, b) => a + b) /
+              _candles.length
         : 0.0001;
-    final bb   = _calculateBollingerBands(20);
-    final bbW  = bb['upper']! - bb['lower']!;
+    final bb = _calculateBollingerBands(20);
+    final bbW = bb['upper']! - bb['lower']!;
     final bbWp = _currentPrice > 0 ? bbW / _currentPrice * 100 : 0;
     final volP = _analyzeVolumeProfile();
     final volR = (volP['ratio'] as double).clamp(0.0, 5.0);
 
     if (adx < 20) {
-      return EngineResult(passed: false, quality: 0, status: 'FAIL',
-          evidence: ['ADX ${adx.toStringAsFixed(0)} < 20'],
-          summary: 'FAIL: Weak Trend Regime (ADX ${adx.toStringAsFixed(0)}) — رفض');
+      return EngineResult(
+        passed: false,
+        quality: 0,
+        status: 'FAIL',
+        evidence: ['ADX ${adx.toStringAsFixed(0)} < 20'],
+        summary:
+            'FAIL: Weak Trend Regime (ADX ${adx.toStringAsFixed(0)}) — رفض',
+      );
     }
     if (bbWp < 0.12 && atr < avgR * 0.45) {
-      return EngineResult(passed: false, quality: 0, status: 'FAIL',
-          evidence: ['BB Width ${bbWp.toStringAsFixed(3)}% compressed', 'ATR low'],
-          summary: 'FAIL: Compression Regime — رفض');
+      return EngineResult(
+        passed: false,
+        quality: 0,
+        status: 'FAIL',
+        evidence: [
+          'BB Width ${bbWp.toStringAsFixed(3)}% compressed',
+          'ATR low',
+        ],
+        summary: 'FAIL: Compression Regime — رفض',
+      );
     }
 
-    String regime; double quality;
-    if      (adx > 30 && bbWp > 0.25 && atr > avgR * 0.7 && volR > 1.4) { regime = 'Expansion';  quality = 95; }
-    else if (adx > 30 && bbWp > 0.25)                                     { regime = 'Trending';   quality = 88; }
-    else if (adx >= 20)                                                    { regime = 'Trending';   quality = 75; }
-    else                                                                   { regime = 'Pullback';   quality = 70; }
+    String regime;
+    double quality;
+    if (adx > 30 && bbWp > 0.25 && atr > avgR * 0.7 && volR > 1.4) {
+      regime = 'Expansion';
+      quality = 95;
+    } else if (adx > 30 && bbWp > 0.25) {
+      regime = 'Trending';
+      quality = 88;
+    } else if (adx >= 20) {
+      regime = 'Trending';
+      quality = 75;
+    } else {
+      regime = 'Pullback';
+      quality = 70;
+    }
 
     if (_candles.length >= 20) {
-      double hi20 = _candles.sublist(_candles.length - 20).map((c) => c.high).reduce(max);
-      double lo20 = _candles.sublist(_candles.length - 20).map((c) => c.low).reduce(min);
-      if ((_currentPrice > hi20 * 0.9998 || _currentPrice < lo20 * 1.0002) && volR > 1.3) {
-        regime = 'Clean Breakout'; quality = min(quality + 5, 100);
+      double hi20 = _candles
+          .sublist(_candles.length - 20)
+          .map((c) => c.high)
+          .reduce(max);
+      double lo20 = _candles
+          .sublist(_candles.length - 20)
+          .map((c) => c.low)
+          .reduce(min);
+      if ((_currentPrice > hi20 * 0.9998 || _currentPrice < lo20 * 1.0002) &&
+          volR > 1.3) {
+        regime = 'Clean Breakout';
+        quality = min(quality + 5, 100);
       }
     }
-    return EngineResult(passed: true, quality: quality, status: 'PASS',
-        evidence: ['Regime: $regime', 'ADX: ${adx.toStringAsFixed(0)}', 'BB%: ${bbWp.toStringAsFixed(3)}', 'Vol: ${(volR*100).toStringAsFixed(0)}%'],
-        summary: 'PASS: $regime | ADX ${adx.toStringAsFixed(0)} | Q: ${quality.toStringAsFixed(0)}');
+    return EngineResult(
+      passed: true,
+      quality: quality,
+      status: 'PASS',
+      evidence: [
+        'Regime: $regime',
+        'ADX: ${adx.toStringAsFixed(0)}',
+        'BB%: ${bbWp.toStringAsFixed(3)}',
+        'Vol: ${(volR * 100).toStringAsFixed(0)}%',
+      ],
+      summary:
+          'PASS: $regime | ADX ${adx.toStringAsFixed(0)} | Q: ${quality.toStringAsFixed(0)}',
+    );
   }
 
   // ══════════════════════════════════════════════════════════════════════
@@ -5631,45 +6900,74 @@ class SignalEngine extends ChangeNotifier {
   // ══════════════════════════════════════════════════════════════════════
   EngineResult _runHigherTimeframeEngine() {
     int tfSec = timeframeSeconds;
-    final evid  = <String>[];
+    final evid = <String>[];
     final votes = <int>[];
 
     void analyzeHtf(List<Candle> c, String label) {
       if (c.length < 8) return;
-      final e9  = _emaOnList(c, min(9,  c.length));
+      final e9 = _emaOnList(c, min(9, c.length));
       final e21 = _emaOnList(c, min(21, c.length));
       final rsi = _rsiOnList(c, min(14, c.length - 1));
-      if      (e9 > e21 && rsi > 50) { votes.add(1);  evid.add('$label: Bullish ↑'); }
-      else if (e9 < e21 && rsi < 50) { votes.add(-1); evid.add('$label: Bearish ↓'); }
-      else                           { votes.add(0);  evid.add('$label: Neutral ↔'); }
+      if (e9 > e21 && rsi > 50) {
+        votes.add(1);
+        evid.add('$label: Bullish ↑');
+      } else if (e9 < e21 && rsi < 50) {
+        votes.add(-1);
+        evid.add('$label: Bearish ↓');
+      } else {
+        votes.add(0);
+        evid.add('$label: Neutral ↔');
+      }
     }
 
-    int fH4  = max(1, (14400 / tfSec).round());
-    int fH1  = max(1, (3600  / tfSec).round());
-    int fM30 = max(1, (1800  / tfSec).round());
-    if (_candles.length >= fH4  * 3) analyzeHtf(_aggregateCandles(fH4),  'H4-sim');
-    if (_candles.length >= fH1  * 3) analyzeHtf(_aggregateCandles(fH1),  'H1-sim');
-    if (_candles.length >= fM30 * 3) analyzeHtf(_aggregateCandles(fM30), 'M30-sim');
+    int fH4 = max(1, (14400 / tfSec).round());
+    int fH1 = max(1, (3600 / tfSec).round());
+    int fM30 = max(1, (1800 / tfSec).round());
+    if (_candles.length >= fH4 * 3)
+      analyzeHtf(_aggregateCandles(fH4), 'H4-sim');
+    if (_candles.length >= fH1 * 3)
+      analyzeHtf(_aggregateCandles(fH1), 'H1-sim');
+    if (_candles.length >= fM30 * 3)
+      analyzeHtf(_aggregateCandles(fM30), 'M30-sim');
 
     if (votes.isEmpty) {
-      final e50  = _calculateEma(min(50,  _candles.length));
+      final e50 = _calculateEma(min(50, _candles.length));
       final e100 = _calculateEma(min(100, _candles.length));
       final e200 = _calculateEma(min(200, _candles.length));
-      if      (e50 > e100 && e100 > e200) { votes.add(1);  evid.add('HTF-EMA proxy: Bullish'); }
-      else if (e50 < e100 && e100 < e200) { votes.add(-1); evid.add('HTF-EMA proxy: Bearish'); }
-      else                                { votes.add(0);  evid.add('HTF-EMA proxy: Mixed'); }
+      if (e50 > e100 && e100 > e200) {
+        votes.add(1);
+        evid.add('HTF-EMA proxy: Bullish');
+      } else if (e50 < e100 && e100 < e200) {
+        votes.add(-1);
+        evid.add('HTF-EMA proxy: Bearish');
+      } else {
+        votes.add(0);
+        evid.add('HTF-EMA proxy: Mixed');
+      }
     }
 
-    int bull = votes.where((v) => v ==  1).length;
+    int bull = votes.where((v) => v == 1).length;
     int bear = votes.where((v) => v == -1).length;
     if (bull > 0 && bear > 0) {
-      return EngineResult(passed: false, quality: 20, status: 'FAIL',
-          evidence: evid, summary: 'FAIL: HTF Major Conflict (Bull:$bull Bear:$bear) — رفض');
+      return EngineResult(
+        passed: false,
+        quality: 20,
+        status: 'FAIL',
+        evidence: evid,
+        summary: 'FAIL: HTF Major Conflict (Bull:$bull Bear:$bear) — رفض',
+      );
     }
-    String dir = bull > bear ? 'Bullish' : (bear > bull ? 'Bearish' : 'Neutral');
-    double q   = (bull == votes.length || bear == votes.length) ? 90 : 72;
-    return EngineResult(passed: true, quality: q, status: 'PASS',
-        evidence: evid, summary: 'PASS: HTF $dir | Q: ${q.toStringAsFixed(0)}');
+    String dir = bull > bear
+        ? 'Bullish'
+        : (bear > bull ? 'Bearish' : 'Neutral');
+    double q = (bull == votes.length || bear == votes.length) ? 90 : 72;
+    return EngineResult(
+      passed: true,
+      quality: q,
+      status: 'PASS',
+      evidence: evid,
+      summary: 'PASS: HTF $dir | Q: ${q.toStringAsFixed(0)}',
+    );
   }
 
   // ══════════════════════════════════════════════════════════════════════
@@ -5679,109 +6977,200 @@ class SignalEngine extends ChangeNotifier {
     int tfSec = timeframeSeconds;
     final evid = <String>[];
     final dirs = <int>[];
-    final qs   = <double>[];
+    final qs = <double>[];
 
     void analyzeMtf(List<Candle> c, String label) {
       if (c.length < 10) return;
-      final e9   = _emaOnList(c, min(9,  c.length));
-      final e21  = _emaOnList(c, min(21, c.length));
-      final rsi  = _rsiOnList(c, min(14, c.length - 1));
+      final e9 = _emaOnList(c, min(9, c.length));
+      final e21 = _emaOnList(c, min(21, c.length));
+      final rsi = _rsiOnList(c, min(14, c.length - 1));
       final fast = _emaOnList(c, min(12, c.length));
       final slow = _emaOnList(c, min(26, c.length));
       final hist = fast - slow;
-      if      (e9 > e21 && rsi > 50 && hist > 0) { dirs.add(1);  qs.add(85); evid.add('$label: Bullish ✅'); }
-      else if (e9 < e21 && rsi < 50 && hist < 0) { dirs.add(-1); qs.add(85); evid.add('$label: Bearish ✅'); }
-      else                                        { dirs.add(0);  qs.add(50); evid.add('$label: Mixed'); }
+      if (e9 > e21 && rsi > 50 && hist > 0) {
+        dirs.add(1);
+        qs.add(85);
+        evid.add('$label: Bullish ✅');
+      } else if (e9 < e21 && rsi < 50 && hist < 0) {
+        dirs.add(-1);
+        qs.add(85);
+        evid.add('$label: Bearish ✅');
+      } else {
+        dirs.add(0);
+        qs.add(50);
+        evid.add('$label: Mixed');
+      }
     }
 
     analyzeMtf(_candles, 'Base-TF');
-    int f5  = max(1, (300  / tfSec).round());
-    int f15 = max(1, (900  / tfSec).round());
+    int f5 = max(1, (300 / tfSec).round());
+    int f15 = max(1, (900 / tfSec).round());
     int f30 = max(1, (1800 / tfSec).round());
-    if (f5  > 1 && _candles.length >= f5  * 5) analyzeMtf(_aggregateCandles(f5),  'M5-sim');
-    if (f15 > 1 && _candles.length >= f15 * 5) analyzeMtf(_aggregateCandles(f15), 'M15-sim');
-    if (f30 > 1 && _candles.length >= f30 * 5) analyzeMtf(_aggregateCandles(f30), 'M30-sim');
+    if (f5 > 1 && _candles.length >= f5 * 5)
+      analyzeMtf(_aggregateCandles(f5), 'M5-sim');
+    if (f15 > 1 && _candles.length >= f15 * 5)
+      analyzeMtf(_aggregateCandles(f15), 'M15-sim');
+    if (f30 > 1 && _candles.length >= f30 * 5)
+      analyzeMtf(_aggregateCandles(f30), 'M30-sim');
 
     if (dirs.isEmpty) {
-      return const EngineResult(passed: false, quality: 0, status: 'FAIL',
-          evidence: ['No MTF data'], summary: 'FAIL: No MTF data');
+      return const EngineResult(
+        passed: false,
+        quality: 0,
+        status: 'FAIL',
+        evidence: ['No MTF data'],
+        summary: 'FAIL: No MTF data',
+      );
     }
-    int bull = dirs.where((v) => v ==  1).length;
+    int bull = dirs.where((v) => v == 1).length;
     int bear = dirs.where((v) => v == -1).length;
-    int tot  = dirs.length;
+    int tot = dirs.length;
     if (bull > 0 && bear > 0 && bull / tot > 0.3 && bear / tot > 0.3) {
-      return EngineResult(passed: false, quality: 0, status: 'FAIL',
-          evidence: [...evid, 'MTF Major Conflict: $bull Bull / $bear Bear'],
-          summary: 'FAIL: MTF Major Conflict — رفض');
+      return EngineResult(
+        passed: false,
+        quality: 0,
+        status: 'FAIL',
+        evidence: [...evid, 'MTF Major Conflict: $bull Bull / $bear Bear'],
+        summary: 'FAIL: MTF Major Conflict — رفض',
+      );
     }
     double avgQ = qs.reduce((a, b) => a + b) / qs.length;
     bool aligned = bull == tot || bear == tot;
     if (!aligned) avgQ *= 0.85;
-    String dir = bull > bear ? 'Bullish' : (bear > bull ? 'Bearish' : 'Neutral');
+    String dir = bull > bear
+        ? 'Bullish'
+        : (bear > bull ? 'Bearish' : 'Neutral');
     bool passed = avgQ >= 60;
-    return EngineResult(passed: passed, quality: avgQ, status: passed ? 'PASS' : 'FAIL',
-        evidence: evid,
-        summary: '${passed ? "PASS" : "FAIL"}: MTF $dir | ${aligned ? "Perfect Alignment" : "Partial"} | Q: ${avgQ.toStringAsFixed(0)}');
+    return EngineResult(
+      passed: passed,
+      quality: avgQ,
+      status: passed ? 'PASS' : 'FAIL',
+      evidence: evid,
+      summary:
+          '${passed ? "PASS" : "FAIL"}: MTF $dir | ${aligned ? "Perfect Alignment" : "Partial"} | Q: ${avgQ.toStringAsFixed(0)}',
+    );
   }
 
   // ══════════════════════════════════════════════════════════════════════
   // STEP 5 — TREND ENGINE
   // ══════════════════════════════════════════════════════════════════════
   EngineResult _runTrendEngine() {
-    final ema9   = _calculateEma(9);
-    final ema20  = _calculateEma(min(20,  _candles.length));
-    final ema50  = _calculateEma(min(50,  _candles.length));
+    final ema9 = _calculateEma(9);
+    final ema20 = _calculateEma(min(20, _candles.length));
+    final ema50 = _calculateEma(min(50, _candles.length));
     final ema100 = _calculateEma(min(100, _candles.length));
     final ema200 = _calculateEma(min(200, _candles.length));
-    final vwap   = _calculateVwap();
-    final adxD   = _calculateAdxFull(14);
-    final adx    = adxD['adx']!;
-    final pDi    = adxD['plusDi']!;
-    final mDi    = adxD['minusDi']!;
-    final atr    = _calculateAtr(14);
+    final vwap = _calculateVwap();
+    final adxD = _calculateAdxFull(14);
+    final adx = adxD['adx']!;
+    final pDi = adxD['plusDi']!;
+    final mDi = adxD['minusDi']!;
+    final atr = _calculateAtr(14);
 
     if (adx < 17) {
-      return EngineResult(passed: false, quality: 0, status: 'FAIL',
-          evidence: ['ADX ${adx.toStringAsFixed(0)} < 17 — Trend too weak'],
-          summary: 'FAIL: ADX ${adx.toStringAsFixed(0)} — Trend too weak — رفض');
+      return EngineResult(
+        passed: false,
+        quality: 0,
+        status: 'FAIL',
+        evidence: ['ADX ${adx.toStringAsFixed(0)} < 17 — Trend too weak'],
+        summary: 'FAIL: ADX ${adx.toStringAsFixed(0)} — Trend too weak — رفض',
+      );
     }
 
     int bullPts = 0, bearPts = 0;
-    if (ema9   > ema20 ) bullPts++; else bearPts++;
-    if (ema20  > ema50 ) bullPts++; else bearPts++;
-    if (ema50  > ema100) bullPts++; else bearPts++;
-    if (ema100 > ema200) bullPts++; else bearPts++;
+    if (ema9 > ema20) {
+      bullPts++;
+    } else {
+      bearPts++;
+    }
+    if (ema20 > ema50) {
+      bullPts++;
+    } else {
+      bearPts++;
+    }
+    if (ema50 > ema100) {
+      bullPts++;
+    } else {
+      bearPts++;
+    }
+    if (ema100 > ema200) {
+      bullPts++;
+    } else {
+      bearPts++;
+    }
 
     if (bullPts == 2 && bearPts == 2) {
-      return const EngineResult(passed: false, quality: 35, status: 'FAIL',
-          evidence: ['EMA 9/20/50/100/200: Split 2/2 — Mixed Trend'],
-          summary: 'FAIL: EMA Split 2/2 — Mixed Trend');
+      return const EngineResult(
+        passed: false,
+        quality: 35,
+        status: 'FAIL',
+        evidence: ['EMA 9/20/50/100/200: Split 2/2 — Mixed Trend'],
+        summary: 'FAIL: EMA Split 2/2 — Mixed Trend',
+      );
     }
 
-    bool isBull  = bullPts > bearPts;
+    bool isBull = bullPts > bearPts;
     bool perfect = bullPts == 4 || bearPts == 4;
-    bool vwapOk  = (isBull  && _currentPrice > vwap) || (!isBull && _currentPrice < vwap);
-    bool diOk    = (isBull  && pDi > mDi) || (!isBull && mDi > pDi);
-    double midP  = (_candles.last.high + _candles.last.low) / 2;
-    bool stOk    = (isBull  && _currentPrice > midP - 3.0 * atr) || (!isBull && _currentPrice < midP + 3.0 * atr);
-    List<double> recentLows  = _candles.sublist(max(0, _candles.length-5)).map((c) => c.low).toList();
-    List<double> recentHighs = _candles.sublist(max(0, _candles.length-5)).map((c) => c.high).toList();
+    bool vwapOk =
+        (isBull && _currentPrice > vwap) || (!isBull && _currentPrice < vwap);
+    bool diOk = (isBull && pDi > mDi) || (!isBull && mDi > pDi);
+    double midP = (_candles.last.high + _candles.last.low) / 2;
+    bool stOk =
+        (isBull && _currentPrice > midP - 3.0 * atr) ||
+        (!isBull && _currentPrice < midP + 3.0 * atr);
+    List<double> recentLows = _candles
+        .sublist(max(0, _candles.length - 5))
+        .map((c) => c.low)
+        .toList();
+    List<double> recentHighs = _candles
+        .sublist(max(0, _candles.length - 5))
+        .map((c) => c.high)
+        .toList();
     bool sarOk = isBull
-        ? _currentPrice > recentLows.reduce(min)  - atr * 0.02
+        ? _currentPrice > recentLows.reduce(min) - atr * 0.02
         : _currentPrice < recentHighs.reduce(max) + atr * 0.02;
 
-    int confs = (perfect ? 2 : 1) + (vwapOk ? 1 : 0) + (diOk ? 1 : 0) + (stOk ? 1 : 0) + (sarOk ? 1 : 0);
-    double quality = confs >= 5 ? 95 : confs == 4 ? 88 : confs == 3 ? 80 : confs == 2 ? 65 : 42;
+    int confs =
+        (perfect ? 2 : 1) +
+        (vwapOk ? 1 : 0) +
+        (diOk ? 1 : 0) +
+        (stOk ? 1 : 0) +
+        (sarOk ? 1 : 0);
+    double quality = confs >= 5
+        ? 95
+        : confs == 4
+        ? 88
+        : confs == 3
+        ? 80
+        : confs == 2
+        ? 65
+        : 42;
 
     if (quality < 65) {
-      return EngineResult(passed: false, quality: quality, status: 'FAIL',
-          evidence: ['EMA: ${bullPts}B/${bearPts}Br', 'ADX: ${adx.toStringAsFixed(0)}', '$confs/5 confirmations'],
-          summary: 'FAIL: Trend Q ${quality.toStringAsFixed(0)} — $confs/5 confirmations');
+      return EngineResult(
+        passed: false,
+        quality: quality,
+        status: 'FAIL',
+        evidence: [
+          'EMA: ${bullPts}B/${bearPts}Br',
+          'ADX: ${adx.toStringAsFixed(0)}',
+          '$confs/5 confirmations',
+        ],
+        summary:
+            'FAIL: Trend Q ${quality.toStringAsFixed(0)} — $confs/5 confirmations',
+      );
     }
     return EngineResult(
-      passed: true, quality: quality, status: 'PASS',
-      evidence: ['EMA: ${perfect ? "Perfect" : "Partial"} ${isBull ? "Bull" : "Bear"}', 'ADX: ${adx.toStringAsFixed(0)} (${adx > 30 ? "Strong" : "Average"})', 'VWAP:${vwapOk ? "✅" : "❌"} DI:${diOk ? "✅" : "❌"} SAR:${sarOk ? "✅" : "❌"}'],
-      summary: 'PASS: ${adx > 30 ? "Strong" : "Average"} ${isBull ? "Bull" : "Bear"} Trend | Q: ${quality.toStringAsFixed(0)} | $confs/5',
+      passed: true,
+      quality: quality,
+      status: 'PASS',
+      evidence: [
+        'EMA: ${perfect ? "Perfect" : "Partial"} ${isBull ? "Bull" : "Bear"}',
+        'ADX: ${adx.toStringAsFixed(0)} (${adx > 30 ? "Strong" : "Average"})',
+        'VWAP:${vwapOk ? "✅" : "❌"} DI:${diOk ? "✅" : "❌"} SAR:${sarOk ? "✅" : "❌"}',
+      ],
+      summary:
+          'PASS: ${adx > 30 ? "Strong" : "Average"} ${isBull ? "Bull" : "Bear"} Trend | Q: ${quality.toStringAsFixed(0)} | $confs/5',
     );
   }
 
@@ -5790,7 +7179,7 @@ class SignalEngine extends ChangeNotifier {
   // ══════════════════════════════════════════════════════════════════════
   EngineResult _runSmartMoneyEngine(int direction) {
     bool isCall = direction > 0;
-    final atr  = _calculateAtr(14);
+    final atr = _calculateAtr(14);
     final vwap = _calculateVwap();
     final evid = <String>[];
     final weak = <String>[];
@@ -5798,220 +7187,409 @@ class SignalEngine extends ChangeNotifier {
 
     final sHigh = <double>[], sLow = <double>[];
     for (int i = 2; i < _candles.length - 2; i++) {
-      if (_candles[i].high > _candles[i-1].high && _candles[i].high > _candles[i+1].high &&
-          _candles[i].high > _candles[i-2].high && _candles[i].high > _candles[i+2].high) sHigh.add(_candles[i].high);
-      if (_candles[i].low  < _candles[i-1].low  && _candles[i].low  < _candles[i+1].low  &&
-          _candles[i].low  < _candles[i-2].low  && _candles[i].low  < _candles[i+2].low)  sLow.add(_candles[i].low);
+      if (_candles[i].high > _candles[i - 1].high &&
+          _candles[i].high > _candles[i + 1].high &&
+          _candles[i].high > _candles[i - 2].high &&
+          _candles[i].high > _candles[i + 2].high) {
+        sHigh.add(_candles[i].high);
+      }
+      if (_candles[i].low < _candles[i - 1].low &&
+          _candles[i].low < _candles[i + 1].low &&
+          _candles[i].low < _candles[i - 2].low &&
+          _candles[i].low < _candles[i + 2].low) {
+        sLow.add(_candles[i].low);
+      }
     }
 
     // BOS (+20)
     bool bosBull = sHigh.isNotEmpty && _currentPrice > sHigh.last;
-    bool bosBear = sLow.isNotEmpty  && _currentPrice < sLow.last;
-    if ((isCall && bosBull) || (!isCall && bosBear)) { score += 20; evid.add('BOS ${isCall ? "Bullish" : "Bearish"} confirmed ✅'); }
-    else { weak.add('BOS not confirmed'); }
+    bool bosBear = sLow.isNotEmpty && _currentPrice < sLow.last;
+    if ((isCall && bosBull) || (!isCall && bosBear)) {
+      score += 20;
+      evid.add('BOS ${isCall ? "Bullish" : "Bearish"} confirmed ✅');
+    } else {
+      weak.add('BOS not confirmed');
+    }
 
     // CHoCH (+15)
     if (sHigh.length >= 2 && sLow.length >= 2) {
-      bool chBull = sHigh.last < sHigh[sHigh.length-2] && _currentPrice > sHigh.last;
-      bool chBear = sLow.last  > sLow[sLow.length-2]  && _currentPrice < sLow.last;
-      if ((isCall && chBull) || (!isCall && chBear)) { score += 15; evid.add('CHoCH ${isCall ? "Bullish" : "Bearish"} ✅'); }
-      else { weak.add('No CHoCH in trade direction'); }
+      bool chBull =
+          sHigh.last < sHigh[sHigh.length - 2] && _currentPrice > sHigh.last;
+      bool chBear =
+          sLow.last > sLow[sLow.length - 2] && _currentPrice < sLow.last;
+      if ((isCall && chBull) || (!isCall && chBear)) {
+        score += 15;
+        evid.add('CHoCH ${isCall ? "Bullish" : "Bearish"} ✅');
+      } else {
+        weak.add('No CHoCH in trade direction');
+      }
     }
 
     // Liquidity Sweep (+15)
     final lc = _candles.last;
-    bool bullSweep = sLow.isNotEmpty  && lc.low  < sLow.last  && lc.close > sLow.last;
-    bool bearSweep = sHigh.isNotEmpty && lc.high > sHigh.last && lc.close < sHigh.last;
-    if ((isCall && bullSweep) || (!isCall && bearSweep)) { score += 15; evid.add('Liquidity Sweep ${isCall ? "Below" : "Above"} ✅'); }
-    else { weak.add('No liquidity sweep'); }
+    bool bullSweep =
+        sLow.isNotEmpty && lc.low < sLow.last && lc.close > sLow.last;
+    bool bearSweep =
+        sHigh.isNotEmpty && lc.high > sHigh.last && lc.close < sHigh.last;
+    if ((isCall && bullSweep) || (!isCall && bearSweep)) {
+      score += 15;
+      evid.add('Liquidity Sweep ${isCall ? "Below" : "Above"} ✅');
+    } else {
+      weak.add('No liquidity sweep');
+    }
 
     // Order Block (+15)
     bool obFound = false;
-    for (int i = _candles.length - min(15, _candles.length - 4); i < _candles.length - 3; i++) {
+    for (
+      int i = _candles.length - min(15, _candles.length - 4);
+      i < _candles.length - 3;
+      i++
+    ) {
       final ob = _candles[i];
       double obB = (ob.open - ob.close).abs();
       if (obB < 0.000001) continue;
-      double futMv = _candles[min(i+3, _candles.length-1)].close - ob.close;
-      bool bullOb = ob.close < ob.open && futMv > obB * 1.2 && _currentPrice >= ob.close && _currentPrice <= ob.open;
-      bool bearOb = ob.close > ob.open && futMv < -obB * 1.2 && _currentPrice <= ob.close && _currentPrice >= ob.open;
+      double futMv = _candles[min(i + 3, _candles.length - 1)].close - ob.close;
+      bool bullOb =
+          ob.close < ob.open &&
+          futMv > obB * 1.2 &&
+          _currentPrice >= ob.close &&
+          _currentPrice <= ob.open;
+      bool bearOb =
+          ob.close > ob.open &&
+          futMv < -obB * 1.2 &&
+          _currentPrice <= ob.close &&
+          _currentPrice >= ob.open;
       if ((isCall && bullOb) || (!isCall && bearOb)) {
-        score += 15; evid.add('Order Block ${isCall ? "Demand" : "Supply"} ✅'); obFound = true; break;
+        score += 15;
+        evid.add('Order Block ${isCall ? "Demand" : "Supply"} ✅');
+        obFound = true;
+        break;
       }
     }
-    if (!obFound) { weak.add('No valid Order Block at current price'); }
+    if (!obFound) {
+      weak.add('No valid Order Block at current price');
+    }
 
     // FVG (+10)
-    bool bullFvg = _candles.length >= 3 && _candles[_candles.length-3].high < _candles.last.low;
-    bool bearFvg = _candles.length >= 3 && _candles[_candles.length-3].low  > _candles.last.high;
-    if ((isCall && bullFvg) || (!isCall && bearFvg)) { score += 10; evid.add('FVG ${isCall ? "Bullish" : "Bearish"} ✅'); }
-    else { weak.add('No FVG in direction'); }
+    bool bullFvg =
+        _candles.length >= 3 &&
+        _candles[_candles.length - 3].high < _candles.last.low;
+    bool bearFvg =
+        _candles.length >= 3 &&
+        _candles[_candles.length - 3].low > _candles.last.high;
+    if ((isCall && bullFvg) || (!isCall && bearFvg)) {
+      score += 10;
+      evid.add('FVG ${isCall ? "Bullish" : "Bearish"} ✅');
+    } else {
+      weak.add('No FVG in direction');
+    }
 
     // OTE 61.8%–78.6% (+10)
     int fibN = min(20, _candles.length);
-    double fibHi = _candles.sublist(_candles.length - fibN).map((c) => c.high).reduce(max);
-    double fibLo = _candles.sublist(_candles.length - fibN).map((c) => c.low).reduce(min);
-    double fibR  = fibHi - fibLo;
-    if (fibR > 0 && _currentPrice >= fibHi - fibR * 0.786 && _currentPrice <= fibHi - fibR * 0.618) {
-      score += 10; evid.add('OTE Zone (61.8%–78.6%) ✅');
-    } else { weak.add('Price not in OTE zone'); }
+    double fibHi = _candles
+        .sublist(_candles.length - fibN)
+        .map((c) => c.high)
+        .reduce(max);
+    double fibLo = _candles
+        .sublist(_candles.length - fibN)
+        .map((c) => c.low)
+        .reduce(min);
+    double fibR = fibHi - fibLo;
+    if (fibR > 0 &&
+        _currentPrice >= fibHi - fibR * 0.786 &&
+        _currentPrice <= fibHi - fibR * 0.618) {
+      score += 10;
+      evid.add('OTE Zone (61.8%–78.6%) ✅');
+    } else {
+      weak.add('Price not in OTE zone');
+    }
 
     // AMD (+5)
     if (_candles.length >= 9) {
-      double t1 = _candles.sublist(_candles.length-9, _candles.length-6).map((c) => c.high-c.low).reduce((a,b) => a+b) / 3;
-      double t2 = _candles.sublist(_candles.length-6, _candles.length-3).map((c) => c.high-c.low).reduce((a,b) => a+b) / 3;
-      double t3 = _candles.sublist(_candles.length-3).map((c)            => c.high-c.low).reduce((a,b) => a+b) / 3;
-      if (t2 > t1 * 1.3 && t3 > t2 * 1.2) { score += 5; evid.add('AMD Pattern ✅'); }
+      double t1 =
+          _candles
+              .sublist(_candles.length - 9, _candles.length - 6)
+              .map((c) => c.high - c.low)
+              .reduce((a, b) => a + b) /
+          3;
+      double t2 =
+          _candles
+              .sublist(_candles.length - 6, _candles.length - 3)
+              .map((c) => c.high - c.low)
+              .reduce((a, b) => a + b) /
+          3;
+      double t3 =
+          _candles
+              .sublist(_candles.length - 3)
+              .map((c) => c.high - c.low)
+              .reduce((a, b) => a + b) /
+          3;
+      if (t2 > t1 * 1.3 && t3 > t2 * 1.2) {
+        score += 5;
+        evid.add('AMD Pattern ✅');
+      }
     }
 
     // Kill Zone (+5)
     int utcH = DateTime.now().toUtc().hour;
     if ((utcH >= 7 && utcH <= 10) || (utcH >= 12 && utcH <= 15)) {
-      score += 5; evid.add('Kill Zone active (${utcH}:00 UTC) ✅');
-    } else { weak.add('Outside Kill Zone (${utcH}:00 UTC)'); }
+      score += 5;
+      evid.add('Kill Zone active ($utcH:00 UTC) ✅');
+    } else {
+      weak.add('Outside Kill Zone ($utcH:00 UTC)');
+    }
 
     // VWAP Institutional Zone (+5)
-    if (atr > 0 && (_currentPrice - vwap).abs() <= atr) { score += 5; evid.add('VWAP Institutional Zone ✅'); }
+    if (atr > 0 && (_currentPrice - vwap).abs() <= atr) {
+      score += 5;
+      evid.add('VWAP Institutional Zone ✅');
+    }
 
     // Hard rejection: no BOS + no OB + no FVG
     bool noBos = !((isCall && bosBull) || (!isCall && bosBear));
     bool noFvg = !((isCall && bullFvg) || (!isCall && bearFvg));
     if (noBos && !obFound && noFvg) {
-      return EngineResult(passed: false, quality: score.clamp(0, 100), status: 'FAIL',
-          evidence: [...evid, ...weak.map((w) => '⚠ $w')],
-          summary: 'FAIL: No BOS + No OB + No FVG — Zero SMC evidence — رفض');
+      return EngineResult(
+        passed: false,
+        quality: score.clamp(0, 100),
+        status: 'FAIL',
+        evidence: [...evid, ...weak.map((w) => '⚠ $w')],
+        summary: 'FAIL: No BOS + No OB + No FVG — Zero SMC evidence — رفض',
+      );
     }
     double quality = score.clamp(0, 100);
     if (quality < 35) {
-      return EngineResult(passed: false, quality: quality, status: 'FAIL',
-          evidence: [...evid, ...weak.map((w) => '⚠ $w')],
-          summary: 'FAIL: SMC Quality ${quality.toStringAsFixed(0)} — Zero institutional evidence — رفض');
-    }
-    return EngineResult(passed: true, quality: quality, status: 'PASS',
+      return EngineResult(
+        passed: false,
+        quality: quality,
+        status: 'FAIL',
         evidence: [...evid, ...weak.map((w) => '⚠ $w')],
-        summary: 'PASS: SMC ${isCall ? "Bullish" : "Bearish"} | Q: ${quality.toStringAsFixed(0)} | Institutional Confidence HIGH');
+        summary:
+            'FAIL: SMC Quality ${quality.toStringAsFixed(0)} — Zero institutional evidence — رفض',
+      );
+    }
+    return EngineResult(
+      passed: true,
+      quality: quality,
+      status: 'PASS',
+      evidence: [...evid, ...weak.map((w) => '⚠ $w')],
+      summary:
+          'PASS: SMC ${isCall ? "Bullish" : "Bearish"} | Q: ${quality.toStringAsFixed(0)} | Institutional Confidence HIGH',
+    );
   }
 
   // ══════════════════════════════════════════════════════════════════════
   // PRICE ACTION ENGINE
   // ══════════════════════════════════════════════════════════════════════
   EngineResult _runPriceActionEngine(int direction) {
-    bool isCall  = direction > 0;
-    final rsi    = _calculateRsi(14);
+    bool isCall = direction > 0;
+    final rsi = _calculateRsi(14);
     final stochK = _calculateStochastic(14, 3)['k']!;
-    final cci    = _calculateCci(20);
-    final mfi    = _calculateMfi(14);
-    final cmf    = _calculateCmf(20);
-    final atr    = _calculateAtr(14);
-    final bb     = _calculateBollingerBands(20);
-    final sr     = _calculateSupportResistance();
-    final macdH  = _calculateFullMacd()['histogram']!;
-    final volD   = _calculateVolumeDelta();
-    final volP   = _analyzeVolumeProfile();
-    final volR   = (volP['ratio'] as double).clamp(0.0, 5.0);
+    final cci = _calculateCci(20);
+    final mfi = _calculateMfi(14);
+    final cmf = _calculateCmf(20);
+    final atr = _calculateAtr(14);
+    final bb = _calculateBollingerBands(20);
+    final sr = _calculateSupportResistance();
+    final macdH = _calculateFullMacd()['histogram']!;
+    final volD = _calculateVolumeDelta();
+    final volP = _analyzeVolumeProfile();
+    final volR = (volP['ratio'] as double).clamp(0.0, 5.0);
     final diverg = _detectRsiDivergence();
-    final patt   = _detectCandlePatterns();
-    final liq    = _calculateLiquidityZones();
-    final evid   = <String>[];
+    final patt = _detectCandlePatterns();
+    final liq = _calculateLiquidityZones();
+    final evid = <String>[];
     double score = 0;
 
     // Pattern
-    const strongBull = ['bullish_engulfing', 'morning_star', 'three_white_soldiers'];
-    const strongBear = ['bearish_engulfing', 'evening_star',  'three_black_crows'];
-    const medBull    = ['hammer', 'pin_bar_bullish'];
-    const medBear    = ['shooting_star', 'pin_bar_bearish'];
-    if      ((isCall && strongBull.contains(patt)) || (!isCall && strongBear.contains(patt))) { score += 20; evid.add('Pattern: ${patt.replaceAll("_", " ")} — Strong ✅'); }
-    else if ((isCall && medBull.contains(patt))    || (!isCall && medBear.contains(patt)))    { score += 12; evid.add('Pattern: ${patt.replaceAll("_", " ")} — Moderate ✅'); }
-    else if (patt == 'doji') { score -= 5; evid.add('Pattern: Doji — Indecision ⚠️'); }
-    else { evid.add('Pattern: ${patt.replaceAll("_", " ")} — No clear bias'); }
+    const strongBull = [
+      'bullish_engulfing',
+      'morning_star',
+      'three_white_soldiers',
+    ];
+    const strongBear = [
+      'bearish_engulfing',
+      'evening_star',
+      'three_black_crows',
+    ];
+    const medBull = ['hammer', 'pin_bar_bullish'];
+    const medBear = ['shooting_star', 'pin_bar_bearish'];
+    if ((isCall && strongBull.contains(patt)) ||
+        (!isCall && strongBear.contains(patt))) {
+      score += 20;
+      evid.add('Pattern: ${patt.replaceAll("_", " ")} — Strong ✅');
+    } else if ((isCall && medBull.contains(patt)) ||
+        (!isCall && medBear.contains(patt))) {
+      score += 12;
+      evid.add('Pattern: ${patt.replaceAll("_", " ")} — Moderate ✅');
+    } else if (patt == 'doji') {
+      score -= 5;
+      evid.add('Pattern: Doji — Indecision ⚠️');
+    } else {
+      evid.add('Pattern: ${patt.replaceAll("_", " ")} — No clear bias');
+    }
 
     // RSI Divergence
-    if ((isCall && diverg == 'bullish') || (!isCall && diverg == 'bearish')) { score += 15; evid.add('RSI $diverg Divergence ✅'); }
+    if ((isCall && diverg == 'bullish') || (!isCall && diverg == 'bearish')) {
+      score += 15;
+      evid.add('RSI $diverg Divergence ✅');
+    }
 
     // S/R
     double atThr = atr > 0 ? atr * 1.5 : _currentPrice * 0.001;
-    bool atSup  = (_currentPrice - sr['support']!).abs()    <= atThr;
-    bool atRes  = (_currentPrice - sr['resistance']!).abs() <= atThr;
-    if ((isCall && (atSup  || _currentPrice <= bb['lower']! * 1.001)) ||
+    bool atSup = (_currentPrice - sr['support']!).abs() <= atThr;
+    bool atRes = (_currentPrice - sr['resistance']!).abs() <= atThr;
+    if ((isCall && (atSup || _currentPrice <= bb['lower']! * 1.001)) ||
         (!isCall && (atRes || _currentPrice >= bb['upper']! * 0.999))) {
-      score += 15; evid.add('S/R: At ${isCall ? "Support/BB-Low" : "Resistance/BB-High"} ✅');
-    } else { evid.add('S/R: No key level at price'); }
+      score += 15;
+      evid.add('S/R: At ${isCall ? "Support/BB-Low" : "Resistance/BB-High"} ✅');
+    } else {
+      evid.add('S/R: No key level at price');
+    }
 
     // Supply/Demand
     String liqZ = (liq['zone'] as String).toLowerCase();
-    if ((isCall  && (liq['score'] as double) > 60 && liqZ.contains('demand')) ||
+    if ((isCall && (liq['score'] as double) > 60 && liqZ.contains('demand')) ||
         (!isCall && (liq['score'] as double) > 60 && liqZ.contains('supply'))) {
-      score += 10; evid.add('S&D: Institutional ${isCall ? "Demand" : "Supply"} zone ✅');
-    } else { evid.add('S&D: Not at key zone'); }
+      score += 10;
+      evid.add('S&D: Institutional ${isCall ? "Demand" : "Supply"} zone ✅');
+    } else {
+      evid.add('S&D: Not at key zone');
+    }
 
     // Fibonacci
     int fibN = min(30, _candles.length);
-    double fibHi = _candles.sublist(_candles.length - fibN).map((c) => c.high).reduce(max);
-    double fibLo = _candles.sublist(_candles.length - fibN).map((c) => c.low).reduce(min);
-    double fibR  = fibHi - fibLo;
+    double fibHi = _candles
+        .sublist(_candles.length - fibN)
+        .map((c) => c.high)
+        .reduce(max);
+    double fibLo = _candles
+        .sublist(_candles.length - fibN)
+        .map((c) => c.low)
+        .reduce(min);
+    double fibR = fibHi - fibLo;
     if (fibR > 0) {
       double tol = atr * 1.5;
-      final levels = {'23.6%': fibHi - fibR*0.236, '38.2%': fibHi - fibR*0.382, '50%': fibHi - fibR*0.5, '61.8%': fibHi - fibR*0.618, '78.6%': fibHi - fibR*0.786};
-      String? hit; levels.forEach((k, v) { if ((_currentPrice - v).abs() <= tol) hit = k; });
-      if (hit != null) { score += 8; evid.add('Fibonacci: Near $hit ✅'); } else { evid.add('Fibonacci: No key level nearby'); }
+      final levels = {
+        '23.6%': fibHi - fibR * 0.236,
+        '38.2%': fibHi - fibR * 0.382,
+        '50%': fibHi - fibR * 0.5,
+        '61.8%': fibHi - fibR * 0.618,
+        '78.6%': fibHi - fibR * 0.786,
+      };
+      String? hit;
+      levels.forEach((k, v) {
+        if ((_currentPrice - v).abs() <= tol) hit = k;
+      });
+      if (hit != null) {
+        score += 8;
+        evid.add('Fibonacci: Near $hit ✅');
+      } else {
+        evid.add('Fibonacci: No key level nearby');
+      }
     }
 
     // Volume
-    bool obvOk = (isCall && volP['trend'] == 'bullish') || (!isCall && volP['trend'] == 'bearish');
-    bool cmfOk = (isCall && cmf  >  0.05) || (!isCall && cmf  < -0.05);
-    bool mfiOk = (isCall && mfi  >  55)   || (!isCall && mfi  <  45);
-    bool vdOk  = (isCall && volD >  10)   || (!isCall && volD < -10);
-    int volConfs = (obvOk?1:0) + (cmfOk?1:0) + (mfiOk?1:0) + (vdOk?1:0);
-    if      (volConfs >= 3) { score += 12; evid.add('Volume: $volConfs/4 confirmed ✅ Vol:${(volR*100).toStringAsFixed(0)}%'); }
-    else if (volConfs >= 2) { score +=  6; evid.add('Volume: $volConfs/4 moderate'); }
-    else                    { evid.add('Volume: Weak ($volConfs/4)'); }
+    bool obvOk =
+        (isCall && volP['trend'] == 'bullish') ||
+        (!isCall && volP['trend'] == 'bearish');
+    bool cmfOk = (isCall && cmf > 0.05) || (!isCall && cmf < -0.05);
+    bool mfiOk = (isCall && mfi > 55) || (!isCall && mfi < 45);
+    bool vdOk = (isCall && volD > 10) || (!isCall && volD < -10);
+    int volConfs =
+        (obvOk ? 1 : 0) + (cmfOk ? 1 : 0) + (mfiOk ? 1 : 0) + (vdOk ? 1 : 0);
+    if (volConfs >= 3) {
+      score += 12;
+      evid.add(
+        'Volume: $volConfs/4 confirmed ✅ Vol:${(volR * 100).toStringAsFixed(0)}%',
+      );
+    } else if (volConfs >= 2) {
+      score += 6;
+      evid.add('Volume: $volConfs/4 moderate');
+    } else {
+      evid.add('Volume: Weak ($volConfs/4)');
+    }
 
     // Momentum
-    bool rsiOk   = (isCall && rsi > 50 && rsi < 70)         || (!isCall && rsi < 50 && rsi > 30);
-    bool macdOk  = (isCall && macdH > 0)                    || (!isCall && macdH < 0);
-    bool stochOk = (isCall && stochK > 50 && stochK < 80)   || (!isCall && stochK < 50 && stochK > 20);
-    bool cciOk   = (isCall && cci > 0 && cci < 150)         || (!isCall && cci < 0 && cci > -150);
-    int momConfs = (rsiOk?1:0) + (macdOk?1:0) + (stochOk?1:0) + (cciOk?1:0);
-    if      (momConfs >= 3) { score += 10; evid.add('Momentum: $momConfs/4 confirmed ✅ RSI:${rsi.toStringAsFixed(0)}'); }
-    else if (momConfs >= 2) { score +=  5; evid.add('Momentum: $momConfs/4'); }
-    else                    { evid.add('Momentum: Weak ($momConfs/4)'); }
+    bool rsiOk =
+        (isCall && rsi > 50 && rsi < 70) || (!isCall && rsi < 50 && rsi > 30);
+    bool macdOk = (isCall && macdH > 0) || (!isCall && macdH < 0);
+    bool stochOk =
+        (isCall && stochK > 50 && stochK < 80) ||
+        (!isCall && stochK < 50 && stochK > 20);
+    bool cciOk =
+        (isCall && cci > 0 && cci < 150) || (!isCall && cci < 0 && cci > -150);
+    int momConfs =
+        (rsiOk ? 1 : 0) +
+        (macdOk ? 1 : 0) +
+        (stochOk ? 1 : 0) +
+        (cciOk ? 1 : 0);
+    if (momConfs >= 3) {
+      score += 10;
+      evid.add(
+        'Momentum: $momConfs/4 confirmed ✅ RSI:${rsi.toStringAsFixed(0)}',
+      );
+    } else if (momConfs >= 2) {
+      score += 5;
+      evid.add('Momentum: $momConfs/4');
+    } else {
+      evid.add('Momentum: Weak ($momConfs/4)');
+    }
 
     // Volatility
-    double avgR = _candles.isNotEmpty ? _candles.map((c) => c.high-c.low).reduce((a,b) => a+b) / _candles.length : 0.0001;
-    if      (atr >= avgR * 0.5 && atr <= avgR * 3.0) { score += 5;  evid.add('Volatility: ATR healthy ✅'); }
-    else if (atr <  avgR * 0.3)                       { score -= 10; evid.add('Volatility: ATR dead market ⛔'); }
-    else                                              { evid.add('Volatility: ATR elevated — caution'); }
+    double avgR = _candles.isNotEmpty
+        ? _candles.map((c) => c.high - c.low).reduce((a, b) => a + b) /
+              _candles.length
+        : 0.0001;
+    if (atr >= avgR * 0.5 && atr <= avgR * 3.0) {
+      score += 5;
+      evid.add('Volatility: ATR healthy ✅');
+    } else if (atr < avgR * 0.3) {
+      score -= 10;
+      evid.add('Volatility: ATR dead market ⛔');
+    } else {
+      evid.add('Volatility: ATR elevated — caution');
+    }
 
     double quality = score.clamp(0, 100);
     bool passed = quality >= 75;
-    return EngineResult(passed: passed, quality: quality, status: passed ? 'PASS' : 'FAIL',
-        evidence: evid,
-        summary: '${passed ? "PASS" : "FAIL"}: PA Q: ${quality.toStringAsFixed(0)} | Patt:${patt.replaceAll("_", " ")} Mom:$momConfs/4');
+    return EngineResult(
+      passed: passed,
+      quality: quality,
+      status: passed ? 'PASS' : 'FAIL',
+      evidence: evid,
+      summary:
+          '${passed ? "PASS" : "FAIL"}: PA Q: ${quality.toStringAsFixed(0)} | Patt:${patt.replaceAll("_", " ")} Mom:$momConfs/4',
+    );
   }
 
   // ── HISTORICAL BACKTESTING ENGINE ────────────────────────────────
   VipHistoricalResult _runHistoricalEngine(int direction) {
     if (_candles.length < 20) {
       return const VipHistoricalResult(
-        passed: false, sampleSize: 0, winRate: 0, verdict: 'FAIL',
+        passed: false,
+        sampleSize: 0,
+        winRate: 0,
+        verdict: 'FAIL',
         summary: 'Historical: HISTORICAL DATA NOT AVAILABLE — بيانات غير كافية',
       );
     }
 
-    final curRsi      = _calculateRsi(14);
+    final curRsi = _calculateRsi(14);
     final curMacdHist = _calculateFullMacd()['histogram']!;
-    final curEma9     = _calculateEma(9);
-    final curEma21    = _calculateEma(21);
-    final curAdxData  = _calculateAdxFull(14);
-    final curAdx      = curAdxData['adx']!;
+    final curEma9 = _calculateEma(9);
+    final curEma21 = _calculateEma(21);
+    final curAdxData = _calculateAdxFull(14);
+    final curAdx = curAdxData['adx']!;
 
-    bool curEmaUp    = curEma9 > curEma21;
-    bool curRsiHigh  = curRsi > 55;
-    bool curRsiLow   = curRsi < 45;
+    bool curEmaUp = curEma9 > curEma21;
+    bool curRsiHigh = curRsi > 55;
+    bool curRsiLow = curRsi < 45;
     bool curMacdBull = curMacdHist > 0;
     bool curStrTrend = curAdx > 20;
 
     int scanStart = 14;
-    int scanEnd   = _candles.length - 4;
+    int scanEnd = _candles.length - 4;
     int sampleSize = 0, wins = 0, losses = 0;
     double totalDd = 0;
 
@@ -6021,31 +7599,55 @@ class SignalEngine extends ChangeNotifier {
       double g = 0, l = 0;
       for (int j = max(1, i - rPer + 1); j <= i; j++) {
         double ch = _candles[j].close - _candles[j - 1].close;
-        if (ch > 0) { g += ch; } else { l -= ch; }
+        if (ch > 0) {
+          g += ch;
+        } else {
+          l -= ch;
+        }
       }
-      double hRsi = l == 0 ? 100.0 : 100.0 - (100.0 / (1.0 + (g / rPer) / (l / rPer)));
+      double hRsi = l == 0
+          ? 100.0
+          : 100.0 - (100.0 / (1.0 + (g / rPer) / (l / rPer)));
 
-      double s9 = 0, s21 = 0; int c9 = 0, c21 = 0;
-      for (int j = max(0, i - 8);  j <= i; j++) { s9  += _candles[j].close; c9++;  }
-      for (int j = max(0, i - 20); j <= i; j++) { s21 += _candles[j].close; c21++; }
+      double s9 = 0, s21 = 0;
+      int c9 = 0, c21 = 0;
+      for (int j = max(0, i - 8); j <= i; j++) {
+        s9 += _candles[j].close;
+        c9++;
+      }
+      for (int j = max(0, i - 20); j <= i; j++) {
+        s21 += _candles[j].close;
+        c21++;
+      }
       bool hEmaUp = (c9 > 0 && c21 > 0) ? (s9 / c9) > (s21 / c21) : curEmaUp;
 
-      double s26 = 0; int c26 = 0;
-      for (int j = max(0, i - 25); j <= i; j++) { s26 += _candles[j].close; c26++; }
+      double s26 = 0;
+      int c26 = 0;
+      for (int j = max(0, i - 25); j <= i; j++) {
+        s26 += _candles[j].close;
+        c26++;
+      }
       bool hMacdBull = c9 > 0 && c26 > 0 && (s9 / c9) > (s26 / c26);
 
-      double trSum = 0; int trCnt = 0;
+      double trSum = 0;
+      int trCnt = 0;
       for (int j = max(1, i - 13); j <= i; j++) {
-        double tr = max(_candles[j].high - _candles[j].low,
-                    max((_candles[j].high - _candles[j-1].close).abs(),
-                        (_candles[j].low  - _candles[j-1].close).abs()));
-        trSum += tr; trCnt++;
+        double tr = max(
+          _candles[j].high - _candles[j].low,
+          max(
+            (_candles[j].high - _candles[j - 1].close).abs(),
+            (_candles[j].low - _candles[j - 1].close).abs(),
+          ),
+        );
+        trSum += tr;
+        trCnt++;
       }
       double avgTr = trCnt > 0 ? trSum / trCnt : 0;
-      bool hStrTrend = avgTr > 0 && _currentPrice > 0 && (avgTr / _currentPrice) > 0.0002;
+      bool hStrTrend =
+          avgTr > 0 && _currentPrice > 0 && (avgTr / _currentPrice) > 0.0002;
 
       int sim = 0;
-      if (hEmaUp    == curEmaUp)    sim += 3;
+      if (hEmaUp == curEmaUp) sim += 3;
       if ((hRsi > 55) == curRsiHigh && (hRsi < 45) == curRsiLow) sim += 2;
       if (hMacdBull == curMacdBull) sim += 2;
       if (hStrTrend == curStrTrend) sim += 1;
@@ -6054,7 +7656,9 @@ class SignalEngine extends ChangeNotifier {
       sampleSize++;
       int fi = min(i + 3, _candles.length - 1);
       double futureMove = _candles[fi].close - _candles[i].close;
-      bool win = (direction > 0 && futureMove > 0) || (direction < 0 && futureMove < 0);
+      bool win =
+          (direction > 0 && futureMove > 0) ||
+          (direction < 0 && futureMove < 0);
 
       if (win) {
         wins++;
@@ -6063,8 +7667,9 @@ class SignalEngine extends ChangeNotifier {
         double entry = _candles[i].close;
         double worst = entry;
         for (int j = i + 1; j <= fi; j++) {
-          if (direction > 0 && _candles[j].low  < worst) worst = _candles[j].low;
-          if (direction < 0 && _candles[j].high > worst) worst = _candles[j].high;
+          if (direction > 0 && _candles[j].low < worst) worst = _candles[j].low;
+          if (direction < 0 && _candles[j].high > worst)
+            worst = _candles[j].high;
         }
         if (entry > 0) totalDd += (worst - entry).abs() / entry * 100;
       }
@@ -6073,21 +7678,33 @@ class SignalEngine extends ChangeNotifier {
     int total = wins + losses;
     if (sampleSize < 1) {
       return const VipHistoricalResult(
-        passed: true, sampleSize: 0, winRate: 0.55, verdict: 'NEUTRAL',
-        summary: 'Historical: No similar setups — neutral (not blocking confidence)',
+        passed: true,
+        sampleSize: 0,
+        winRate: 0.55,
+        verdict: 'NEUTRAL',
+        summary:
+            'Historical: No similar setups — neutral (not blocking confidence)',
       );
     }
-    double wr    = total > 0 ? wins / total : 0;
+    double wr = total > 0 ? wins / total : 0;
     double avgDd = losses > 0 ? totalDd / losses : 0;
     if (wr < 0.50) {
       return VipHistoricalResult(
-        passed: false, sampleSize: sampleSize, winRate: wr, verdict: 'FAIL',
-        summary: 'Historical FAIL ⛔: ${(wr*100).toStringAsFixed(0)}% win | $sampleSize setups | (min 50%) — REJECT',
+        passed: false,
+        sampleSize: sampleSize,
+        winRate: wr,
+        verdict: 'FAIL',
+        summary:
+            'Historical FAIL ⛔: ${(wr * 100).toStringAsFixed(0)}% win | $sampleSize setups | (min 50%) — REJECT',
       );
     }
     return VipHistoricalResult(
-      passed: true, sampleSize: sampleSize, winRate: wr, verdict: 'PASS ✅',
-      summary: 'Historical PASS ✅: ${(wr*100).toStringAsFixed(0)}% win | $sampleSize setups | Avg DD ${avgDd.toStringAsFixed(2)}%',
+      passed: true,
+      sampleSize: sampleSize,
+      winRate: wr,
+      verdict: 'PASS ✅',
+      summary:
+          'Historical PASS ✅: ${(wr * 100).toStringAsFixed(0)}% win | $sampleSize setups | Avg DD ${avgDd.toStringAsFixed(2)}%',
     );
   }
 
@@ -6098,101 +7715,181 @@ class SignalEngine extends ChangeNotifier {
     // ── CRITICAL GATE: Market Structure (chaos/range filter only) ────
     final msR = _runMarketStructureEngine();
     if (!msR.passed) {
-      return VipAnalysisResult(netScore: 0, confidence: 0, isApproved: false, overallScore: 0,
-          grade: 'Rejected ❌', riskAssessment: '🔴 REJECTED — Chaotic/Range Market',
-          scoreBreakdown: [msR.summary], rejectionReason: msR.summary, historical: null);
+      return VipAnalysisResult(
+        netScore: 0,
+        confidence: 0,
+        isApproved: false,
+        overallScore: 0,
+        grade: 'Rejected ❌',
+        riskAssessment: '🔴 REJECTED — Chaotic/Range Market',
+        scoreBreakdown: [msR.summary],
+        rejectionReason: msR.summary,
+        historical: null,
+      );
     }
 
     // ── DIRECTION: 7-vote system (odd — no ties possible) ────────────
-    final ema9  = _calculateEma(9);
+    final ema9 = _calculateEma(9);
     final ema21 = _calculateEma(21);
     final ema50 = _calculateEma(min(50, _candles.length));
-    final vwap  = _calculateVwap();
-    final adxD  = _calculateAdxFull(14);
-    final cmf   = _calculateCmf(20);
-    final rsi   = _calculateRsi(14);
+    final vwap = _calculateVwap();
+    final adxD = _calculateAdxFull(14);
+    final cmf = _calculateCmf(20);
+    final rsi = _calculateRsi(14);
     final macdH = _calculateFullMacd()['histogram']!;
     int bv = 0, brv = 0;
-    if (ema9  > ema21)                       bv++; else brv++;
-    if (ema21 > ema50)                       bv++; else brv++;
-    if (adxD['plusDi']! > adxD['minusDi']!) bv++; else brv++;
-    if (rsi   > 50)                          bv++; else brv++;
-    if (macdH > 0)                           bv++; else brv++;
-    if (_currentPrice > vwap)                bv++; else brv++;
-    if (cmf   > 0)                           bv++; else brv++;
+    if (ema9 > ema21) {
+      bv++;
+    } else {
+      brv++;
+    }
+    if (ema21 > ema50) {
+      bv++;
+    } else {
+      brv++;
+    }
+    if (adxD['plusDi']! > adxD['minusDi']!) {
+      bv++;
+    } else {
+      brv++;
+    }
+    if (rsi > 50) {
+      bv++;
+    } else {
+      brv++;
+    }
+    if (macdH > 0) {
+      bv++;
+    } else {
+      brv++;
+    }
+    if (_currentPrice > vwap) {
+      bv++;
+    } else {
+      brv++;
+    }
+    if (cmf > 0) {
+      bv++;
+    } else {
+      brv++;
+    }
     int direction = bv > brv ? 1 : -1;
 
     // ── SCORING ENGINES (all contribute weighted score) ───────────────
-    final tR   = _runTrendEngine();
-    final mrR  = _runMarketRegimeEngine();
+    final tR = _runTrendEngine();
+    final mrR = _runMarketRegimeEngine();
     final htfR = _runHigherTimeframeEngine();
     final mtfR = _runMultiTimeframeEngine();
-    final smR  = _runSmartMoneyEngine(direction);
-    final paR  = _runPriceActionEngine(direction);
+    final smR = _runSmartMoneyEngine(direction);
+    final paR = _runPriceActionEngine(direction);
 
     // ── SEMI-CRITICAL: zero institutional evidence → reject ───────────
     if (!smR.passed) {
-      return VipAnalysisResult(netScore: 0, confidence: 0, isApproved: false, overallScore: 0,
-          grade: 'Rejected ❌', riskAssessment: '🔴 REJECTED — No Institutional Evidence',
-          scoreBreakdown: [msR.summary, smR.summary], rejectionReason: smR.summary, historical: null);
+      return VipAnalysisResult(
+        netScore: 0,
+        confidence: 0,
+        isApproved: false,
+        overallScore: 0,
+        grade: 'Rejected ❌',
+        riskAssessment: '🔴 REJECTED — No Institutional Evidence',
+        scoreBreakdown: [msR.summary, smR.summary],
+        rejectionReason: smR.summary,
+        historical: null,
+      );
     }
 
     // ── COMPOSITE WEIGHTED SCORE ──────────────────────────────────────
     // Weights: SMC 30% | Trend 18% | HTF 12% | PA 12% | MS 10% | Regime 10% | MTF 8%
-    double total = (smR.quality  * 0.30
-                  + tR.quality   * 0.18
-                  + htfR.quality * 0.12
-                  + paR.quality  * 0.12
-                  + msR.quality  * 0.10
-                  + mrR.quality  * 0.10
-                  + mtfR.quality * 0.08).clamp(0.0, 100.0);
+    double total =
+        (smR.quality * 0.30 +
+                tR.quality * 0.18 +
+                htfR.quality * 0.12 +
+                paR.quality * 0.12 +
+                msR.quality * 0.10 +
+                mrR.quality * 0.10 +
+                mtfR.quality * 0.08)
+            .clamp(0.0, 100.0);
 
     final fullBd = <String>[
-      msR.summary, tR.summary, mrR.summary, htfR.summary,
-      mtfR.summary, smR.summary, paR.summary,
+      msR.summary,
+      tR.summary,
+      mrR.summary,
+      htfR.summary,
+      mtfR.summary,
+      smR.summary,
+      paR.summary,
       '📊 Composite: ${total.toStringAsFixed(1)}/100 | Direction: ${bv}B/${brv}Br',
     ];
 
     if (total < 58) {
-      return VipAnalysisResult(netScore: 0, confidence: 0, isApproved: false,
-          overallScore: total, grade: 'Rejected ❌',
-          riskAssessment: '🔴 REJECTED — Score ${total.toStringAsFixed(0)}/100 (min 58)',
-          scoreBreakdown: fullBd,
-          rejectionReason: 'Score ${total.toStringAsFixed(0)}/100 below threshold — WAIT',
-          historical: null);
+      return VipAnalysisResult(
+        netScore: 0,
+        confidence: 0,
+        isApproved: false,
+        overallScore: total,
+        grade: 'Rejected ❌',
+        riskAssessment:
+            '🔴 REJECTED — Score ${total.toStringAsFixed(0)}/100 (min 58)',
+        scoreBreakdown: fullBd,
+        rejectionReason:
+            'Score ${total.toStringAsFixed(0)}/100 below threshold — WAIT',
+        historical: null,
+      );
     }
 
     // ── HISTORICAL VALIDATION ─────────────────────────────────────────
     final hist = _runHistoricalEngine(direction);
     if (!hist.passed) {
-      return VipAnalysisResult(netScore: 0, confidence: 0, isApproved: false,
-          overallScore: total, grade: 'Rejected ❌',
-          riskAssessment: '🔴 REJECTED — Historical WR ${(hist.winRate*100).toStringAsFixed(0)}% < 50%',
-          scoreBreakdown: [...fullBd, hist.summary],
-          rejectionReason: hist.summary, historical: hist);
+      return VipAnalysisResult(
+        netScore: 0,
+        confidence: 0,
+        isApproved: false,
+        overallScore: total,
+        grade: 'Rejected ❌',
+        riskAssessment:
+            '🔴 REJECTED — Historical WR ${(hist.winRate * 100).toStringAsFixed(0)}% < 50%',
+        scoreBreakdown: [...fullBd, hist.summary],
+        rejectionReason: hist.summary,
+        historical: hist,
+      );
     }
 
     // ── HONEST CONFIDENCE (max 88%) ───────────────────────────────────
-    double scorePct  = ((total - 58.0) / 42.0).clamp(0.0, 1.0);
-    double histPct   = ((hist.winRate - 0.50) / 0.40).clamp(0.0, 1.0);
+    double scorePct = ((total - 58.0) / 42.0).clamp(0.0, 1.0);
+    double histPct = ((hist.winRate - 0.50) / 0.40).clamp(0.0, 1.0);
     double samplePct = hist.sampleSize.clamp(0, 10) / 10.0;
-    int failCnt      = (!tR.passed ? 1 : 0) + (!mrR.passed ? 1 : 0)
-                     + (!htfR.passed ? 1 : 0) + (!mtfR.passed ? 1 : 0) + (!paR.passed ? 1 : 0);
-    double conflPen  = failCnt >= 3 ? 8.0 : failCnt == 2 ? 4.0 : failCnt == 1 ? 2.0 : 0.0;
-    double confidence = (50.0 + scorePct*28.0 + histPct*12.0 + samplePct*5.0 - conflPen)
-                        .clamp(50.0, 88.0);
+    int failCnt =
+        (!tR.passed ? 1 : 0) +
+        (!mrR.passed ? 1 : 0) +
+        (!htfR.passed ? 1 : 0) +
+        (!mtfR.passed ? 1 : 0) +
+        (!paR.passed ? 1 : 0);
+    double conflPen = failCnt >= 3
+        ? 8.0
+        : failCnt == 2
+        ? 4.0
+        : failCnt == 1
+        ? 2.0
+        : 0.0;
+    double confidence =
+        (50.0 + scorePct * 28.0 + histPct * 12.0 + samplePct * 5.0 - conflPen)
+            .clamp(50.0, 88.0);
 
     String grade;
-    if      (total >= 92) grade = 'Institutional Grade 🏛️';
-    else if (total >= 85) grade = 'Excellent ⭐⭐⭐⭐⭐';
-    else if (total >= 75) grade = 'Very Good ⭐⭐⭐⭐';
-    else                  grade = 'Acceptable ⭐⭐⭐';
+    if (total >= 92) {
+      grade = 'Institutional Grade 🏛️';
+    } else if (total >= 85)
+      grade = 'Excellent ⭐⭐⭐⭐⭐';
+    else if (total >= 75)
+      grade = 'Very Good ⭐⭐⭐⭐';
+    else
+      grade = 'Acceptable ⭐⭐⭐';
 
     String risk = failCnt == 0 && confidence >= 72
-        ? '🟢 Low — Score ${total.toStringAsFixed(0)} | WR ${(hist.winRate*100).toStringAsFixed(0)}% | All Clear'
+        ? '🟢 Low — Score ${total.toStringAsFixed(0)} | WR ${(hist.winRate * 100).toStringAsFixed(0)}% | All Clear'
         : failCnt <= 1
-            ? '🟡 Medium — $failCnt engine below optimal'
-            : '🟠 Medium-High — $failCnt conflicts, reduce size';
+        ? '🟡 Medium — $failCnt engine below optimal'
+        : '🟠 Medium-High — $failCnt conflicts, reduce size';
 
     return VipAnalysisResult(
       netScore: direction * total,

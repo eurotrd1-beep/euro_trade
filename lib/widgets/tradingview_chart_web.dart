@@ -3,7 +3,6 @@ import 'dart:async';
 import 'dart:html' as html;
 // ignore: avoid_web_libraries_in_flutter
 import 'dart:js' as js;
-import 'dart:math' show min;
 import 'dart:ui_web' as ui;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -18,18 +17,20 @@ class TradingViewChart extends StatefulWidget {
   final String? signalDirection;   // 'CALL' | 'PUT' — null = no signal
   final double? signalEntryPrice;
   final int?    signalDurationMin;
+  final int?    signalSecondsRemaining; // live countdown from signal engine
   // Called once after JS init; provides a closure to read the latest TV price
   final void Function(double Function() priceGetter)? onReady;
 
   const TradingViewChart({
     super.key,
     required this.symbol,
-    this.interval         = '1m',
-    this.mode             = 'sim',
-    this.guaranteedWin    = false,
+    this.interval              = '1m',
+    this.mode                  = 'sim',
+    this.guaranteedWin         = false,
     this.signalDirection,
     this.signalEntryPrice,
     this.signalDurationMin,
+    this.signalSecondsRemaining,
     this.onReady,
   });
 
@@ -44,15 +45,12 @@ class _TradingViewChartState extends State<TradingViewChart> {
 
   _TradeState _tradeState  = _TradeState.idle;
   String  _direction       = '';
-  int     _durationMin     = 1;
   double  _entryPrice      = 0;
   double  _currentPrice    = 0;
   int     _secondsLeft     = 0;
   int     _totalSeconds    = 0;
   Timer?  _countdownTimer;
-
-  String get _displaySymbol =>
-      widget.symbol.replaceFirst(RegExp(r'^[A-Z]+:'), '').replaceAll('_', '/');
+  bool    _jsInitDone      = false;
 
   @override
   void initState() {
@@ -70,7 +68,11 @@ class _TradingViewChartState extends State<TradingViewChart> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _jsInit());
+    if (_jsInitDone) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _jsInitDone = true;
+      _jsInit();
+    });
   }
 
   @override
@@ -142,21 +144,45 @@ class _TradingViewChartState extends State<TradingViewChart> {
         active ? _direction : '',
         active ? _entryPrice : 0.0,
         active ? _secondsLeft : 0,
-        active && widget.guaranteedWin && widget.mode == 'tv',
+        active && widget.guaranteedWin, // gwin applies to both sim and TV
       ]);
     } catch (_) {}
   }
 
   // ── Trade logic ────────────────────────────────────────────────────────────
 
+  int _candleIntervalSec() {
+    switch (widget.interval) {
+      case '5m':  return 300;
+      case '15m': return 900;
+      case '1h':  return 3600;
+      case '1D':  return 86400;
+      default:    return 60;
+    }
+  }
+
   /// Auto-opens a trade driven by the signal engine.
   void _autoOpenTrade(String direction, double entryPrice, int durationMin) {
-    if (entryPrice == 0) return;
-    final totalSec = durationMin * 60;
+    // Always use chart's actual live price — signal engine price may diverge
+    final chartPrice = _getLastPrice();
+    final price = chartPrice > 0 ? chartPrice : entryPrice;
+    if (price == 0) return;
+    entryPrice = price;
+    // Use live secondsRemaining from signal engine if available,
+    // otherwise align to the next candle boundary.
+    int totalSec;
+    if (widget.signalSecondsRemaining != null && widget.signalSecondsRemaining! > 0) {
+      totalSec = widget.signalSecondsRemaining!;
+    } else {
+      final intervalSec = _candleIntervalSec();
+      final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      final secsIntoCandle = nowSec % intervalSec;
+      final secsRemaining  = intervalSec - secsIntoCandle;
+      totalSec = secsRemaining + (durationMin - 1) * intervalSec;
+    }
     setState(() {
       _tradeState   = _TradeState.active;
       _direction    = direction;
-      _durationMin  = durationMin;
       _entryPrice   = entryPrice;
       _currentPrice = entryPrice;
       _secondsLeft  = totalSec;
@@ -195,168 +221,15 @@ class _TradingViewChartState extends State<TradingViewChart> {
   }
 
   void _closeTrade() {
-    final exitPrice = _getLastPrice();
-    final isCall    = _direction == 'CALL';
-    final isWin     = isCall ? exitPrice > _entryPrice : exitPrice < _entryPrice;
-
     _jsTradeState(active: false);
     _setEntryLine(null, '');
-    final dir      = _direction;
-    final entry    = _entryPrice;
-    final durMin   = _durationMin;
     setState(() {
       _tradeState   = _TradeState.idle;
       _currentPrice = 0;
     });
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _showReviewDialog(
-          direction:       dir,
-          entryPrice:      entry,
-          exitPrice:       exitPrice,
-          durationMinutes: durMin,
-          isWin:           isWin,
-        );
-      }
-    });
+    // Dialog is shown by MainScreen via signal engine — no duplicate needed
   }
 
-  // ── Review dialog ──────────────────────────────────────────────────────────
-
-  void _showReviewDialog({
-    required String direction,
-    required double entryPrice,
-    required double exitPrice,
-    required int    durationMinutes,
-    required bool   isWin,
-  }) {
-    final color       = isWin ? AppConstants.callGreen : AppConstants.putRed;
-    final outcomeText = isWin ? 'صفقة ناجحة ✅' : 'صفقة خاسرة ❌';
-    final dirText     = direction == 'CALL' ? 'صعود 🟢' : 'هبوط 🔴';
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      barrierColor: AppConstants.spaceBackground.withAlpha(220),
-      builder: (ctx) => Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        child: Container(
-          width: min(MediaQuery.of(ctx).size.width, 420),
-          decoration: BoxDecoration(
-            color: AppConstants.cardBgColor,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AppConstants.borderGlow, width: 1.5),
-            boxShadow: [
-              BoxShadow(color: color.withAlpha(25), blurRadius: 28, spreadRadius: 6),
-            ],
-          ),
-          padding: const EdgeInsets.all(20),
-          child: Directionality(
-            textDirection: TextDirection.rtl,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      isWin
-                          ? Icons.check_circle_outline_rounded
-                          : Icons.info_outline_rounded,
-                      color: color,
-                      size: 26,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'مراجعة الصفقة المغلقة',
-                      style: GoogleFonts.outfit(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: AppConstants.textPrimary,
-                      ),
-                    ),
-                  ],
-                ),
-                const Divider(color: AppConstants.borderGlow, height: 24),
-                Container(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(
-                    color: color.withAlpha(18),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: color.withAlpha(80)),
-                  ),
-                  child: Text(
-                    outcomeText,
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.outfit(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: color,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppConstants.spaceBackground.withAlpha(150),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppConstants.borderGlow.withAlpha(120)),
-                  ),
-                  child: Column(
-                    children: [
-                      _statRow('زوج العملات',  _displaySymbol),
-                      const Divider(color: AppConstants.borderGlow, height: 16),
-                      _statRow('نوع الاتجاه',  dirText),
-                      const Divider(color: AppConstants.borderGlow, height: 16),
-                      _statRow('سعر الدخول',   AppConstants.formatPrice(entryPrice)),
-                      const Divider(color: AppConstants.borderGlow, height: 16),
-                      _statRow('سعر الإغلاق',  AppConstants.formatPrice(exitPrice)),
-                      const Divider(color: AppConstants.borderGlow, height: 16),
-                      _statRow('المدة',         '$durationMinutes دقيقة'),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-                ElevatedButton(
-                  onPressed: () => Navigator.of(ctx).pop(),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppConstants.accentBlue,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                    elevation: 8,
-                    shadowColor: AppConstants.accentBlue.withAlpha(120),
-                  ),
-                  child: Text(
-                    'متابعة الصفقة التالية 🚀',
-                    style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _statRow(String label, String value) => Row(
-    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-    children: [
-      Text(label,
-          style: GoogleFonts.outfit(fontSize: 12, color: AppConstants.textSecondary)),
-      Text(value,
-          style: GoogleFonts.outfit(
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-              color: AppConstants.textPrimary)),
-    ],
-  );
 
   // ── UI ─────────────────────────────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../constants.dart';
 import '../widgets/particles.dart';
@@ -20,33 +20,28 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
   Timer? _countdownTimer;
   Duration _remaining = Duration.zero;
   String _message = 'التطبيق متوقف مؤقتاً للصيانة، سنعود قريباً';
-  StreamSubscription<DocumentSnapshot>? _sub;
+  StreamSubscription<List<Map<String, dynamic>>>? _sub;
 
   @override
   void initState() {
     super.initState();
-    _sub = FirebaseFirestore.instance
-        .collection('configs')
-        .doc('maintenance')
-        .snapshots()
-        .listen((doc) {
-      if (!mounted) return;
-      if (!doc.exists) return;
-      final d = doc.data();
-      if (d == null) return;
+    _sub = Supabase.instance.client
+        .from('configs')
+        .stream(primaryKey: ['id'])
+        .eq('id', 'maintenance')
+        .listen((rows) {
+      if (!mounted || rows.isEmpty) return;
+      final d = rows.first['data'] as Map<String, dynamic>? ?? {};
 
       final isActive = d['isActive'] as bool? ?? false;
       if (!isActive) {
-        // Maintenance ended — go back to app
         _navigateAway();
         return;
       }
       final msg = d['message'] as String? ?? _message;
       DateTime? endsAt;
-      final endsAtRaw = d['endsAt'];
-      if (endsAtRaw is Timestamp) {
-        endsAt = endsAtRaw.toDate();
-      }
+      final endsAtStr = d['endsAt'] as String?;
+      if (endsAtStr != null) endsAt = DateTime.tryParse(endsAtStr);
       setState(() => _message = msg);
       if (endsAt != null) _startCountdown(endsAt);
     });
