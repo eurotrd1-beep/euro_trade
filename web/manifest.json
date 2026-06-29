@@ -1,11 +1,11 @@
 {
-    "name": "euro_trade",
-    "short_name": "euro_trade",
+    "name": "EURO TRADE",
+    "short_name": "EURO TRADE",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#0A0714",
+    "theme_color": "#0A0714",
+    "description": "أقوى بوت إشارات في الشرق الأوسط",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
