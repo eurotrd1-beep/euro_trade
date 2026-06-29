@@ -48,3 +48,6 @@ app.*.map.json
 firebase.json
 .firebaserc
 .firebase/
+
+# Proxy is a separate project (euro-trade-proxy) — not part of this repo
+proxy/
