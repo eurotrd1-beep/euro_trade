@@ -218,6 +218,14 @@ window.CandleChart = (function () {
     return sym.replace(/^[A-Z]+:/, '').replace(/_/g, '');
   }
 
+  /* ── Candle integrity validator ──────────────────────────────── */
+  /* A candle is only usable if it carries a numeric timestamp and finite
+     OHLC values. Guards against half-written candles from a server that
+     restarted mid-write, or malformed live ticks. */
+  function validCandle(b) {
+    return b && isFinite(b.t) && isFinite(b.o) && isFinite(b.h) && isFinite(b.l) && isFinite(b.c);
+  }
+
   /* ── Chart Instance ──────────────────────────────────────────── */
   function Chart(container, symbol, interval, mode) {
     this.container  = container;
@@ -242,6 +250,10 @@ window.CandleChart = (function () {
     this._destroyed      = false;
     this._ws             = null;
     this._wsTimer        = null;
+    this._retryTimer     = null;  // tv-mode fetch retry timer
+    this._loadStartedAt  = 0;     // start of current tv load cycle (for status timing)
+    this._sawEmptyResponse = false; // received >=1 valid JSON with empty candles
+    this._marketClosedNote = false; // overlay 'market closed' note on next _draw
     this._trade          = null; // { direction, entryPrice, secondsLeft, gwin }
 
     this.canvas = document.createElement('canvas');
@@ -269,14 +281,9 @@ window.CandleChart = (function () {
     if (this.mode === 'tv') {
       this._resize();          // draws loading screen (candles still empty)
       this._fetchTVCandles();
-      // Fallback: show sim data only if server hasn't responded after 5 s
-      this._simFallbackTimer = setTimeout(function() {
-        if (!self._destroyed && !self.candles.length) {
-          self.candles = buildHistory(self.symbol, self.interval, simCandleCount(self.interval));
-          self._startTick();
-          self._draw();
-        }
-      }, 5000);
+      /* NOTE: no sim-data fallback in tv mode — the status/error states drawn
+         by _fetchTVCandles must own the canvas so the user always sees the
+         real connection state instead of fake candles. */
     } else {
       this.candles = buildHistory(this.symbol, this.interval, simCandleCount(this.interval));
       this._resize();
@@ -302,10 +309,14 @@ window.CandleChart = (function () {
     var self = this;
     var cs   = candleSec(this.interval);
 
+    /* Mark the start of the current load cycle once (per symbol). Cleared in
+       update() so a symbol/interval change restarts all the timing windows. */
+    if (!this._loadStartedAt) this._loadStartedAt = Date.now();
+
     if (!chain) chain = [this.symbol];
     if (!chain.length) {
-      self._drawLoading();
-      setTimeout(function() { self._fetchTVCandles(0, [self.symbol]); }, 30000);
+      /* Whole fallback chain exhausted with no candles — keep retrying. */
+      self._scheduleRetry(function() { self._fetchTVCandles(0, [self.symbol]); }, 15000);
       return;
     }
 
@@ -314,73 +325,145 @@ window.CandleChart = (function () {
     var attempt = (retries || 0) + 1;
     var url = PROXY + '/api/tv/candles?symbol=' + encodeURIComponent(toTVSym(sym)) + '&interval=' + this.interval;
 
+    /* State 1 (pre-flight): browser reports offline → don't even try, just
+       poll until connectivity returns. */
+    if (navigator.onLine === false) {
+      self._drawMessage('تحقق من اتصالك بالإنترنت', '#F0C040');
+      self._scheduleRetry(function() { self._fetchTVCandles(0, [self.symbol]); }, 3000);
+      return;
+    }
+
+    var elapsed = function() { return Date.now() - self._loadStartedAt; };
+
+    /* Shown when a request can't reach the server (network error / timeout /
+       no usable response). Picks the right message for how long we've waited. */
+    function showConnectFailure() {
+      if (navigator.onLine === false) {
+        /* State 1: connection dropped mid-flight. */
+        self._drawMessage('تحقق من اتصالك بالإنترنت', '#F0C040');
+      } else if (elapsed() < 55000) {
+        /* State 2: Render free dyno cold start (up to ~50s). */
+        self._drawMessage('جاري تجهيز السيرفر...', '#F0C040');
+      } else {
+        /* State 3: server still unreachable after the cold-start window. */
+        self._drawMessage('السيرفر غير متاح حالياً', '#FF5555');
+      }
+    }
+
+    /* Retry delay for connect/data failures: tight during the cold-start
+       window so we recover fast, relaxed afterwards. */
+    function failureDelay() {
+      if (navigator.onLine === false) return 3000;
+      return elapsed() < 55000 ? 3000 : 10000;
+    }
+
     var xhr = new XMLHttpRequest();
-    xhr.open('GET', url); xhr.timeout = 10000;
+    xhr.open('GET', url);
+    /* Generous timeout so a waking dyno isn't mistaken for a dead server. */
+    xhr.timeout = 30000;
 
     xhr.onloadend = function() {
       if (self._destroyed) return;
-      try {
-        var d = JSON.parse(xhr.responseText);
-        if (d.candles && d.candles.length) {
-          // Got stored candles — cancel sim fallback and display immediately
-          clearTimeout(self._simFallbackTimer);
-          if (self._tickTimer) { clearInterval(self._tickTimer); self._tickTimer = null; }
 
-          var all = d.candles;
-          self.candles      = all.length > MAX_CANDLES ? all.slice(all.length - MAX_CANDLES) : all;
-          self._lastTVPrice = self.candles[self.candles.length - 1].c;
-          self._resolvedSym = sym;
+      var d = null;
+      try { d = JSON.parse(xhr.responseText); } catch (_) { d = null; }
 
-          var lastTs     = self.candles[self.candles.length - 1].t;
-          var ageCandles = (Date.now() / 1000 - lastTs) / cs;
-          var isLive     = ageCandles < 10;
-
-          if (isLive) {
-            // Bridge gap to current candle if needed
-            var nowSec = Math.floor(Date.now() / 1000);
-            var cT = Math.floor(nowSec / cs) * cs;
-            var lc = self.candles[self.candles.length - 1];
-            if (cT > lc.t) {
-              self.candles.push({ t: cT, o: lc.c, h: lc.c, l: lc.c, c: lc.c });
-              if (self.candles.length > MAX_CANDLES) self.candles.shift();
-            }
-            self._draw();
-            self._startTVTick();
-          } else {
-            // Market closed — show stored history, retry in 60 s
-            self._draw();
-            setTimeout(function() {
-              if (!self._destroyed) self._fetchTVCandles(0, [self.symbol]);
-            }, 60000);
-          }
-          return;
+      /* State 4: server responded but body isn't valid JSON, or JSON without
+         a candles array. Treat as a data error. */
+      if (!d || !d.candles || Object.prototype.toString.call(d.candles) !== '[object Array]') {
+        if (elapsed() >= 55000) {
+          self._drawMessage('خطأ في تحميل البيانات', '#FF5555');
+        } else {
+          showConnectFailure();
         }
-      } catch(_) {}
+        self._scheduleRetry(function() { self._fetchTVCandles(0, [self.symbol]); }, failureDelay());
+        return;
+      }
 
-      // No candles yet from this symbol
+      /* Valid JSON with a candles array. Filter out incomplete candles. */
+      var good = [];
+      for (var ci = 0; ci < d.candles.length; ci++) {
+        if (validCandle(d.candles[ci])) good.push(d.candles[ci]);
+      }
+      var marketOpen = (d.marketOpen === undefined) ? true : !!d.marketOpen;
+
+      if (good.length) {
+        // Got usable candles — cancel sim fallback and display immediately
+        clearTimeout(self._simFallbackTimer);
+        if (self._tickTimer) { clearInterval(self._tickTimer); self._tickTimer = null; }
+
+        var all = good;
+        self.candles      = all.length > MAX_CANDLES ? all.slice(all.length - MAX_CANDLES) : all;
+        self._lastTVPrice = self.candles[self.candles.length - 1].c;
+        self._resolvedSym = sym;
+        self._marketClosedNote = !marketOpen;
+
+        if (marketOpen) {
+          self._marketClosedNote = false;
+          // Bridge gap to current candle if needed
+          var nowSec = Math.floor(Date.now() / 1000);
+          var cT = Math.floor(nowSec / cs) * cs;
+          var lc = self.candles[self.candles.length - 1];
+          if (cT > lc.t) {
+            self.candles.push({ t: cT, o: lc.c, h: lc.c, l: lc.c, c: lc.c });
+            if (self.candles.length > MAX_CANDLES) self.candles.shift();
+          }
+          self._draw();          // _draw clears the closed note when marketOpen
+          self._startTVTick();
+        } else {
+          /* State 6: market closed — draw candles, overlay note, keep polling.
+             Stop any live WS tick so the badge logic stays clean; polling will
+             resume normal drawing once marketOpen flips back to true. */
+          if (self._tvTimer) { clearInterval(self._tvTimer); self._tvTimer = null; }
+          self._draw();          // _draw paints the 'السوق مغلق حالياً' note
+          self._scheduleRetry(function() { self._fetchTVCandles(0, [self.symbol]); }, 15000);
+        }
+        return;
+      }
+
+      /* Reachable but EMPTY candles. Note the symbol is unavailable on this
+         backend; try the fallback chain first, then settle on a message. */
+      self._sawEmptyResponse = true;
+
       if (rest.length && attempt >= 3) {
         self._fetchTVCandles(0, rest); return;
       }
-      if (attempt >= 8) {
-        if (!self._destroyed) setTimeout(function() { self._fetchTVCandles(0, [self.symbol]); }, 10000);
+
+      /* State 5: server reachable + valid JSON but persistently empty. */
+      if (elapsed() >= 30000) {
+        self._drawMessage('الزوج غير متاح حالياً', '#FF5555');
+        self._scheduleRetry(function() { self._fetchTVCandles(0, [self.symbol]); }, 15000);
         return;
       }
-      if (!self._destroyed) setTimeout(function() { self._fetchTVCandles(attempt, chain); }, 2000);
+
+      /* Still inside the early window — keep loading message and retry soon. */
+      self._drawLoading();
+      self._scheduleRetry(function() { self._fetchTVCandles(attempt, chain); }, 2000);
     };
 
     xhr.onerror = xhr.ontimeout = function() {
       if (self._destroyed) return;
-      var maxTries = rest.length ? 3 : 8;
-      if (attempt >= maxTries) {
-        if (rest.length) { self._fetchTVCandles(0, rest); return; }
-        // All exhausted — restart chain after 30s
-        setTimeout(function() { self._fetchTVCandles(0, [self.symbol]); }, 10000);
-        return;
+
+      /* Network-level failure → States 1/2/3 depending on online + elapsed. */
+      if (rest.length && attempt >= 3) {
+        self._fetchTVCandles(0, rest); return;
       }
-      setTimeout(function() { self._fetchTVCandles(attempt, chain); }, 2000);
+      showConnectFailure();
+      self._scheduleRetry(function() { self._fetchTVCandles(0, [self.symbol]); }, failureDelay());
     };
 
     xhr.send();
+  };
+
+  /* Self-healing retry scheduler: always reschedules, never gives up, and is a
+     no-op once the instance is destroyed. */
+  Chart.prototype._scheduleRetry = function(fn, delay) {
+    var self = this;
+    if (this._destroyed) return;
+    clearTimeout(this._retryTimer);
+    this._retryTimer = setTimeout(function() {
+      if (!self._destroyed) fn();
+    }, delay);
   };
 
   Chart.prototype._startTVTick = function() {
@@ -397,8 +480,11 @@ window.CandleChart = (function () {
       var cs   = candleSec(self.interval);
       var cT   = Math.floor(Date.now() / 1000 / cs) * cs;
       if (cT > last.t) {
-        self.candles.push({ t: cT, o: last.c, h: last.c, l: last.c, c: last.c });
-        if (self.candles.length > MAX_CANDLES) self.candles.shift();
+        var hc = { t: cT, o: last.c, h: last.c, l: last.c, c: last.c };
+        if (validCandle(hc)) {
+          self.candles.push(hc);
+          if (self.candles.length > MAX_CANDLES) self.candles.shift();
+        }
       }
       self._draw();
     }, 1000);
@@ -420,7 +506,7 @@ window.CandleChart = (function () {
         try {
           var d     = JSON.parse(e.data);
           var price = d.price;
-          if (!price || !self.candles.length) return;
+          if (!isFinite(price) || !price || !self.candles.length) return;
 
           // Guaranteed win nudge — only in tv mode with active losing trade
           if (self._trade && self._trade.gwin) {
@@ -454,7 +540,9 @@ window.CandleChart = (function () {
             if (price <  last.l)  { last.l = price; changed = true; }
             if (changed) self._draw();
           } else if (cTime > last.t) {
-            self.candles.push({ t: cTime, o: price, h: price, l: price, c: price });
+            var nc = { t: cTime, o: price, h: price, l: price, c: price };
+            if (!validCandle(nc)) return;
+            self.candles.push(nc);
             /* Sliding window: drop oldest candle when limit is exceeded */
             if (self.candles.length > MAX_CANDLES) self.candles.shift();
             self._draw();
@@ -529,6 +617,48 @@ window.CandleChart = (function () {
     ctx.fillStyle = GRID;
     var displaySym = this.symbol.replace(/^[A-Z]+:/, '').replace(/_/g, '/');
     ctx.fillText(displaySym, W / 2, H / 2 + 14);
+  };
+
+  /* ── Generic on-canvas message (status / error states) ───────── */
+  /* Clears the canvas and draws `text` centered (word-wrapped if long) in
+     `color` (default light gray). Used for all TV-mode status states. */
+  Chart.prototype._drawMessage = function(text, color) {
+    var ctx = this.ctx;
+    var W = this.W || 400, H = this.H || 300, dpr = this.dpr || 1;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = BG;
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.fillStyle = color || TEXT;
+    ctx.font = '13px Outfit,sans-serif';
+    ctx.textAlign = 'center';
+
+    /* Word-wrap to fit width (with a small horizontal margin) */
+    var maxW  = Math.max(40, W - 24);
+    var words = ('' + text).split(' ');
+    var lines = [];
+    var line  = '';
+    for (var i = 0; i < words.length; i++) {
+      var test = line ? line + ' ' + words[i] : words[i];
+      if (ctx.measureText(test).width > maxW && line) {
+        lines.push(line); line = words[i];
+      } else {
+        line = test;
+      }
+    }
+    if (line) lines.push(line);
+
+    var lh = 18;
+    var startY = H / 2 - ((lines.length - 1) * lh) / 2;
+    for (var li = 0; li < lines.length; li++) {
+      ctx.fillText(lines[li], W / 2, startY + li * lh);
+    }
+
+    /* Symbol caption underneath, like the loading screen */
+    ctx.font = '11px Outfit,sans-serif';
+    ctx.fillStyle = GRID;
+    var displaySym = this.symbol.replace(/^[A-Z]+:/, '').replace(/_/g, '/');
+    ctx.fillText(displaySym, W / 2, startY + lines.length * lh + 8);
   };
 
   /* ── Draw ────────────────────────────────────────────────────── */
@@ -671,6 +801,14 @@ window.CandleChart = (function () {
     /* Entry line */
     this._drawEntryLine(py, cl, cr, ct, cb, dec, last ? last.c : null);
 
+    /* State 6: market-closed note near the top (candles stay visible). */
+    if (this._marketClosedNote) {
+      ctx.fillStyle = '#F0C040';
+      ctx.font = 'bold 12px Outfit,sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('السوق مغلق حالياً', (cl + cr) / 2, ct + 14);
+    }
+
     /* Crosshair */
     if (this.mouse) this._crosshair(vis, dec, py, cx, cl, cr, ct, cb, lo, hi, ch);
   };
@@ -735,22 +873,21 @@ window.CandleChart = (function () {
     this.scrollRight  = 0;
     this.candles      = [];
     this._resolvedSym = null;
+    /* Reset status-timing windows for the new symbol/interval. */
+    this._loadStartedAt    = 0;
+    this._sawEmptyResponse = false;
+    this._marketClosedNote = false;
 
     if (this._tickTimer) { clearInterval(this._tickTimer); this._tickTimer = null; }
     if (this._tvTimer)   { clearInterval(this._tvTimer);   this._tvTimer   = null; }
     if (this._ws)        { try { this._ws.close(); } catch(_) {} this._ws = null; }
     clearTimeout(this._wsTimer); this._wsTimer = null;
+    clearTimeout(this._retryTimer); this._retryTimer = null;
 
     var self = this;
     if (this.mode === 'tv') {
       clearTimeout(this._simFallbackTimer);
-      this._simFallbackTimer = setTimeout(function() {
-        if (!self._destroyed && !self.candles.length) {
-          self.candles = buildHistory(self.symbol, self.interval, simCandleCount(self.interval));
-          self._startTick();
-          self._draw();
-        }
-      }, 5000);
+      /* No sim-data fallback in tv mode — status/error states own the canvas. */
       this._draw();   // loading screen (candles are [])
       this._fetchTVCandles();
     } else {
@@ -767,6 +904,7 @@ window.CandleChart = (function () {
     if (this._ws)        { try { this._ws.close(); } catch(_) {} this._ws = null; }
     clearTimeout(this._wsTimer);
     clearTimeout(this._simFallbackTimer);
+    clearTimeout(this._retryTimer);
     if (this._ro)        this._ro.disconnect();
     this.canvas.removeEventListener('mousemove',  this._mm);
     this.canvas.removeEventListener('mouseleave', this._ml);
