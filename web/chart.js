@@ -537,6 +537,8 @@ window.CandleChart = (function () {
           self._tvDistinctPrices++;
           self._lastTVPrice = price;
           self._lastTVTickTime = Date.now();
+          /* Price moved → market is live: drop the CLOSED badge / note instantly. */
+          self._marketClosedNote = false;
 
           var last  = self.candles[self.candles.length - 1];
           var cs    = candleSec(self.interval);
@@ -544,19 +546,18 @@ window.CandleChart = (function () {
           var cTime = Math.floor(now / cs) * cs;
 
           if (cTime === last.t) {
-            var changed = false;
-            if (price !== last.c) { last.c = price; changed = true; }
-            if (price >  last.h)  { last.h = price; changed = true; }
-            if (price <  last.l)  { last.l = price; changed = true; }
-            if (changed) self._draw();
+            if (price !== last.c) last.c = price;
+            if (price >  last.h)  last.h = price;
+            if (price <  last.l)  last.l = price;
           } else if (cTime > last.t) {
             var nc = { t: cTime, o: price, h: price, l: price, c: price };
             if (!validCandle(nc)) return;
             self.candles.push(nc);
             /* Sliding window: drop oldest candle when limit is exceeded */
             if (self.candles.length > MAX_CANDLES) self.candles.shift();
-            self._draw();
           }
+          /* Always redraw on a fresh price so the CLOSED badge clears immediately. */
+          self._draw();
         } catch(_) {}
       };
 
