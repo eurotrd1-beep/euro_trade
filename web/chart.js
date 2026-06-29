@@ -13,6 +13,22 @@ window.CandleChart = (function () {
   var BORDER  = '#2C2250';
   var RM = 80, TM = 20, BM = 28, LM = 4;
 
+  /* ── Brand watermark: faint EURO TRADER logo behind the chart ──── */
+  var LOGO = new Image();
+  var LOGO_OK = false;
+  LOGO.onload = function () { LOGO_OK = true; };
+  try { LOGO.src = 'logo.jpg'; } catch (_) {}
+
+  function drawWatermark(ctx, W, H) {
+    if (!LOGO_OK || !LOGO.width) return;
+    var lw = Math.min(W, H) * 0.55;
+    var lh = lw * (LOGO.height / LOGO.width);
+    ctx.save();
+    ctx.globalAlpha = 0.05;            /* faint / semi-transparent */
+    ctx.drawImage(LOGO, (W - lw) / 2, (H - lh) / 2, lw, lh);
+    ctx.restore();
+  }
+
   /* ── Proxy base URL ─────────────────────────────────────────── */
   var PROXY = 'https://euro-trade-proxy.onrender.com';
 
@@ -603,6 +619,7 @@ window.CandleChart = (function () {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = BG;
     ctx.fillRect(0, 0, W, H);
+    drawWatermark(ctx, W, H);
     ctx.fillStyle = TEXT;
     ctx.font = '13px Outfit,sans-serif';
     ctx.textAlign = 'center';
@@ -622,6 +639,7 @@ window.CandleChart = (function () {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = BG;
     ctx.fillRect(0, 0, W, H);
+    drawWatermark(ctx, W, H);
 
     ctx.fillStyle = color || TEXT;
     ctx.font = '13px Outfit,sans-serif';
@@ -663,6 +681,7 @@ window.CandleChart = (function () {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = BG;
     ctx.fillRect(0, 0, W, H);
+    drawWatermark(ctx, W, H);   /* faint brand logo behind everything */
 
     if (!this.candles.length) { this._drawLoading(); return; }
 
