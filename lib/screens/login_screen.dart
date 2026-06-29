@@ -28,12 +28,35 @@ class _LoginScreenState extends State<LoginScreen> {
   double _verificationProgress = 0.0;
   String? _errorMessage;
 
+  // Admin-controlled social links (with safe fallbacks)
+  String _youtubeUrl = 'https://www.youtube.com/@euro_trader';
+  String _telegramUrl = 'https://t.me/euro_trd1';
+
   @override
   void initState() {
     super.initState();
+    _loadSocialLinks();
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _maybeShowSubscriptionDialog(),
     );
+  }
+
+  Future<void> _loadSocialLinks() async {
+    try {
+      final row = await Supabase.instance.client
+          .from('configs')
+          .select('data')
+          .eq('id', 'social')
+          .maybeSingle();
+      if (!mounted) return;
+      final data = row?['data'] as Map<String, dynamic>? ?? {};
+      final yt = (data['youtubeUrl'] as String?)?.trim();
+      final tg = (data['telegramUrl'] as String?)?.trim();
+      setState(() {
+        if (yt != null && yt.isNotEmpty) _youtubeUrl = yt;
+        if (tg != null && tg.isNotEmpty) _telegramUrl = tg;
+      });
+    } catch (_) {}
   }
 
   Future<void> _maybeShowSubscriptionDialog() async {
@@ -140,9 +163,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         sublabel: '@euro_trader',
                         done: ytDone,
                         onTap: () {
-                          openBrowserTab(
-                            'https://www.youtube.com/@euro_trader',
-                          );
+                          openBrowserTab(_youtubeUrl);
                           Future.delayed(const Duration(seconds: 2), () {
                             if (ctx.mounted) setS(() => ytDone = true);
                           });
@@ -157,7 +178,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         sublabel: '@euro_trd1',
                         done: tgDone,
                         onTap: () {
-                          openBrowserTab('https://t.me/euro_trd1');
+                          openBrowserTab(_telegramUrl);
                           Future.delayed(const Duration(seconds: 2), () {
                             if (ctx.mounted) setS(() => tgDone = true);
                           });
@@ -764,8 +785,69 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
             ),
+            const SizedBox(height: 6),
+            // Social follow card
+            Center(child: _buildSocialCard()),
           ],
         ),
+      ),
+    );
+  }
+
+  // Compact social follow card
+  Widget _buildSocialCard() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppConstants.cardBgColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppConstants.borderGlow),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'تابعنا',
+            style: GoogleFonts.outfit(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: AppConstants.textSecondary,
+            ),
+          ),
+          const SizedBox(width: 10),
+          _socialIconButton(
+            icon: Icons.smart_display_rounded,
+            color: const Color(0xFFFF0000),
+            onTap: () => openBrowserTab(_youtubeUrl),
+          ),
+          const SizedBox(width: 8),
+          _socialIconButton(
+            icon: Icons.send_rounded,
+            color: const Color(0xFF229ED9),
+            onTap: () => openBrowserTab(_telegramUrl),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _socialIconButton({
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: color.withAlpha(28),
+          border: Border.all(color: color.withAlpha(110)),
+        ),
+        child: Icon(icon, color: color, size: 18),
       ),
     );
   }
@@ -782,10 +864,10 @@ class _LoginScreenState extends State<LoginScreen> {
         _selectedBroker = name;
         _selectedBrokerKey = clickKey;
       }),
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(10),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+        padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 6),
         decoration: BoxDecoration(
           gradient: isSelected
               ? LinearGradient(
@@ -800,18 +882,18 @@ class _LoginScreenState extends State<LoginScreen> {
           color: isSelected
               ? null
               : AppConstants.spaceBackground.withAlpha(120),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: isSelected
                 ? AppConstants.accentCyan
                 : AppConstants.borderGlow,
-            width: isSelected ? 2.0 : 1.0,
+            width: isSelected ? 1.5 : 1.0,
           ),
           boxShadow: isSelected
               ? [
                   BoxShadow(
                     color: AppConstants.accentCyan.withAlpha(40),
-                    blurRadius: 12,
+                    blurRadius: 10,
                   ),
                 ]
               : null,
@@ -820,8 +902,8 @@ class _LoginScreenState extends State<LoginScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 42,
-              height: 42,
+              width: 32,
+              height: 32,
               decoration: BoxDecoration(
                 color: Colors.white,
                 shape: BoxShape.circle,
@@ -829,44 +911,44 @@ class _LoginScreenState extends State<LoginScreen> {
                   color: isSelected
                       ? AppConstants.accentCyan
                       : Colors.white.withAlpha(50),
-                  width: 1.5,
+                  width: 1.2,
                 ),
                 boxShadow: [
                   BoxShadow(
                     color: isSelected
                         ? AppConstants.accentCyan.withAlpha(60)
                         : Colors.black.withAlpha(40),
-                    blurRadius: isSelected ? 10 : 4,
+                    blurRadius: isSelected ? 8 : 3,
                   ),
                 ],
               ),
               child: ClipOval(
                 child: Padding(
-                  padding: const EdgeInsets.all(5),
-                  child: _buildLogoImage(logoUrl, fallbackSize: 20),
+                  padding: const EdgeInsets.all(4),
+                  child: _buildLogoImage(logoUrl, fallbackSize: 16),
                 ),
               ),
             ),
-            const SizedBox(height: 7),
+            const SizedBox(height: 5),
             Text(
               name,
               textAlign: TextAlign.center,
-              maxLines: 2,
+              maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: GoogleFonts.outfit(
-                fontSize: 11,
+                fontSize: 9.5,
                 fontWeight: FontWeight.bold,
                 color: isSelected ? Colors.white : AppConstants.textSecondary,
               ),
             ),
-            const SizedBox(height: 5),
+            const SizedBox(height: 3),
             AnimatedOpacity(
               opacity: isSelected ? 1.0 : 0.0,
               duration: const Duration(milliseconds: 200),
               child: Icon(
                 Icons.check_circle_rounded,
                 color: AppConstants.accentCyan,
-                size: 14,
+                size: 11,
               ),
             ),
           ],
@@ -1121,7 +1203,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed: () => openBrowserTab('https://t.me/euro_trd'),
+                      onPressed: () => openBrowserTab(_telegramUrl),
                       icon: const Icon(Icons.send_rounded, size: 16),
                       label: Text(
                         '@euro_trd — تواصل الآن',

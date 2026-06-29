@@ -59,6 +59,9 @@ class _MainScreenState extends State<MainScreen> {
   bool _vipDowngradeInFlight = false; // avoid duplicate Supabase updates
   String _telegramContact = '';
 
+  // --- Promotional announcement (admin-controlled, configs/promo) ---
+  bool _promoChecked = false; // fetch & decide only once per session
+
   @override
   void initState() {
     super.initState();
@@ -173,6 +176,10 @@ class _MainScreenState extends State<MainScreen> {
     setUserBroker(brokerName);
     // Delay update check so it doesn't block startup rendering
     Future.delayed(const Duration(seconds: 2), () => _checkForUpdate());
+    // Promotional announcement: fetch & decide once, after account id is known.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _maybeShowPromo();
+    });
   }
 
   Future<void> _loadBrokerLogo(String brokerName) async {
@@ -249,7 +256,7 @@ class _MainScreenState extends State<MainScreen> {
           .maybeSingle();
       if (row == null || !mounted) return;
       final d = row['data'] as Map<String, dynamic>? ?? {};
-      final tg = (d['telegram'] as String? ?? '').trim();
+      final tg = (d['telegramUrl'] as String? ?? '').trim();
       if (tg.isNotEmpty) _telegramContact = tg;
     } catch (_) {}
   }
@@ -1366,6 +1373,470 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
+  // ── Promotional announcement (admin-controlled) ─────────────────────────────
+
+  /// Fetch the promo config once, evaluate the show-conditions, and display the
+  /// ad-style overlay when appropriate. All time math is in UTC.
+  Future<void> _maybeShowPromo() async {
+    if (_promoChecked) return;
+    _promoChecked = true;
+    try {
+      final row = await Supabase.instance.client
+          .from('configs')
+          .select('data')
+          .eq('id', 'promo')
+          .maybeSingle();
+      if (row == null || !mounted) return;
+      final d = row['data'] as Map<String, dynamic>? ?? {};
+
+      // 1) Must be enabled.
+      final enabled = d['enabled'] as bool? ?? false;
+      if (!enabled) return;
+
+      // 2) Targeting: 'all' or this user's account id.
+      final target = (d['target'] as String? ?? 'all').trim();
+      if (target != 'all' && target != _userAccountId) return;
+
+      // 3) Offer not expired: endsAt null OR in the future (UTC).
+      final endsAtStr = d['endsAt'] as String?;
+      if (endsAtStr != null && endsAtStr.isNotEmpty) {
+        final endsAt = DateTime.tryParse(endsAtStr)?.toUtc();
+        if (endsAt != null && !endsAt.isAfter(DateTime.now().toUtc())) return;
+      }
+
+      // 4) Not already dismissed for this version on this device.
+      final version = d['version'] as int? ?? 0;
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool('promo_dismissed_v$version') == true) return;
+
+      if (!mounted) return;
+      _showPromoDialog(d);
+    } catch (_) {}
+  }
+
+  void _showPromoDialog(Map<String, dynamic> d) {
+    // Analytics: count this impression (how many users the ad was shown to).
+    Supabase.instance.client
+        .rpc('increment_click', params: {'row_id': 'promo', 'field_name': 'views'})
+        .catchError((_) {});
+    final title = (d['title'] as String? ?? '').trim();
+    final message = (d['message'] as String? ?? '').trim();
+    final price = (d['price'] as String? ?? '').trim();
+    final save = (d['save'] as String? ?? '').trim();
+    final ctaText = (d['ctaText'] as String? ?? '').trim().isNotEmpty
+        ? (d['ctaText'] as String).trim()
+        : 'تواصل معايا';
+    final version = d['version'] as int? ?? 0;
+    final autoCloseSeconds = (d['autoCloseSeconds'] as int? ?? 0)
+        .clamp(0, 3600);
+    final endsAtStr = d['endsAt'] as String?;
+    final endsAtUtc = (endsAtStr != null && endsAtStr.isNotEmpty)
+        ? DateTime.tryParse(endsAtStr)?.toUtc()
+        : null;
+
+    // Timers owned by the dialog; cancelled when it closes (see .then below).
+    Timer? skipTimer; // counts down autoCloseSeconds → enables close (X)
+    Timer? offerTimer; // 1s tick for the offer countdown / auto-close at zero
+    var canClose = autoCloseSeconds <= 0;
+    var skipRemaining = autoCloseSeconds;
+
+    Future<void> persistDismissal() async {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('promo_dismissed_v$version', true);
+      } catch (_) {}
+    }
+
+    String fmtCountdown(Duration diff) {
+      if (diff.isNegative) diff = Duration.zero;
+      final d = diff.inDays;
+      final h = diff.inHours % 24;
+      final m = diff.inMinutes % 60;
+      final s = diff.inSeconds % 60;
+      String two(int v) => v.toString().padLeft(2, '0');
+      if (d > 0) return '$d يوم ${two(h)}:${two(m)}:${two(s)}';
+      return '${two(h)}:${two(m)}:${two(s)}';
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: AppConstants.spaceBackground.withAlpha(235),
+      builder: (dialogCtx) {
+        return StatefulBuilder(
+          builder: (ctx, setLocal) {
+            // Start the skip (auto-close enable) countdown once.
+            skipTimer ??= autoCloseSeconds <= 0
+                ? null
+                : Timer.periodic(const Duration(seconds: 1), (t) {
+                    skipRemaining -= 1;
+                    if (skipRemaining <= 0) {
+                      skipRemaining = 0;
+                      canClose = true;
+                      t.cancel();
+                    }
+                    if (ctx.mounted) setLocal(() {});
+                  });
+
+            // Start the offer countdown once (if an end time exists).
+            if (endsAtUtc != null) {
+              offerTimer ??= Timer.periodic(const Duration(seconds: 1), (t) {
+                final remaining = endsAtUtc.difference(DateTime.now().toUtc());
+                if (remaining.isNegative || remaining == Duration.zero) {
+                  // Offer ended → auto-close the ad (persist not required: a
+                  // new version/offer will re-show; expired won't re-show).
+                  t.cancel();
+                  if (Navigator.of(dialogCtx, rootNavigator: true).canPop()) {
+                    Navigator.of(dialogCtx, rootNavigator: true).pop();
+                  }
+                  return;
+                }
+                if (ctx.mounted) setLocal(() {});
+              });
+            }
+
+            void closeAd() {
+              if (!canClose) return;
+              persistDismissal();
+              Navigator.of(dialogCtx, rootNavigator: true).pop();
+            }
+
+            final offerRemaining =
+                endsAtUtc?.difference(DateTime.now().toUtc());
+
+            return Directionality(
+              textDirection: TextDirection.rtl,
+              child: Dialog(
+                backgroundColor: Colors.transparent,
+                insetPadding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 40,
+                ),
+                child: Container(
+                  width: min(MediaQuery.of(ctx).size.width, 420),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topRight,
+                      end: Alignment.bottomLeft,
+                      colors: [Color(0xFF1B1338), AppConstants.cardBgColor],
+                    ),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: Colors.amber.withAlpha(120),
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.amber.withAlpha(50),
+                        blurRadius: 40,
+                        spreadRadius: 6,
+                      ),
+                      BoxShadow(
+                        color: AppConstants.accentBlue.withAlpha(30),
+                        blurRadius: 30,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                  child: Stack(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(22, 26, 22, 22),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            // ── Header: gift icon + title ──
+                            Row(
+                              children: [
+                                Container(
+                                  width: 46,
+                                  height: 46,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    gradient: const LinearGradient(
+                                      colors: [
+                                        Colors.amberAccent,
+                                        Colors.orangeAccent,
+                                      ],
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.amber.withAlpha(110),
+                                        blurRadius: 16,
+                                        spreadRadius: 1,
+                                      ),
+                                    ],
+                                  ),
+                                  child: const Center(
+                                    child: Text(
+                                      '🎁',
+                                      style: TextStyle(fontSize: 24),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    title.isNotEmpty ? title : 'عرض خاص',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 19,
+                                      fontWeight: FontWeight.w800,
+                                      color: AppConstants.textPrimary,
+                                      height: 1.25,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+
+                            // ── Message body ──
+                            if (message.isNotEmpty)
+                              Text(
+                                message,
+                                style: GoogleFonts.outfit(
+                                  fontSize: 14,
+                                  color: AppConstants.textSecondary,
+                                  height: 1.6,
+                                ),
+                              ),
+
+                            // ── Price + save highlight ──
+                            if (price.isNotEmpty || save.isNotEmpty) ...[
+                              const SizedBox(height: 16),
+                              Row(
+                                children: [
+                                  if (price.isNotEmpty)
+                                    Expanded(
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 12,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: AppConstants.accentCyan
+                                              .withAlpha(20),
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          border: Border.all(
+                                            color: AppConstants.accentCyan
+                                                .withAlpha(90),
+                                          ),
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'السعر',
+                                              style: GoogleFonts.outfit(
+                                                fontSize: 10,
+                                                color:
+                                                    AppConstants.textSecondary,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              price,
+                                              style: GoogleFonts.outfit(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w800,
+                                                color: AppConstants.accentCyan,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  if (price.isNotEmpty && save.isNotEmpty)
+                                    const SizedBox(width: 10),
+                                  if (save.isNotEmpty)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 10,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        gradient: const LinearGradient(
+                                          colors: [
+                                            AppConstants.callGreen,
+                                            Color(0xFF00C46A),
+                                          ],
+                                        ),
+                                        borderRadius: BorderRadius.circular(12),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: AppConstants.callGreen
+                                                .withAlpha(80),
+                                            blurRadius: 12,
+                                          ),
+                                        ],
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Text(
+                                            '🔥',
+                                            style: TextStyle(fontSize: 13),
+                                          ),
+                                          const SizedBox(width: 5),
+                                          Text(
+                                            save,
+                                            style: GoogleFonts.outfit(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w800,
+                                              color: AppConstants
+                                                  .spaceBackground,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ],
+
+                            // ── Live offer countdown ──
+                            if (endsAtUtc != null) ...[
+                              const SizedBox(height: 16),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 10,
+                                ),
+                                decoration: BoxDecoration(
+                                  color:
+                                      AppConstants.warningOrange.withAlpha(20),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: AppConstants.warningOrange
+                                        .withAlpha(80),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(
+                                      Icons.timer_outlined,
+                                      color: AppConstants.warningOrange,
+                                      size: 18,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'ينتهي خلال ${fmtCountdown(offerRemaining ?? Duration.zero)}',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppConstants.warningOrange,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+
+                            const SizedBox(height: 22),
+
+                            // ── CTA button ──
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                onPressed: () {
+                                  // Analytics: count this CTA / link click.
+                                  Supabase.instance.client.rpc(
+                                    'increment_click',
+                                    params: {'row_id': 'promo', 'field_name': 'cta'},
+                                  ).catchError((_) {});
+                                  final url = _telegramContact.isNotEmpty
+                                      ? _telegramContact
+                                      : 'https://t.me/euro_trd1';
+                                  openBrowserTab(url);
+                                },
+                                icon: const Icon(
+                                  Icons.send_rounded,
+                                  size: 18,
+                                ),
+                                label: Text(
+                                  ctaText,
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF229ED9),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 14,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  elevation: 8,
+                                  shadowColor:
+                                      const Color(0xFF229ED9).withAlpha(150),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // ── Close (X) — disabled like a skippable ad ──
+                      Positioned(
+                        top: 8,
+                        left: 8,
+                        child: canClose
+                            ? IconButton(
+                                onPressed: closeAd,
+                                icon: const Icon(
+                                  Icons.close_rounded,
+                                  color: AppConstants.textSecondary,
+                                  size: 22,
+                                ),
+                                tooltip: 'إغلاق',
+                              )
+                            : Container(
+                                margin: const EdgeInsets.all(6),
+                                width: 32,
+                                height: 32,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: AppConstants.spaceBackground
+                                      .withAlpha(160),
+                                  border: Border.all(
+                                    color: AppConstants.borderGlow,
+                                  ),
+                                ),
+                                child: Text(
+                                  '$skipRemaining',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppConstants.textSecondary,
+                                  ),
+                                ),
+                              ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    ).then((_) {
+      // Dialog closed by any path → cancel timers (no leaks).
+      skipTimer?.cancel();
+      offerTimer?.cancel();
+    });
+  }
+
   @override
   void dispose() {
     _roleListener?.cancel();
@@ -1745,7 +2216,9 @@ class _MainScreenState extends State<MainScreen> {
       );
     } else {
       return InkWell(
-        onTap: () => openBrowserTab('https://t.me/euro_trd1'),
+        onTap: () => openBrowserTab(
+          _telegramContact.isNotEmpty ? _telegramContact : 'https://t.me/euro_trd1',
+        ),
         borderRadius: BorderRadius.circular(10),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -2338,23 +2811,31 @@ class _MainScreenState extends State<MainScreen> {
 
   // DESKTOP LAYOUT
   Widget _buildDesktopLayout() {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
       children: [
-        Expanded(
-          flex: 2,
-          child: Column(
-            children: [
-              _buildChartCard(),
-              const SizedBox(height: 20),
-              _buildAIAnalysisCard(),
-              const SizedBox(height: 20),
-              _buildSignalHistoryCard(),
-            ],
-          ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 2,
+              child: Column(
+                children: [
+                  _buildChartCard(),
+                  const SizedBox(height: 20),
+                  _buildAIAnalysisCard(),
+                  const SizedBox(height: 20),
+                  _buildSignalHistoryCard(),
+                ],
+              ),
+            ),
+            const SizedBox(width: 20),
+            Expanded(flex: 1, child: Column(children: [_buildLiveFeedCard()])),
+          ],
         ),
-        const SizedBox(width: 20),
-        Expanded(flex: 1, child: Column(children: [_buildLiveFeedCard()])),
+        const SizedBox(height: 20),
+        // Social follow footer — always the LAST thing on the signals page.
+        _buildSocialCards(),
+        const SizedBox(height: 24),
       ],
     );
   }
@@ -2371,7 +2852,9 @@ class _MainScreenState extends State<MainScreen> {
         const SizedBox(height: 20),
         _buildLiveFeedCard(),
         const SizedBox(height: 20),
+        // Social follow footer — always the LAST thing on the signals page.
         _buildSocialCards(),
+        const SizedBox(height: 24),
       ],
     );
   }
@@ -3405,74 +3888,58 @@ class _MainScreenState extends State<MainScreen> {
         final data = rows.isNotEmpty
             ? rows.first['data'] as Map<String, dynamic>? ?? {}
             : <String, dynamic>{};
-        final ytUrl   = data['youtubeUrl']  as String? ?? 'https://www.youtube.com/@euro_trader';
-        final tgUrl   = data['telegramUrl'] as String? ?? 'https://t.me/euro_trd1';
-        final chatUrl = data['chatUrl']     as String? ?? 'https://t.me/euro_trd';
+        final ytUrl = data['youtubeUrl']  as String? ?? 'https://www.youtube.com/@euro_trader';
+        final tgUrl = data['telegramUrl'] as String? ?? 'https://t.me/euro_trd1';
 
-        return _buildGlassCard(
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Directionality(
-              textDirection: TextDirection.rtl,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.share_rounded,
-                        color: AppConstants.accentCyan,
-                        size: 16,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'تابعنا على السوشيال ميديا',
-                        style: GoogleFonts.outfit(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: AppConstants.textPrimary,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ],
+        return Directionality(
+          textDirection: TextDirection.rtl,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Thin divider separating the footer from the content above.
+              Container(
+                height: 1,
+                margin: const EdgeInsets.symmetric(horizontal: 8),
+                color: AppConstants.textSecondary.withAlpha(30),
+              ),
+              const SizedBox(height: 18),
+              // Subtle centered title.
+              Center(
+                child: Text(
+                  'تابعنا على',
+                  style: GoogleFonts.outfit(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: AppConstants.textSecondary,
+                    letterSpacing: 1.0,
                   ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _socialBtn(
-                          icon: Icons.play_circle_fill_rounded,
-                          color: Colors.red,
-                          label: 'يوتيوب',
-                          sublabel: '@euro_trader',
-                          url: ytUrl,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _socialBtn(
-                          icon: Icons.send_rounded,
-                          color: const Color(0xFF29B6F6),
-                          label: 'تليجرام',
-                          sublabel: '@euro_trd1',
-                          url: tgUrl,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _socialBtn(
-                          icon: Icons.chat_bubble_rounded,
-                          color: AppConstants.warningOrange,
-                          label: 'تواصل معنا',
-                          sublabel: 'للتجديد والدعم',
-                          url: chatUrl,
-                        ),
-                      ),
-                    ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: _socialBtn(
+                      icon: Icons.play_circle_fill_rounded,
+                      color: Colors.red,
+                      label: 'يوتيوب',
+                      sublabel: '@euro_trader',
+                      url: ytUrl,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _socialBtn(
+                      icon: Icons.send_rounded,
+                      color: const Color(0xFF29B6F6),
+                      label: 'تليجرام',
+                      sublabel: '@euro_trd1',
+                      url: tgUrl,
+                    ),
                   ),
                 ],
               ),
-            ),
+            ],
           ),
         );
       },
