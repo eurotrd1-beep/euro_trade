@@ -242,6 +242,53 @@ window.CandleChart = (function () {
     return b && isFinite(b.t) && isFinite(b.o) && isFinite(b.h) && isFinite(b.l) && isFinite(b.c);
   }
 
+  /* ── Guaranteed-win price bias ───────────────────────────────────
+     Works as a persistent price OFFSET (self._gwinBias) that is eased in and
+     out gradually — it never snaps, so the candle stream is always continuous
+     (NO gap / empty space between candles, even at the moment the trade ends):
+       • Each trade wins by a DIFFERENT amount (gwinTarget, per-trade) → no
+         fixed-size tell.
+       • A smooth guided path (smootherstep) runs from entry to that target
+         across the WHOLE trade — calm start, calm finish — so candles stay
+         small and there is never a big late jump.
+       • We only ever lift a SHORTFALL behind the path; a genuine bigger real
+         move is left to ride (offset eases back to 0), nothing looks clipped.
+       • When the trade ends the offset eases back to 0 over the next few ticks,
+         so the price drifts back to the real market smoothly — no snap, no gap.
+       • Per-tick cap + micro-jitter keep every candle small and organic.
+     `price` is the RAW market/sim price (no offset baked in); we return the
+     shown price = raw + eased offset. gwinTarget/gwinTotal/gwinJit come from
+     _setTradeState. */
+  function gwinAdjust(self, price) {
+    if (!isFinite(price)) return price;
+    var t = self._trade;
+    var bias = self._gwinBias || 0;
+    var active = t && t.gwin && t.gwinTarget != null;
+    if (!active && bias === 0) return price;            // fast path: nothing applied
+    var desiredBias = 0;
+    if (active) {
+      var isCall = t.direction === 'CALL';
+      var total  = t.gwinTotal || 1;
+      var p = 1 - (t.secondsLeft / total);             // progress 0 → 1
+      if (p < 0) p = 0; else if (p > 1) p = 1;
+      var e = p * p * p * (p * (p * 6 - 15) + 10);      // smootherstep
+      var center = t.entryPrice + (t.gwinTarget - t.entryPrice) * e;
+      // Shown price should sit on the win path; if the real price is already
+      // deeper in profit, ride it (offset → 0).
+      var desiredShown = isCall ? Math.max(price, center) : Math.min(price, center);
+      desiredBias = desiredShown - price;
+    }
+    var step = (desiredBias - bias) * 0.18;            // ease toward target offset
+    if (active && desiredBias !== 0) step += (Math.random() - 0.5) * (t.gwinJit || 0);
+    var cap = price * 0.00015;                          // ≤ ~1.5 pip per tick → no candle jumps
+    if (step >  cap) step =  cap;
+    else if (step < -cap) step = -cap;
+    bias += step;
+    if (Math.abs(bias) < price * 0.000002) bias = 0;    // fully release tiny residual
+    self._gwinBias = bias;
+    return price + bias;
+  }
+
   /* ── Chart Instance ──────────────────────────────────────────── */
   function Chart(container, symbol, interval, mode) {
     this.container  = container;
@@ -271,6 +318,7 @@ window.CandleChart = (function () {
     this._sawEmptyResponse = false; // received >=1 valid JSON with empty candles
     this._marketClosedNote = false; // overlay 'market closed' note on next _draw
     this._trade          = null; // { direction, entryPrice, secondsLeft, gwin }
+    this._gwinBias       = 0;    // current guaranteed-win price offset (eased in/out — never snaps)
 
     this.canvas = document.createElement('canvas');
     this.canvas.style.cssText = 'display:block;width:100%;height:100%;cursor:crosshair;';
@@ -518,20 +566,9 @@ window.CandleChart = (function () {
           var price = d.price;
           if (!isFinite(price) || !price || !self.candles.length) return;
 
-          // Guaranteed win nudge — only in tv mode with active losing trade
-          if (self._trade && self._trade.gwin) {
-            var t      = self._trade;
-            var isCall = t.direction === 'CALL';
-            var losing = isCall ? price <= t.entryPrice : price >= t.entryPrice;
-            if (losing) {
-              var nudge = price * 0.00006;
-              if (t.secondsLeft <= 6) {
-                price = isCall ? t.entryPrice + nudge : t.entryPrice - nudge;
-              } else if (t.secondsLeft <= 20) {
-                price = isCall ? price + nudge * 0.4 : price - nudge * 0.4;
-              }
-            }
-          }
+          // Guaranteed win — eased price offset (tv mode). `price` is the raw
+          // market price; the offset eases in/out so candles never gap.
+          price = gwinAdjust(self, price);
 
           if (price === self._lastTVPrice) return;
           self._tvDistinctPrices++;
@@ -599,11 +636,16 @@ window.CandleChart = (function () {
         last = self.candles[self.candles.length - 1];
       }
 
-      /* Price tick */
+      /* Price tick — walk the RAW (offset-free) price, then re-apply the eased
+         guaranteed-win offset on top so it is never double-counted and candles
+         stay continuous. */
+      var raw   = last.c - (self._gwinBias || 0);
       var move  = tickSigma * randn();
       /* Gentle pull toward base price */
-      move += (a.p - last.c) * 0.0008;
-      var price = last.c + move;
+      move += (a.p - raw) * 0.0008;
+      raw = raw + move;
+
+      var price = gwinAdjust(self, raw);
 
       last.c = price;
       if (price > last.h) last.h = price;
@@ -949,7 +991,27 @@ window.CandleChart = (function () {
 
   Chart.prototype._setTradeState = function(active, direction, entryPrice, secondsLeft, gwin) {
     if (!active) { this._trade = null; return; }
-    this._trade = { direction: direction, entryPrice: entryPrice, secondsLeft: secondsLeft, gwin: gwin };
+    var prev = this._trade;
+    var t = { direction: direction, entryPrice: entryPrice, secondsLeft: secondsLeft, gwin: gwin };
+    if (gwin) {
+      // Reuse the win path while the SAME trade keeps ticking; (re)initialise it
+      // only for a fresh trade (new entry/direction) so every trade wins by a
+      // different, realistic amount.
+      var same = prev && prev.gwin && prev.gwinTarget != null &&
+                 prev.direction === direction && prev.entryPrice === entryPrice;
+      if (same) {
+        t.gwinTarget = prev.gwinTarget;
+        t.gwinTotal  = Math.max(prev.gwinTotal, secondsLeft);
+        t.gwinJit    = prev.gwinJit;
+      } else {
+        var isCall = direction === 'CALL';
+        var margin = entryPrice * (0.00006 + Math.random() * 0.00040); // ~0.6–4.6 pip, varied
+        t.gwinTarget = isCall ? entryPrice + margin : entryPrice - margin;
+        t.gwinTotal  = Math.max(secondsLeft, 1);
+        t.gwinJit    = entryPrice * 0.00002;            // micro-jitter on corrected ticks
+      }
+    }
+    this._trade = t;
   };
 
   /* ── Public API ──────────────────────────────────────────────── */

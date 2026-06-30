@@ -6506,21 +6506,35 @@ class SignalEngine extends ChangeNotifier {
   void _evaluateSignalResult() {
     if (_activeSignal == null) return;
 
-    // Guaranteed win: use Dart's nudged price (chart.js bias may not have converged at exact expiry)
-    // Normal: use live chart price so result matches what user sees on chart
-    final liveExit = (!_isGuaranteedWin
-        ? (_tvPriceGetter?.call() ?? 0.0)
-        : 0.0);
-    final exitP = (_isGuaranteedWin || liveExit == 0.0)
-        ? _currentPrice
-        : liveExit;
+    final signal = _activeSignal!;
+    final bool isCall = signal.direction == 'CALL';
 
-    double diff = exitP - _activeSignal!.entryPrice;
+    // Exit price is read on the SAME scale as the entry price — the live chart
+    // price (TV price in scraping mode, sim price otherwise). entryPrice was
+    // captured the same way, so entry vs exit are always directly comparable.
+    final double live = _tvPriceGetter?.call() ?? 0.0;
+    double exitP = live > 0 ? live : _currentPrice;
+
+    // Guaranteed win (admin, per-user): force the close onto the winning side of
+    // entry. The chart already drifts there gently across the whole trade; if a
+    // sparse-tick gap leaves it short, snap to a tiny realistic margin so the
+    // recorded entry/exit stay consistent with what the chart showed.
+    if (_isGuaranteedWin) {
+      final bool winning =
+          isCall ? exitP > signal.entryPrice : exitP < signal.entryPrice;
+      if (!winning) {
+        final double margin =
+            signal.entryPrice * 0.00008 * (0.6 + _random.nextDouble() * 0.8);
+        exitP = isCall ? signal.entryPrice + margin : signal.entryPrice - margin;
+      }
+    }
+
+    final double diff = exitP - signal.entryPrice;
     // Three outcomes: exit == entry → TIE (تعادل); otherwise WIN/LOSS by direction.
     String result;
     if (diff == 0) {
       result = 'TIE';
-    } else if (_activeSignal!.direction == 'CALL') {
+    } else if (isCall) {
       result = diff > 0 ? 'WIN' : 'LOSS';
     } else { // PUT
       result = diff < 0 ? 'WIN' : 'LOSS';
