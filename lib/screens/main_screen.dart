@@ -46,7 +46,7 @@ class _MainScreenState extends State<MainScreen> {
   bool _updateChecked = false;
 
   // --- Server-driven market status (from proxy `marketOpen`) ---
-  static const String _proxyBase = 'https://euro-trade-proxy.onrender.com';
+  static const String _proxyBase = 'https://euro-trade-proxy-1.onrender.com';
   Timer? _marketStatusTimer;
   bool _marketOpen = true; // optimistic default until first poll
   bool _marketClosedDialogShown = false;
@@ -109,9 +109,45 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
+  /// True when the active pair is an OTC pair (category 'otc'). OTC market
+  /// status comes from Supabase (the OTC scraper), not the TradingView proxy.
+  bool _isActiveOtc() {
+    final cs = _activeChartSymbol.isNotEmpty
+        ? _activeChartSymbol
+        : AppConstants.chartSymbolFor(_signalEngine.activePair);
+    final p = AppConstants.currencyPairs.firstWhere(
+      (e) => (e['chartSymbol'] as String? ?? '') == cs,
+      orElse: () => const <String, dynamic>{},
+    );
+    return (p['category'] as String? ?? '') == 'otc';
+  }
+
   Future<void> _pollMarketStatus() async {
     final sym = _bareSymbol();
     if (sym.isEmpty) return;
+
+    // OTC pairs: read market-open from configs/otc_prices in Supabase. The
+    // scraper sets `o:false` for a frozen (closed) market → drives the existing
+    // "market closed" dialog exactly like TradingView pairs.
+    if (_isActiveOtc()) {
+      try {
+        final row = await Supabase.instance.client
+            .from('configs')
+            .select('data')
+            .eq('id', 'otc_prices')
+            .maybeSingle()
+            .timeout(const Duration(seconds: 8));
+        final data = (row?['data'] as Map<String, dynamic>?) ?? {};
+        final entry = data[sym.toUpperCase()] as Map<String, dynamic>?;
+        if (entry == null) return; // no data yet → leave state unchanged
+        if (!mounted) return;
+        _applyMarketStatus(entry['o'] == true);
+      } catch (_) {
+        return; // leave state unchanged on error
+      }
+      return;
+    }
+
     bool open;
     try {
       final resp = await http
@@ -1877,6 +1913,14 @@ class _MainScreenState extends State<MainScreen> {
           .stream(primaryKey: ['id'])
           .listen((rows) {
             if (!mounted) return;
+
+            // Capture the active pair + whether it was an OTC pair BEFORE we
+            // swap in the new list, so we can detect "removed while open".
+            final oldActive = _signalEngine.activePair;
+            final wasOtc = AppConstants.currencyPairs.any((p) =>
+                p['symbol'] == oldActive &&
+                (p['category'] as String? ?? '') == 'otc');
+
             final pairs = rows
                 .map((d) => <String, dynamic>{
                       'id': d['id'],
@@ -1890,6 +1934,9 @@ class _MainScreenState extends State<MainScreen> {
                 .toList()
               ..sort((a, b) => (a['order'] as int).compareTo(b['order'] as int));
 
+            final activeExists =
+                pairs.any((p) => p['symbol'] == oldActive);
+
             setState(() {
               AppConstants.currencyPairs = pairs;
 
@@ -1901,9 +1948,6 @@ class _MainScreenState extends State<MainScreen> {
               }
 
               // Verify active pair is still in the new list
-              final activeExists = pairs.any(
-                (p) => p['symbol'] == _signalEngine.activePair,
-              );
               if (!activeExists && pairs.isNotEmpty) {
                 final firstForex = pairs.firstWhere(
                   (p) => (p['category'] as String? ?? '') == 'forex',
@@ -1916,6 +1960,23 @@ class _MainScreenState extends State<MainScreen> {
                   _signalEngine.selectPair(firstSymbol);
               }
             });
+
+            // STATE 9 — the OTC pair the user was viewing got disabled/removed
+            // from the library while open. Tell them clearly (we already
+            // switched them to another pair above).
+            if (!activeExists && wasOtc && mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'هذا الزوج لم يعد متاحًا، يرجى اختيار زوج آخر',
+                    style: GoogleFonts.outfit(),
+                    textAlign: TextAlign.right,
+                  ),
+                  backgroundColor: AppConstants.warningOrange,
+                  duration: const Duration(seconds: 5),
+                ),
+              );
+            }
           });
     } catch (_) {}
   }
@@ -2388,6 +2449,12 @@ class _MainScreenState extends State<MainScreen> {
                       'crypto',
                       'كريبتو',
                       Icons.currency_bitcoin_rounded,
+                    ),
+                  if (_categoryHasPairs('otc'))
+                    _buildCategoryTab(
+                      'otc',
+                      'OTC',
+                      Icons.bolt_rounded,
                     ),
                 ],
               ),
@@ -2864,6 +2931,14 @@ class _MainScreenState extends State<MainScreen> {
     final chartSymbol = _activeChartSymbol.isNotEmpty
         ? _activeChartSymbol
         : AppConstants.chartSymbolFor(_signalEngine.activePair);
+    // OTC pairs (category 'otc') are driven from Supabase, not TradingView — the
+    // chart gets a dedicated 'otc' mode regardless of the global sim/tv setting.
+    final activePairData = AppConstants.currencyPairs.firstWhere(
+      (p) => (p['chartSymbol'] as String? ?? '') == chartSymbol,
+      orElse: () => const <String, dynamic>{},
+    );
+    final bool isOtc = (activePairData['category'] as String? ?? '') == 'otc';
+    final String effectiveMode = isOtc ? 'otc' : _chartMode;
     final tf = _signalEngine.chartTimeframe;
     final signal = _signalEngine.activeSignal;
     final isActive = signal?.status == 'ACTIVE';
@@ -2947,7 +3022,7 @@ class _MainScreenState extends State<MainScreen> {
           TradingViewChart(
             symbol: chartSymbol,
             interval: tf,
-            mode: _chartMode,
+            mode: effectiveMode,
             guaranteedWin: _signalEngine.isGuaranteedWin,
             signalDirection: isActive ? signal!.direction : null,
             signalEntryPrice: signal?.entryPrice,

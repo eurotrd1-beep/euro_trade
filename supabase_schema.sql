@@ -108,3 +108,38 @@ BEGIN
     );
 END;
 $$;
+
+-- ══════════════════════════════════════════════════════
+-- OTC scraping system (Pocket Option) — independent of the
+-- TradingView scraper. Managed by proxy/po-scraper.js.
+-- ══════════════════════════════════════════════════════
+
+-- OTC pairs library — single source of truth for OTC pairs.
+-- Discovered by the admin "جلب الأزواج" action; enabled per-pair by the admin.
+CREATE TABLE IF NOT EXISTS otc_pairs (
+  id            UUID    DEFAULT gen_random_uuid() PRIMARY KEY,
+  name          TEXT    NOT NULL DEFAULT '',            -- "EUR/USD OTC"
+  symbol        TEXT    NOT NULL,                        -- internal scraping symbol (NO ':')
+  platform      TEXT    NOT NULL DEFAULT 'pocketoption', -- extensible to other OTC platforms
+  subcategory   TEXT    DEFAULT 'forex',                -- forex | metals | commodities | crypto
+  enabled       BOOLEAN DEFAULT FALSE,                  -- admin switch (off by default)
+  "order"       BIGINT  DEFAULT 0,
+  created_at    TIMESTAMPTZ DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (platform, symbol)
+);
+
+-- Control rows in configs:
+--   otc_scan   — admin "جلب الأزواج" trigger + scraper status
+--   otc_prices — latest per-second price per OTC symbol (for the live user chart)
+--   otc_status — scraper connection/login/reconnect status
+INSERT INTO configs (id, data) VALUES
+  ('otc_scan',   '{"requestedAt":null,"status":"idle","count":0,"message":"","updatedAt":null}'::jsonb),
+  ('otc_prices', '{}'::jsonb),
+  ('otc_status', '{"connected":false,"loggedIn":false,"reconnects":0,"lastError":"","updatedAt":null}'::jsonb)
+ON CONFLICT (id) DO NOTHING;
+
+ALTER PUBLICATION supabase_realtime ADD TABLE otc_pairs;
+
+ALTER TABLE otc_pairs ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "allow all" ON otc_pairs FOR ALL USING (true) WITH CHECK (true);

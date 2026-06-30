@@ -30,7 +30,15 @@ window.CandleChart = (function () {
   }
 
   /* ── Proxy base URL ─────────────────────────────────────────── */
-  var PROXY = 'https://euro-trade-proxy.onrender.com';
+  var PROXY = 'https://euro-trade-proxy-1.onrender.com';
+
+  /* ── Supabase (OTC data: candles table + configs/otc_prices) ──
+     OTC pairs aren't on TradingView, so their candles/price are read straight
+     from Supabase (written there by the independent OTC scraper). The anon key
+     is already shipped in the compiled web app, so embedding it here is the same
+     public exposure. */
+  var SUPABASE_URL = 'https://dlzqdmqkvlvwnjhqxqym.supabase.co';
+  var SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRsenFkbXFrdmx2d25qaHF4cXltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2ODk3OTQsImV4cCI6MjA5ODI2NTc5NH0.Gchfry1V4vDnwSKk-uF9r7C10PfhXUkt2E4EpWGbdAg';
 
   /* ── Sliding window: max candles kept in memory ─────────────── */
   var MAX_CANDLES = 150;
@@ -137,26 +145,29 @@ window.CandleChart = (function () {
     return 6;                      // sub-dollar pairs
   }
 
+  /* All candle-time formatting uses UTC (getUTC*) so timestamps are identical on
+     every device regardless of the user's local timezone — candle frames are
+     built on UTC epoch boundaries server-side, and these labels must match. */
   function fmtShort(t, iv) {
     var d = new Date(t * 1000);
-    if (iv === '1D') return (d.getMonth()+1)+'/'+pad2(d.getDate());
-    return pad2(d.getHours())+':'+pad2(d.getMinutes());
+    if (iv === '1D') return (d.getUTCMonth()+1)+'/'+pad2(d.getUTCDate());
+    return pad2(d.getUTCHours())+':'+pad2(d.getUTCMinutes());
   }
   function fmtFull(t, iv) {
     var d = new Date(t * 1000);
-    if (iv === '1D') return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate());
-    return pad2(d.getMonth()+1)+'/'+pad2(d.getDate())+' '+pad2(d.getHours())+':'+pad2(d.getMinutes());
+    if (iv === '1D') return d.getUTCFullYear()+'-'+pad2(d.getUTCMonth()+1)+'-'+pad2(d.getUTCDate());
+    return pad2(d.getUTCMonth()+1)+'/'+pad2(d.getUTCDate())+' '+pad2(d.getUTCHours())+':'+pad2(d.getUTCMinutes());
   }
 
   function showLabel(t, iv) {
     var d = new Date(t * 1000);
     switch(iv) {
-      case '1m':  return d.getMinutes() % 30 === 0;
-      case '5m':  return d.getMinutes() === 0;
-      case '15m': return d.getHours() % 4 === 0 && d.getMinutes() === 0;
-      case '1h':  return d.getHours() === 0;
-      case '1D':  return d.getDay() === 1;
-      default:    return d.getMinutes() % 30 === 0;
+      case '1m':  return d.getUTCMinutes() % 30 === 0;
+      case '5m':  return d.getUTCMinutes() === 0;
+      case '15m': return d.getUTCHours() % 4 === 0 && d.getUTCMinutes() === 0;
+      case '1h':  return d.getUTCMinutes() === 0;
+      case '1D':  return d.getUTCDay() === 1;
+      default:    return d.getUTCMinutes() % 30 === 0;
     }
   }
 
@@ -314,6 +325,8 @@ window.CandleChart = (function () {
     this._ws             = null;
     this._wsTimer        = null;
     this._retryTimer     = null;  // tv-mode fetch retry timer
+    this._otcHistTimer   = null;  // otc-mode: periodic candle history refresh
+    this._otcPriceTimer  = null;  // otc-mode: per-second live price poll
     this._loadStartedAt  = 0;     // start of current tv load cycle (for status timing)
     this._sawEmptyResponse = false; // received >=1 valid JSON with empty candles
     this._marketClosedNote = false; // overlay 'market closed' note on next _draw
@@ -342,7 +355,11 @@ window.CandleChart = (function () {
 
   Chart.prototype._init = function() {
     var self = this;
-    if (this.mode === 'tv') {
+    if (this.mode === 'otc') {
+      this._resize();          // loading screen until Supabase data arrives
+      this._fetchOtcCandles();
+      this._startOtcStream();
+    } else if (this.mode === 'tv') {
       this._resize();          // draws loading screen (candles still empty)
       this._fetchTVCandles();
       /* NOTE: no sim-data fallback in tv mode — the status/error states drawn
@@ -609,6 +626,167 @@ window.CandleChart = (function () {
     }
 
     connect();
+  };
+
+  /* ── OTC data mode (Pocket Option via Supabase) ──────────────────
+     OTC pairs aren't on TradingView. Their candles live in the Supabase
+     `candles` table and their per-second price + scraper status live in
+     configs/otc_prices + configs/otc_status (written by the OTC scraper).
+     Each chart instance polls Supabase independently over plain REST — so
+     multiple open tabs never conflict (no shared/limited socket). All candle
+     timing is UTC-epoch based, identical on every device. */
+
+  /* Normalised OTC symbol (no exchange prefix, upper-case). */
+  function toOtcSym(sym) { return String(sym).replace(/^[A-Z]+:/, '').toUpperCase(); }
+
+  /* One specific message per real cause — never a generic "error". */
+  var OTC_MSG = {
+    offline:      ['🌐 تحقق من اتصالك بالإنترنت', '#F0C040'],
+    reconnecting: ['🔄 جاري إعادة الاتصال...', '#F0C040'],
+    server:       ['⚠️ تعذر الاتصال بالسيرفر، جاري المحاولة...', '#F0C040'],
+    relogin:      ['🔄 جاري إعادة تسجيل الدخول للمنصة...', '#F0C040'],
+    login_failed: ['⚠️ تعذر الاتصال بمنصة البيانات، يتم إبلاغ الدعم الفني', '#FF6B6B'],
+    ip_blocked:   ['⚠️ تعذر الوصول لمصدر البيانات حاليًا', '#FF6B6B'],
+    resolving:    ['🔧 جاري إصلاح الاتصال بمصدر البيانات...', '#F0C040'],
+    circuit:      ['⏳ النظام بيستريح شوية، هيرجع تلقائي خلال دقايق', '#F0C040'],
+    supabase:     ['📡 مشكلة مؤقتة في تحميل البيانات، جاري المحاولة', '#F0C040'],
+    warming:      ['📊 جاري تجهيز البيانات لأول مرة، يستغرق دقيقة', '#5AC8FA'],
+    unavailable:  ['هذا الزوج غير متاح حاليًا', '#9CA3AF'],
+  };
+
+  Chart.prototype._sbHeaders = function() {
+    return { apikey: SUPABASE_ANON, Authorization: 'Bearer ' + SUPABASE_ANON };
+  };
+
+  Chart.prototype._otcMsg = function(kind) {
+    this._otcProblem = kind;
+    var m = OTC_MSG[kind] || OTC_MSG.unavailable;
+    this._drawMessage(m[0], m[1]);
+  };
+
+  /* Candle history from the Supabase `candles` table (key = SYMBOL_interval). */
+  Chart.prototype._fetchOtcCandles = function() {
+    var self = this;
+    function load() {
+      if (self._destroyed) return;
+      var key = toOtcSym(self.symbol) + '_' + self.interval;
+      var url = SUPABASE_URL + '/rest/v1/candles?key=eq.' +
+                encodeURIComponent(key) + '&select=data';
+      fetch(url, { headers: self._sbHeaders() })
+        .then(function(r) { if (!r.ok) throw 0; return r.json(); })
+        .then(function(rows) {
+          if (self._destroyed) return;
+          var arr = (rows && rows[0] && rows[0].data) || [];
+          if (!Array.isArray(arr) || !arr.length) return;
+          /* Adopt stored history only when it's at/ahead of our local forming
+             candle, so periodic refreshes never wipe the live candle. */
+          var lastLocal = self.candles.length ? self.candles[self.candles.length - 1].t : 0;
+          var lastStored = arr[arr.length - 1].t;
+          if (lastStored >= lastLocal) {
+            self.candles = arr.slice(-MAX_CANDLES);
+            if (!self._otcProblem) self._draw();
+          }
+        })
+        .catch(function() { /* surfaced by the status poll (supabase down) */ });
+    }
+    load();
+    this._otcHistTimer = setInterval(load, 15000);
+  };
+
+  /* Per-second status + price poll → resolves the exact state, then either shows
+     the right message or feeds the live price into the candles. */
+  Chart.prototype._startOtcStream = function() {
+    var self = this;
+    function poll() {
+      if (self._destroyed) return;
+      /* STATE 17 — the user's own device is offline. */
+      if (navigator.onLine === false) { self._otcMsg('offline'); return; }
+      var url = SUPABASE_URL +
+        '/rest/v1/configs?id=in.(otc_status,otc_prices)&select=id,data';
+      fetch(url, { headers: self._sbHeaders() })
+        .then(function(r) { if (!r.ok) throw 0; return r.json(); })
+        .then(function(rows) {
+          if (self._destroyed) return;
+          var status = {}, prices = {};
+          (rows || []).forEach(function(row) {
+            if (row.id === 'otc_status') status = row.data || {};
+            else if (row.id === 'otc_prices') prices = row.data || {};
+          });
+          self._onOtcData(status, prices);
+        })
+        /* STATE 6 — Supabase itself isn't responding. */
+        .catch(function() { if (!self._destroyed) self._otcMsg('supabase'); });
+    }
+    poll();
+    this._otcPriceTimer = setInterval(poll, 1000);
+  };
+
+  Chart.prototype._onOtcData = function(status, prices) {
+    var sym   = toOtcSym(this.symbol);
+    var now   = Date.now();
+    var hbAge = status.updatedAt ? (now - Date.parse(status.updatedAt)) : Infinity;
+    var entry = prices ? prices[sym] : null;
+
+    /* ── Macro (whole scraper / server) states ── */
+    /* STATE 8 — real login failure (needs manual fix). */
+    if (status.phase === 'login_failed') { this._otcMsg('login_failed'); return; }
+    /* STATE 12 — Pocket Option blocked the server IP. */
+    if (status.phase === 'ip_blocked')   { this._otcMsg('ip_blocked');   return; }
+    /* STATE 2 & 14 — scraper not heartbeating for long → server down / maintenance. */
+    if (hbAge > 150000) { this._otcMsg('server'); return; }
+    /* STATE 10 & 13 — short heartbeat gap → new deploy / restart / VPN hiccup. */
+    if (hbAge > 45000)  { this._otcMsg('reconnecting'); return; }
+    /* STATE 4 — re-establishing the Pocket Option session. */
+    if (status.phase === 'relogin' || status.phase === 'reconnecting' ||
+        status.connected === false) { this._otcMsg('relogin'); return; }
+
+    /* ── Per-pair states ── */
+    if (!entry) {
+      /* Enabled pair with no price yet: warming if we already have some candles,
+         otherwise genuinely unavailable on the platform (STATE 7 / 16). */
+      if (this.candles.length) this._otcMsg('warming');
+      else this._otcMsg('unavailable');
+      return;
+    }
+    /* STATE 5 — circuit breaker open for this pair. */
+    if (entry.st === 'circuit')   { this._otcMsg('circuit');   return; }
+    /* STATE 3 — server up but the scraper can't read this pair's price. */
+    if (entry.st === 'resolving') { this._otcMsg('resolving'); return; }
+    /* STATE 16 — first-time: price flowing but not enough candles yet. */
+    if (this.candles.length < 3) { this._feedOtcPrice(entry.p, true); this._otcMsg('warming'); return; }
+
+    /* Live (STATE 1 market-closed is surfaced by the Flutter dialog, candles
+       just stay frozen) → feed the real price into the candle series. */
+    this._otcProblem = null;
+    this._feedOtcPrice(entry.p);
+  };
+
+  /* Feed one real OTC price into the candle series — same rule as the server:
+     a new candle opens only when the frame elapsed AND the price changed. */
+  Chart.prototype._feedOtcPrice = function(price, noDraw) {
+    if (!isFinite(price) || !price) return;
+    price = gwinAdjust(this, price);
+    var cs    = candleSec(this.interval);
+    var now   = Math.floor(Date.now() / 1000);   // UTC epoch
+    var cTime = Math.floor(now / cs) * cs;
+    if (!this.candles.length) {
+      this.candles.push({ t: cTime, o: price, h: price, l: price, c: price });
+      if (!noDraw) this._draw();
+      return;
+    }
+    var last = this.candles[this.candles.length - 1];
+    if (cTime === last.t) {
+      if (price !== last.c) last.c = price;
+      if (price >  last.h)  last.h = price;
+      if (price <  last.l)  last.l = price;
+    } else if (cTime > last.t && price !== last.c) {
+      var nc = { t: cTime, o: price, h: price, l: price, c: price };
+      if (!validCandle(nc)) return;
+      this.candles.push(nc);
+      if (this.candles.length > MAX_CANDLES) this.candles.shift();
+    } else { return; }
+    this._lastTVPrice = price;
+    if (!noDraw) this._draw();
   };
 
   /* ── Live tick simulation ────────────────────────────────────── */
@@ -939,9 +1117,17 @@ window.CandleChart = (function () {
     if (this._ws)        { try { this._ws.close(); } catch(_) {} this._ws = null; }
     clearTimeout(this._wsTimer); this._wsTimer = null;
     clearTimeout(this._retryTimer); this._retryTimer = null;
+    if (this._otcHistTimer)  { clearInterval(this._otcHistTimer);  this._otcHistTimer  = null; }
+    if (this._otcPriceTimer) { clearInterval(this._otcPriceTimer); this._otcPriceTimer = null; }
+    this._otcProblem = null;
 
     var self = this;
-    if (this.mode === 'tv') {
+    if (this.mode === 'otc') {
+      clearTimeout(this._simFallbackTimer);
+      this._draw();   // loading screen until Supabase data arrives
+      this._fetchOtcCandles();
+      this._startOtcStream();
+    } else if (this.mode === 'tv') {
       clearTimeout(this._simFallbackTimer);
       /* No sim-data fallback in tv mode — status/error states own the canvas. */
       this._draw();   // loading screen (candles are [])
@@ -957,6 +1143,8 @@ window.CandleChart = (function () {
     this._destroyed = true;
     if (this._tickTimer) clearInterval(this._tickTimer);
     if (this._tvTimer)   clearInterval(this._tvTimer);
+    if (this._otcHistTimer)  clearInterval(this._otcHistTimer);
+    if (this._otcPriceTimer) clearInterval(this._otcPriceTimer);
     if (this._ws)        { try { this._ws.close(); } catch(_) {} this._ws = null; }
     clearTimeout(this._wsTimer);
     clearTimeout(this._simFallbackTimer);
