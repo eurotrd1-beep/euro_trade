@@ -641,18 +641,25 @@ window.CandleChart = (function () {
 
   /* One specific message per real cause — never a generic "error". */
   var OTC_MSG = {
-    offline:      ['🌐 تحقق من اتصالك بالإنترنت', '#F0C040'],
-    reconnecting: ['🔄 جاري إعادة الاتصال...', '#F0C040'],
-    server:       ['⚠️ تعذر الاتصال بالسيرفر، جاري المحاولة...', '#F0C040'],
-    relogin:      ['🔄 جاري إعادة تسجيل الدخول للمنصة...', '#F0C040'],
-    login_failed: ['⚠️ تعذر الاتصال بمنصة البيانات، يتم إبلاغ الدعم الفني', '#FF6B6B'],
-    ip_blocked:   ['⚠️ تعذر الوصول لمصدر البيانات حاليًا', '#FF6B6B'],
-    resolving:    ['🔧 جاري إصلاح الاتصال بمصدر البيانات...', '#F0C040'],
-    circuit:      ['⏳ النظام بيستريح شوية، هيرجع تلقائي خلال دقايق', '#F0C040'],
-    supabase:     ['📡 مشكلة مؤقتة في تحميل البيانات، جاري المحاولة', '#F0C040'],
-    warming:      ['📊 جاري تجهيز البيانات لأول مرة، يستغرق دقيقة', '#5AC8FA'],
-    unavailable:  ['هذا الزوج غير متاح حاليًا', '#9CA3AF'],
+    offline:        ['🌐 تحقق من اتصالك بالإنترنت', '#F0C040'],
+    reconnecting:   ['🔄 جاري إعادة الاتصال...', '#F0C040'],
+    server:         ['⚠️ تعذر الاتصال بالسيرفر، جاري المحاولة...', '#F0C040'],
+    relogin:        ['🔄 جاري إعادة تسجيل الدخول للمنصة...', '#F0C040'],
+    login_failed:   ['⚠️ تعذر الاتصال بمنصة البيانات، يتم إبلاغ الدعم الفني', '#FF6B6B'],
+    ip_blocked:     ['⚠️ تعذر الوصول لمصدر البيانات حاليًا', '#FF6B6B'],
+    resolving:      ['🔧 جاري إصلاح الاتصال بمصدر البيانات...', '#F0C040'],
+    repairing:      ['🔄 جاري إعادة الاتصال بمصدر البيانات...', '#F0C040'],
+    repairing_long: ['⏳ النظام بيستعيد الاتصال، استنى لحظات', '#F0C040'],
+    circuit:        ['⏳ النظام بيستريح شوية، هيرجع تلقائي خلال دقايق', '#F0C040'],
+    supabase:       ['📡 مشكلة مؤقتة في تحميل البيانات، جاري المحاولة', '#F0C040'],
+    warming:        ['📊 جاري تجهيز البيانات لأول مرة، يستغرق دقيقة', '#5AC8FA'],
+    unavailable:    ['هذا الزوج غير متاح حاليًا', '#9CA3AF'],
   };
+
+  /* Transient states keep the last candles visible with a calm banner overlay
+     (the chart isn't "broken" — something is working quietly in the background).
+     Hard/no-data states take over the whole canvas. */
+  var OTC_OVERLAY_KINDS = { repairing: 1, repairing_long: 1, reconnecting: 1, relogin: 1, resolving: 1 };
 
   Chart.prototype._sbHeaders = function() {
     return { apikey: SUPABASE_ANON, Authorization: 'Bearer ' + SUPABASE_ANON };
@@ -661,7 +668,13 @@ window.CandleChart = (function () {
   Chart.prototype._otcMsg = function(kind) {
     this._otcProblem = kind;
     var m = OTC_MSG[kind] || OTC_MSG.unavailable;
-    this._drawMessage(m[0], m[1]);
+    if (OTC_OVERLAY_KINDS[kind] && this.candles && this.candles.length) {
+      this._otcOverlay = { text: m[0], color: m[1] };   // candles stay + banner
+      this._draw();
+    } else {
+      this._otcOverlay = null;
+      this._drawMessage(m[0], m[1]);                     // full takeover (no usable data)
+    }
   };
 
   /* Candle history from the Supabase `candles` table (key = SYMBOL_interval). */
@@ -728,10 +741,17 @@ window.CandleChart = (function () {
     var entry = prices ? prices[sym] : null;
 
     /* ── Macro (whole scraper / server) states ── */
-    /* STATE 8 — real login failure (needs manual fix). */
+    /* STATE 8 — auto-repair gave up / token truly dead → manual re-capture. */
     if (status.phase === 'login_failed') { this._otcMsg('login_failed'); return; }
     /* STATE 12 — Pocket Option blocked the server IP. */
     if (status.phase === 'ip_blocked')   { this._otcMsg('ip_blocked');   return; }
+    /* SELF-REPAIR — token died, system is re-capturing it automatically. Keep
+       last candles + calm banner; escalate the wording if it runs over a minute. */
+    if (status.phase === 'repairing') {
+      var since = status.phaseSince ? (now - Date.parse(status.phaseSince)) : 0;
+      this._otcMsg(since > 60000 ? 'repairing_long' : 'repairing');
+      return;
+    }
     /* STATE 2 & 14 — scraper not heartbeating for long → server down / maintenance. */
     if (hbAge > 150000) { this._otcMsg('server'); return; }
     /* STATE 10 & 13 — short heartbeat gap → new deploy / restart / VPN hiccup. */
@@ -758,6 +778,7 @@ window.CandleChart = (function () {
     /* Live (STATE 1 market-closed is surfaced by the Flutter dialog, candles
        just stay frozen) → feed the real price into the candle series. */
     this._otcProblem = null;
+    this._otcOverlay = null;     // clear any repair/reconnect banner
     this._feedOtcPrice(entry.p);
   };
 
@@ -1043,6 +1064,17 @@ window.CandleChart = (function () {
       ctx.fillText('السوق مغلق حالياً', (cl + cr) / 2, ct + 14);
     }
 
+    /* OTC transient overlay (self-repair / reconnecting): keep the last candles
+       visible and show a calm translucent banner on top — not a full takeover. */
+    if (this._otcOverlay) {
+      ctx.fillStyle = 'rgba(10,7,20,0.74)';
+      ctx.fillRect(cl, ct, cr - cl, 30);
+      ctx.fillStyle = this._otcOverlay.color || '#F0C040';
+      ctx.font = 'bold 12px Outfit,sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(this._otcOverlay.text, (cl + cr) / 2, ct + 19);
+    }
+
     /* Crosshair */
     if (this.mouse) this._crosshair(vis, dec, py, cx, cl, cr, ct, cb, lo, hi, ch);
   };
@@ -1120,6 +1152,7 @@ window.CandleChart = (function () {
     if (this._otcHistTimer)  { clearInterval(this._otcHistTimer);  this._otcHistTimer  = null; }
     if (this._otcPriceTimer) { clearInterval(this._otcPriceTimer); this._otcPriceTimer = null; }
     this._otcProblem = null;
+    this._otcOverlay = null;
 
     var self = this;
     if (this.mode === 'otc') {

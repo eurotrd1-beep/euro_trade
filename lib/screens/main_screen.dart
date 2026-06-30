@@ -49,6 +49,9 @@ class _MainScreenState extends State<MainScreen> {
   static const String _proxyBase = 'https://euro-trade-proxy-1.onrender.com';
   Timer? _marketStatusTimer;
   bool _marketOpen = true; // optimistic default until first poll
+  // OTC data health: true while the OTC scraper is repairing/reconnecting/down,
+  // so we block new-signal requests on stale/incomplete OTC data.
+  bool _otcUnhealthy = false;
   bool _marketClosedDialogShown = false;
   bool _marketClosedDialogOpen = false;
 
@@ -131,17 +134,27 @@ class _MainScreenState extends State<MainScreen> {
     // "market closed" dialog exactly like TradingView pairs.
     if (_isActiveOtc()) {
       try {
-        final row = await Supabase.instance.client
+        final rows = await Supabase.instance.client
             .from('configs')
-            .select('data')
-            .eq('id', 'otc_prices')
-            .maybeSingle()
+            .select('id, data')
+            .inFilter('id', ['otc_prices', 'otc_status'])
             .timeout(const Duration(seconds: 8));
-        final data = (row?['data'] as Map<String, dynamic>?) ?? {};
-        final entry = data[sym.toUpperCase()] as Map<String, dynamic>?;
-        if (entry == null) return; // no data yet → leave state unchanged
+        Map<String, dynamic> prices = {};
+        Map<String, dynamic> status = {};
+        for (final r in (rows as List)) {
+          if (r['id'] == 'otc_prices') prices = (r['data'] as Map<String, dynamic>?) ?? {};
+          if (r['id'] == 'otc_status') status = (r['data'] as Map<String, dynamic>?) ?? {};
+        }
+        final entry = prices[sym.toUpperCase()] as Map<String, dynamic>?;
+        final phase = status['phase'] as String? ?? '';
+        final st = entry?['st'] as String? ?? '';
+        // Healthy only when the scraper is live AND this pair is flowing (or just
+        // market-closed). Anything else (repairing/reconnecting/down/resolving)
+        // ⇒ block new signals so we never act on stale/incomplete data.
+        final healthy = phase == 'live' && entry != null && (st == 'live' || st == 'closed');
         if (!mounted) return;
-        _applyMarketStatus(entry['o'] == true);
+        _otcUnhealthy = !healthy;
+        if (entry != null) _applyMarketStatus(entry['o'] == true);
       } catch (_) {
         return; // leave state unchanged on error
       }
@@ -3534,6 +3547,25 @@ class _MainScreenState extends State<MainScreen> {
                       SnackBar(
                         content: Text(
                           'السوق مغلق الان حاول في وقت لاحق',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.outfit(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        backgroundColor: AppConstants.warningOrange,
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                    return;
+                  }
+                  // Block analysis while an OTC pair's data source is recovering
+                  // (self-repair / reconnect) — never act on stale/incomplete data.
+                  if (_isActiveOtc() && _otcUnhealthy) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'النظام بيستعيد الاتصال بمصدر البيانات، استنى لحظات',
                           textAlign: TextAlign.center,
                           style: GoogleFonts.outfit(
                             fontWeight: FontWeight.bold,
