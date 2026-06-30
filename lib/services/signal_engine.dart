@@ -6509,20 +6509,27 @@ class SignalEngine extends ChangeNotifier {
     final signal = _activeSignal!;
     final bool isCall = signal.direction == 'CALL';
 
-    // Exit price is read on the SAME scale as the entry price — the live chart
-    // price (TV price in scraping mode, sim price otherwise). entryPrice was
-    // captured the same way, so entry vs exit are always directly comparable.
+    // Exit price must be on the SAME scale as the entry price. We only trust the
+    // live chart price when it is genuinely close to entry (< 1% away). This
+    // guards against a null/stale getter or the Dart-internal fallback price,
+    // which live on a different scale and would otherwise make the review dialog
+    // show an entry and a close from two different worlds (the old bug).
     final double live = _tvPriceGetter?.call() ?? 0.0;
-    double exitP = live > 0 ? live : _currentPrice;
+    final bool liveSane =
+        live > 0 && (live - signal.entryPrice).abs() / signal.entryPrice < 0.01;
+    double exitP = liveSane ? live : signal.entryPrice;
 
-    // Guaranteed win (admin, per-user): force the close onto the winning side of
-    // entry. The chart already drifts there gently across the whole trade; if a
-    // sparse-tick gap leaves it short, snap to a tiny realistic margin so the
-    // recorded entry/exit stay consistent with what the chart showed.
     if (_isGuaranteedWin) {
-      final bool winning =
-          isCall ? exitP > signal.entryPrice : exitP < signal.entryPrice;
-      if (!winning) {
+      // Guaranteed win (admin, per-user): the close is FORCED onto the winning
+      // side of entry, deterministically. If the live price already wins on the
+      // same scale we keep it (so the number matches the chart); otherwise we
+      // snap to a small realistic margin. Either way it is always a win and the
+      // entry/exit pair is always coherent — never derived from another scale.
+      final bool winning = liveSane &&
+          (isCall ? live > signal.entryPrice : live < signal.entryPrice);
+      if (winning) {
+        exitP = live;
+      } else {
         final double margin =
             signal.entryPrice * 0.00008 * (0.6 + _random.nextDouble() * 0.8);
         exitP = isCall ? signal.entryPrice + margin : signal.entryPrice - margin;
