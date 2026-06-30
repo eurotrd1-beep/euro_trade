@@ -636,8 +636,10 @@ window.CandleChart = (function () {
      multiple open tabs never conflict (no shared/limited socket). All candle
      timing is UTC-epoch based, identical on every device. */
 
-  /* Normalised OTC symbol (no exchange prefix, upper-case). */
-  function toOtcSym(sym) { return String(sym).replace(/^[A-Z]+:/, '').toUpperCase(); }
+  /* OTC symbol = PO's exact asset symbol (e.g. "EURUSD_otc", "#AAPL_otc").
+     Do NOT upper-case — PO uses lowercase "_otc", and candle keys must match
+     exactly what the scraper wrote. Only strip an exchange prefix if present. */
+  function toOtcSym(sym) { return String(sym).replace(/^[A-Z]+:/, ''); }
 
   /* One specific message per real cause — never a generic "error". */
   var OTC_MSG = {
