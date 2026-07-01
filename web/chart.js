@@ -670,12 +670,15 @@ window.CandleChart = (function () {
   Chart.prototype._otcMsg = function(kind) {
     this._otcProblem = kind;
     var m = OTC_MSG[kind] || OTC_MSG.unavailable;
-    if (OTC_OVERLAY_KINDS[kind] && this.candles && this.candles.length) {
+    /* Once we have candles on screen, NOTHING takes the chart over — every status
+       becomes a small banner so the user always keeps seeing the live chart.
+       A full-screen message is only used before the first candles have loaded. */
+    if (this.candles && this.candles.length) {
       this._otcOverlay = { text: m[0], color: m[1] };   // candles stay + banner
       this._draw();
     } else {
       this._otcOverlay = null;
-      this._drawMessage(m[0], m[1]);                     // full takeover (no usable data)
+      this._drawMessage(m[0], m[1]);                     // no data yet → full message
     }
   };
 
@@ -684,6 +687,9 @@ window.CandleChart = (function () {
     var self = this;
     function load() {
       if (self._destroyed) return;
+      /* One request: the last (≤150) candles live in a single JSON `data` array
+         (the scraper keeps them oldest→newest, FIFO-capped at 150) — so there's
+         nothing to sort/reverse client-side, just fetch and paint. */
       var key = toOtcSym(self.symbol) + '_' + self.interval;
       var url = SUPABASE_URL + '/rest/v1/candles?key=eq.' +
                 encodeURIComponent(key) + '&select=data';
@@ -693,9 +699,20 @@ window.CandleChart = (function () {
           if (self._destroyed) return;
           var arr = (rows && rows[0] && rows[0].data) || [];
           if (!Array.isArray(arr) || !arr.length) return;
-          /* Adopt stored history only when it's at/ahead of our local forming
-             candle, so periodic refreshes never wipe the live candle. */
-          var lastLocal = self.candles.length ? self.candles[self.candles.length - 1].t : 0;
+          if (!self._otcHistLoaded) {
+            /* FIRST successful load → BATCH RENDER: adopt all 150 and paint them
+               in one shot, right now, regardless of any status message the poll
+               may have raised. Full chart on screen in < 1s, like the platform. */
+            self._otcHistLoaded = true;
+            self.candles = arr.slice(-MAX_CANDLES);
+            self._otcProblem = null;      // never let a transient message hide the chart
+            self._otcOverlay = null;
+            self._draw();
+            return;
+          }
+          /* Periodic top-up: adopt stored history only when it's at/ahead of our
+             local forming candle, so a refresh never wipes the live candle. */
+          var lastLocal  = self.candles.length ? self.candles[self.candles.length - 1].t : 0;
           var lastStored = arr[arr.length - 1].t;
           if (lastStored >= lastLocal) {
             self.candles = arr.slice(-MAX_CANDLES);
@@ -1167,6 +1184,7 @@ window.CandleChart = (function () {
     if (this._otcPriceTimer) { clearInterval(this._otcPriceTimer); this._otcPriceTimer = null; }
     this._otcProblem = null;
     this._otcOverlay = null;
+    this._otcHistLoaded = false;   // new pair → next successful fetch batch-renders
 
     var self = this;
     if (this.mode === 'otc') {
