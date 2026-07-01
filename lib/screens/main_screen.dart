@@ -2781,9 +2781,6 @@ class _MainScreenState extends State<MainScreen> {
                               final isSelected =
                                   _signalEngine.activePair == pair['symbol'];
 
-                              final payout =
-                                  85 + (pair['symbol'].hashCode % 11);
-
                               return Padding(
                                 padding: const EdgeInsets.only(bottom: 8),
                                 child: InkWell(
@@ -2820,39 +2817,9 @@ class _MainScreenState extends State<MainScreen> {
                                     ),
                                     child: Row(
                                       mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
+                                          MainAxisAlignment.end,
                                       children: [
-                                        // Left side: Payout percentage badge
-                                        Row(
-                                          children: [
-                                            Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 8,
-                                                    vertical: 4,
-                                                  ),
-                                              decoration: BoxDecoration(
-                                                color: AppConstants.callGreen
-                                                    .withAlpha(25),
-                                                borderRadius:
-                                                    BorderRadius.circular(6),
-                                                border: Border.all(
-                                                  color: AppConstants.callGreen
-                                                      .withAlpha(80),
-                                                ),
-                                              ),
-                                              child: Text(
-                                                '$payout%',
-                                                style: GoogleFonts.outfit(
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: AppConstants.callGreen,
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        // Right side: source badge + symbol
+                                        // Source badge + symbol (no payout %)
                                         Row(
                                           children: [
                                             // Source: 📺 TradingView / 🎯 Pocket Option
