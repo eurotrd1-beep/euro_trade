@@ -2135,7 +2135,16 @@ class _MainScreenState extends State<MainScreen> {
                     ? ((rows.first['data'] as Map?)?['value'] as String?)
                     : null) ??
                 'all';
-            if (v != _displaySource) setState(() => _displaySource = v);
+            if (v != _displaySource) {
+              setState(() => _displaySource = v);
+              // The active pair may no longer be allowed under the new source →
+              // re-pick the first visible pair in the selected category.
+              final stillVisible = _visiblePairs
+                  .any((p) => p['symbol'] == _signalEngine.activePair);
+              if (!stillVisible) {
+                _selectFirstVisibleInCategory(_selectedCategory);
+              }
+            }
           });
     } catch (_) {}
   }
@@ -2217,18 +2226,21 @@ class _MainScreenState extends State<MainScreen> {
               // first category that does so the picker isn't stuck empty.
               final vis = _visiblePairs;
               if (vis.isNotEmpty && !_categoryHasPairs(_selectedCategory)) {
-                _selectedCategory =
-                    vis.first['category'] as String? ?? _selectedCategory;
+                _selectedCategory = _normCat(vis.first['category'] as String?);
               }
 
-              // Verify active pair is still in the new list
-              if (!activeExists && vis.isNotEmpty) {
-                final first = vis.first;
-                _activeChartSymbol = first['chartSymbol'] as String? ?? '';
-                final firstSymbol = first['symbol'] as String? ?? '';
-                if (firstSymbol.isNotEmpty) {
-                  _signalEngine.selectPair(firstSymbol);
-                }
+              // The pair shown outside the picker must be a VISIBLE one (right
+              // source) and, by default, the FIRST pair of the selected category.
+              final activeVisible = vis.any((p) => p['symbol'] == oldActive);
+              if (!activeVisible && vis.isNotEmpty) {
+                final inCat = vis
+                    .where((p) =>
+                        _normCat(p['category'] as String?) == _selectedCategory)
+                    .toList();
+                final pick = inCat.isNotEmpty ? inCat.first : vis.first;
+                _activeChartSymbol = pick['chartSymbol'] as String? ?? '';
+                final s = pick['symbol'] as String? ?? '';
+                if (s.isNotEmpty) _signalEngine.selectPair(s);
               }
             });
 
@@ -2774,12 +2786,13 @@ class _MainScreenState extends State<MainScreen> {
                             letterSpacing: 0.5,
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        const SizedBox(width: 12),
-                        Icon(
-                          Icons.currency_exchange_rounded,
-                          color: AppConstants.accentCyan,
-                          size: 18,
+                        const SizedBox(width: 10),
+                        // Source badge: 📺 TradingView / 🎯 Pocket Option
+                        Text(
+                          (_activePairInfo()['source'] as String? ?? 'tv') == 'po'
+                              ? '🎯'
+                              : '📺',
+                          style: const TextStyle(fontSize: 16),
                         ),
                       ],
                     ),
@@ -3070,6 +3083,22 @@ class _MainScreenState extends State<MainScreen> {
   bool _categoryHasPairs(String cat) =>
       _visiblePairs.any((p) => _normCat(p['category'] as String?) == cat);
 
+  // Make the FIRST visible pair in [cat] the active pair (the one shown outside
+  // the picker). Respects display_source; falls back to the first visible pair.
+  void _selectFirstVisibleInCategory(String cat) {
+    final vis = _visiblePairs;
+    if (vis.isEmpty) return;
+    final inCat =
+        vis.where((p) => _normCat(p['category'] as String?) == cat).toList();
+    final pick = inCat.isNotEmpty ? inCat.first : vis.first;
+    final sym = pick['symbol'] as String? ?? '';
+    final cs = pick['chartSymbol'] as String? ?? '';
+    if (sym.isEmpty) return;
+    if (mounted) setState(() => _activeChartSymbol = cs);
+    _signalEngine.selectPair(sym);
+    _pollMarketStatus(); // refresh market status for the new pair
+  }
+
   Widget _buildCategoryTab(String categoryId, String label, IconData icon) {
     final isSelected = _selectedCategory == categoryId;
     return Padding(
@@ -3077,6 +3106,8 @@ class _MainScreenState extends State<MainScreen> {
       child: InkWell(
         onTap: () {
           setState(() => _selectedCategory = categoryId);
+          // Switching category → show its FIRST visible pair outside the picker.
+          _selectFirstVisibleInCategory(categoryId);
         },
         borderRadius: BorderRadius.circular(12),
         child: AnimatedContainer(
