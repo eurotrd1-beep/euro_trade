@@ -145,29 +145,30 @@ window.CandleChart = (function () {
     return 6;                      // sub-dollar pairs
   }
 
-  /* All candle-time formatting uses UTC (getUTC*) so timestamps are identical on
-     every device regardless of the user's local timezone — candle frames are
-     built on UTC epoch boundaries server-side, and these labels must match. */
+  /* Candle frames are built on UTC epoch boundaries server-side (so data is
+     identical on every device), but the LABELS are shown in the user's LOCAL
+     time — so the newest candle reads the same as the phone's clock and the
+     broker platform (e.g. a live candle shows 13:50 for a UTC+3 user, not 10:50). */
   function fmtShort(t, iv) {
     var d = new Date(t * 1000);
-    if (iv === '1D') return (d.getUTCMonth()+1)+'/'+pad2(d.getUTCDate());
-    return pad2(d.getUTCHours())+':'+pad2(d.getUTCMinutes());
+    if (iv === '1D') return (d.getMonth()+1)+'/'+pad2(d.getDate());
+    return pad2(d.getHours())+':'+pad2(d.getMinutes());
   }
   function fmtFull(t, iv) {
     var d = new Date(t * 1000);
-    if (iv === '1D') return d.getUTCFullYear()+'-'+pad2(d.getUTCMonth()+1)+'-'+pad2(d.getUTCDate());
-    return pad2(d.getUTCMonth()+1)+'/'+pad2(d.getUTCDate())+' '+pad2(d.getUTCHours())+':'+pad2(d.getUTCMinutes());
+    if (iv === '1D') return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate());
+    return pad2(d.getMonth()+1)+'/'+pad2(d.getDate())+' '+pad2(d.getHours())+':'+pad2(d.getMinutes());
   }
 
   function showLabel(t, iv) {
     var d = new Date(t * 1000);
     switch(iv) {
-      case '1m':  return d.getUTCMinutes() % 30 === 0;
-      case '5m':  return d.getUTCMinutes() === 0;
-      case '15m': return d.getUTCHours() % 4 === 0 && d.getUTCMinutes() === 0;
-      case '1h':  return d.getUTCMinutes() === 0;
-      case '1D':  return d.getUTCDay() === 1;
-      default:    return d.getUTCMinutes() % 30 === 0;
+      case '1m':  return d.getMinutes() % 30 === 0;
+      case '5m':  return d.getMinutes() === 0;
+      case '15m': return d.getHours() % 4 === 0 && d.getMinutes() === 0;
+      case '1h':  return d.getMinutes() === 0;
+      case '1D':  return d.getDay() === 1;
+      default:    return d.getMinutes() % 30 === 0;
     }
   }
 
