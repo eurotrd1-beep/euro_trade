@@ -315,10 +315,10 @@ class _MainScreenState extends State<MainScreen> {
       return;
     }
 
-    // ── Real markets: category time-rules AND a live (non-frozen) price. ──
-    final mkt = MarketHours.statusFor(category, false);
-    bool priceLive = true;
-    double? px;
+    // ── Real markets from Pocket Option: use PO's OWN tradeable flag (`po`) —
+    // an EXACT match with the platform. Real forex/stocks read closed during
+    // their off-hours/rollover even while PO keeps streaming the price; the OTC
+    // variant stays open. `no` carries PO's next-open unix timestamp. ──
     if (source == 'po') {
       try {
         final row = await Supabase.instance.client
@@ -332,33 +332,52 @@ class _MainScreenState extends State<MainScreen> {
         final t = (entry?['t'] as num?)?.toInt() ?? 0;
         final nowSec = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
         _otcUnhealthy = !(entry != null && (nowSec - t) < 20);
-        priceLive = entry?['o'] == true;
-        px = (entry?['p'] as num?)?.toDouble();
+        final poFlag = entry?['po'];
+        bool open;
+        if (poFlag is bool) {
+          open = poFlag;
+          final no = (entry?['no'] as num?)?.toInt() ?? 0;
+          _nextOpenLabel = (!open && no > 1000000000)
+              ? MarketHours.nextOpenLabel(
+                  DateTime.fromMillisecondsSinceEpoch(no * 1000, isUtc: true))
+              : (!open
+                  ? MarketHours.nextOpenLabel(
+                      MarketHours.statusFor(category, false).nextOpenUtc)
+                  : '');
+        } else {
+          // No flag yet → fall back to schedule OR live price.
+          final mkt = MarketHours.statusFor(category, false);
+          final priceOpen = entry?['o'] == true &&
+              !_pxStale(sym, (entry?['p'] as num?)?.toDouble());
+          open = mkt.open || priceOpen;
+          _nextOpenLabel =
+              !open ? MarketHours.nextOpenLabel(mkt.nextOpenUtc) : '';
+        }
+        if (!mounted) return;
+        _applyMarketStatus(open);
       } catch (_) {
         return;
       }
-    } else {
-      try {
-        final resp = await http
-            .get(Uri.parse('$_proxyBase/api/tv/tick?symbol=$sym'))
-            .timeout(const Duration(seconds: 8));
-        if (resp.statusCode != 200) return;
-        final data = jsonDecode(resp.body) as Map<String, dynamic>;
-        priceLive =
-            data.containsKey('marketOpen') ? data['marketOpen'] == true : true;
-        px = (data['price'] as num?)?.toDouble();
-      } catch (_) {
-        return;
-      }
+      return;
     }
 
-    final stale = _pxStale(sym, px);
-    // CONFIRM BOTH (per request): a real market is declared CLOSED only when the
-    // SCHEDULE says out-of-hours AND the price is frozen — so it's OPEN if EITHER
-    // the time-rules say open OR the price is still moving. This self-corrects a
-    // wrong hard-coded schedule (e.g. a non-US index) via the live price.
-    final priceOpen = priceLive && !stale;
-    final open = mkt.open || priceOpen;
+    // ── Real markets from TradingView: schedule OR live proxy price. ──
+    final mkt = MarketHours.statusFor(category, false);
+    double? px;
+    bool priceLive = true;
+    try {
+      final resp = await http
+          .get(Uri.parse('$_proxyBase/api/tv/tick?symbol=$sym'))
+          .timeout(const Duration(seconds: 8));
+      if (resp.statusCode != 200) return;
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      priceLive =
+          data.containsKey('marketOpen') ? data['marketOpen'] == true : true;
+      px = (data['price'] as num?)?.toDouble();
+    } catch (_) {
+      return;
+    }
+    final open = mkt.open || (priceLive && !_pxStale(sym, px));
     _nextOpenLabel = !open ? MarketHours.nextOpenLabel(mkt.nextOpenUtc) : '';
     if (!mounted) return;
     _applyMarketStatus(open);
