@@ -15,6 +15,107 @@ import '../widgets/tradingview_chart.dart';
 import 'notice_screen.dart';
 import 'maintenance_screen.dart';
 
+/// Result of a market-hours check: whether it's open + (if closed) the next
+/// open time in UTC.
+class MarketStatus {
+  final bool open;
+  final DateTime? nextOpenUtc;
+  const MarketStatus(this.open, [this.nextOpenUtc]);
+}
+
+/// Pure, UTC-based market-hours calculator per asset category.
+///   • OTC (any) + real crypto → 24/7 (never closed)
+///   • Currencies (forex)      → Sun 22:00 → Fri 22:00 UTC (closed weekends)
+///   • Stocks / Indices        → Mon-Fri 13:30-20:00 UTC (US 9:30-16:00 ET)
+///   • Commodities             → forex hours minus a 1h daily break (21:00 UTC)
+class MarketHours {
+  static const _arDays = [
+    '', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد'
+  ];
+
+  static MarketStatus statusFor(String category, bool isOtc) {
+    if (isOtc) return const MarketStatus(true); // OTC never closes
+    final now = DateTime.now().toUtc();
+    switch (category) {
+      case 'crypto':
+        return const MarketStatus(true); // real crypto is 24/7
+      case 'stocks':
+      case 'indices':
+        return _usEquity(now);
+      case 'commodities':
+        return _commodities(now);
+      case 'currencies':
+      default:
+        return _forex(now);
+    }
+  }
+
+  static MarketStatus _forex(DateTime now) {
+    final wd = now.weekday, h = now.hour;
+    bool open;
+    if (wd == DateTime.saturday) {
+      open = false;
+    } else if (wd == DateTime.sunday) {
+      open = h >= 22;
+    } else if (wd == DateTime.friday) {
+      open = h < 22;
+    } else {
+      open = true;
+    }
+    return MarketStatus(open, open ? null : _nextSundayOpen(now));
+  }
+
+  static MarketStatus _commodities(DateTime now) {
+    final fx = _forex(now);
+    if (!fx.open) return fx;
+    if (now.hour == 21) {
+      return MarketStatus(false, DateTime.utc(now.year, now.month, now.day, 22));
+    }
+    return const MarketStatus(true);
+  }
+
+  static MarketStatus _usEquity(DateTime now) {
+    final wd = now.weekday;
+    final mins = now.hour * 60 + now.minute;
+    const openMin = 13 * 60 + 30, closeMin = 20 * 60;
+    final weekday = wd >= DateTime.monday && wd <= DateTime.friday;
+    if (weekday && mins >= openMin && mins < closeMin) {
+      return const MarketStatus(true);
+    }
+    return MarketStatus(false, _nextEquityOpen(now));
+  }
+
+  static DateTime _nextSundayOpen(DateTime now) {
+    var d = DateTime.utc(now.year, now.month, now.day, 22);
+    while (d.weekday != DateTime.sunday || !d.isAfter(now)) {
+      d = d.add(const Duration(days: 1));
+      d = DateTime.utc(d.year, d.month, d.day, 22);
+    }
+    return d;
+  }
+
+  static DateTime _nextEquityOpen(DateTime now) {
+    final openToday = DateTime.utc(now.year, now.month, now.day, 13, 30);
+    if (now.isBefore(openToday) && now.weekday <= DateTime.friday) {
+      return openToday;
+    }
+    var day = DateTime.utc(now.year, now.month, now.day);
+    do {
+      day = day.add(const Duration(days: 1));
+    } while (day.weekday == DateTime.saturday || day.weekday == DateTime.sunday);
+    return DateTime.utc(day.year, day.month, day.day, 13, 30);
+  }
+
+  /// "يفتح [اليوم] الساعة HH:MM" in the device's local timezone.
+  static String nextOpenLabel(DateTime? nextOpenUtc) {
+    if (nextOpenUtc == null) return '';
+    final l = nextOpenUtc.toLocal();
+    final hh = l.hour.toString().padLeft(2, '0');
+    final mm = l.minute.toString().padLeft(2, '0');
+    return 'يفتح ${_arDays[l.weekday]} الساعة $hh:$mm';
+  }
+}
+
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
@@ -59,6 +160,12 @@ class _MainScreenState extends State<MainScreen> {
   bool _otcUnhealthy = false;
   bool _marketClosedDialogShown = false;
   bool _marketClosedDialogOpen = false;
+  String _nextOpenLabel = ''; // "يفتح الاثنين الساعة 12:00" for the closed dialog
+  // Price-staleness (3-min rule): a real market whose price hasn't moved for 3
+  // minutes is treated as closed (news/holiday/maintenance). OTC is exempt.
+  double? _lastPx;
+  DateTime? _lastPxAt;
+  String _lastPxSym = '';
 
   // --- VIP expiry handling ---
   Timer? _vipExpiryTimer;
@@ -128,14 +235,47 @@ class _MainScreenState extends State<MainScreen> {
     return (p['source'] as String? ?? 'tv') == 'po';
   }
 
+  // The active pair's row (category / isOtc / source) from the loaded list.
+  Map<String, dynamic> _activePairInfo() {
+    final cs = _activeChartSymbol.isNotEmpty
+        ? _activeChartSymbol
+        : AppConstants.chartSymbolFor(_signalEngine.activePair);
+    return AppConstants.currencyPairs.firstWhere(
+      (e) => (e['chartSymbol'] as String? ?? '') == cs,
+      orElse: () => const <String, dynamic>{},
+    );
+  }
+
+  // 3-minute price-freeze detector for REAL markets: if the price hasn't moved
+  // for 180s the market is treated as closed (holiday / news halt / maintenance).
+  bool _pxStale(String sym, double? px) {
+    if (sym != _lastPxSym) {
+      _lastPxSym = sym;
+      _lastPx = null;
+      _lastPxAt = null;
+    }
+    final now = DateTime.now();
+    if (px != null && px > 0) {
+      if (_lastPx == null || (px - _lastPx!).abs() > (_lastPx!.abs() * 1e-9)) {
+        _lastPx = px;
+        _lastPxAt = now;
+      }
+    }
+    return _lastPxAt != null && now.difference(_lastPxAt!).inSeconds >= 180;
+  }
+
   Future<void> _pollMarketStatus() async {
     final sym = _bareSymbol();
     if (sym.isEmpty) return;
 
-    // OTC pairs: read market-open from configs/otc_prices in Supabase. The
-    // scraper sets `o:false` for a frozen (closed) market → drives the existing
-    // "market closed" dialog exactly like TradingView pairs.
-    if (_isActiveOtc()) {
+    final info = _activePairInfo();
+    final category = _normCat(info['category'] as String?);
+    final isOtc = info['isOtc'] == true;
+    final source = info['source'] as String? ?? 'tv';
+
+    // ── OTC assets: ALWAYS open (24/7). Never a close dialog. Health for the
+    // signal-button gate still comes from fresh price data. ──
+    if (isOtc) {
       try {
         final row = await Supabase.instance.client
             .from('configs')
@@ -146,35 +286,60 @@ class _MainScreenState extends State<MainScreen> {
         final prices = (row?['data'] as Map<String, dynamic>?) ?? {};
         final entry = prices[sym.toUpperCase()] as Map<String, dynamic>?;
         final st = entry?['st'] as String? ?? '';
-        // Health is judged by FRESH live price data for THIS pair — NOT the global
-        // scraper phase (the price source can be a different worker than whatever
-        // last wrote otc_status). Fresh (<20s) + live/closed ⇒ signals allowed.
         final t = (entry?['t'] as num?)?.toInt() ?? 0;
         final nowSec = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
         final fresh = entry != null && (nowSec - t) < 20;
-        final healthy = fresh && (st == 'live' || st == 'closed');
-        if (!mounted) return;
-        _otcUnhealthy = !healthy;
-        if (entry != null) _applyMarketStatus(entry['o'] == true);
-      } catch (_) {
-        return; // leave state unchanged on error
-      }
+        _otcUnhealthy = !(fresh && (st == 'live' || st == 'closed'));
+      } catch (_) {}
+      _nextOpenLabel = '';
+      if (mounted) _applyMarketStatus(true);
       return;
     }
 
-    bool open;
-    try {
-      final resp = await http
-          .get(Uri.parse('$_proxyBase/api/tv/tick?symbol=$sym'))
-          .timeout(const Duration(seconds: 8));
-      if (resp.statusCode != 200) return; // leave state unchanged on bad status
-      final data = jsonDecode(resp.body) as Map<String, dynamic>;
-      // Missing field → treat as open (safety). Otherwise honour marketOpen.
-      open = data.containsKey('marketOpen') ? data['marketOpen'] == true : true;
-    } catch (_) {
-      // Network/parse error → leave current state unchanged (don't flip/spam).
-      return;
+    // ── Real markets: category time-rules AND a live (non-frozen) price. ──
+    final mkt = MarketHours.statusFor(category, false);
+    bool priceLive = true;
+    double? px;
+    if (source == 'po') {
+      try {
+        final row = await Supabase.instance.client
+            .from('configs')
+            .select('data')
+            .eq('id', 'otc_prices')
+            .maybeSingle()
+            .timeout(const Duration(seconds: 8));
+        final prices = (row?['data'] as Map<String, dynamic>?) ?? {};
+        final entry = prices[sym.toUpperCase()] as Map<String, dynamic>?;
+        final t = (entry?['t'] as num?)?.toInt() ?? 0;
+        final nowSec = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
+        _otcUnhealthy = !(entry != null && (nowSec - t) < 20);
+        priceLive = entry?['o'] == true;
+        px = (entry?['p'] as num?)?.toDouble();
+      } catch (_) {
+        return;
+      }
+    } else {
+      try {
+        final resp = await http
+            .get(Uri.parse('$_proxyBase/api/tv/tick?symbol=$sym'))
+            .timeout(const Duration(seconds: 8));
+        if (resp.statusCode != 200) return;
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        priceLive =
+            data.containsKey('marketOpen') ? data['marketOpen'] == true : true;
+        px = (data['price'] as num?)?.toDouble();
+      } catch (_) {
+        return;
+      }
     }
+
+    final stale = _pxStale(sym, px);
+    final open = mkt.open && priceLive && !stale;
+    // Only advertise a scheduled next-open when the CLOSE is time-based; a live
+    // freeze during open hours has no known reopen time.
+    _nextOpenLabel = (!open && !mkt.open)
+        ? MarketHours.nextOpenLabel(mkt.nextOpenUtc)
+        : '';
     if (!mounted) return;
     _applyMarketStatus(open);
   }
@@ -931,6 +1096,28 @@ class _MainScreenState extends State<MainScreen> {
                       height: 1.6,
                     ),
                   ),
+                  if (_nextOpenLabel.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppConstants.warningOrange.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: AppConstants.warningOrange.withValues(alpha: 0.4),
+                        ),
+                      ),
+                      child: Text(
+                        '🕐 $_nextOpenLabel',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.outfit(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: AppConstants.warningOrange,
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 6),
                   Text(
                     '💡 جرب أزواج OTC — متاحة 24/7 حتى في عطلات نهاية الأسبوع',
