@@ -21,8 +21,8 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _idController = TextEditingController();
-  String _selectedBroker = 'Quotex';
-  String _selectedBrokerKey = 'quotex';
+  String _selectedBroker = ''; // no default — the user MUST pick a platform
+  String _selectedBrokerKey = '';
   bool _isVerifying = false;
   String _verificationStepText = '';
   double _verificationProgress = 0.0;
@@ -284,6 +284,14 @@ class _LoginScreenState extends State<LoginScreen> {
     if (accountId.length < 5) {
       setState(() {
         _errorMessage = 'يجب أن يتكون معرف الحساب من 5 أرقام على الأقل';
+      });
+      return;
+    }
+
+    // Platform is MANDATORY — its name is shown across the app + tracked per user.
+    if (_selectedBroker.trim().isEmpty) {
+      setState(() {
+        _errorMessage = 'اختر منصة التداول أولاً (الخطوة 1)';
       });
       return;
     }
