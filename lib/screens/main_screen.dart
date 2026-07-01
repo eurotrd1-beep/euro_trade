@@ -235,6 +235,19 @@ class _MainScreenState extends State<MainScreen> {
     return (p['source'] as String? ?? 'tv') == 'po';
   }
 
+  // Look up a symbol in the otc_prices map tolerantly: PO keys keep their exact
+  // case (lowercase "_otc", e.g. "EURJPY_otc", "#AAPL_otc"), so an upper-cased
+  // lookup misses them → the pair looked "unhealthy" though its chart was live.
+  Map<String, dynamic>? _otcEntry(Map<String, dynamic> prices, String sym) {
+    final direct = prices[sym];
+    if (direct is Map<String, dynamic>) return direct;
+    final lc = sym.toLowerCase();
+    for (final k in prices.keys) {
+      if (k.toLowerCase() == lc) return prices[k] as Map<String, dynamic>?;
+    }
+    return null;
+  }
+
   // The active pair's row (category / isOtc / source) from the loaded list.
   Map<String, dynamic> _activePairInfo() {
     final cs = _activeChartSymbol.isNotEmpty
@@ -284,7 +297,7 @@ class _MainScreenState extends State<MainScreen> {
             .maybeSingle()
             .timeout(const Duration(seconds: 8));
         final prices = (row?['data'] as Map<String, dynamic>?) ?? {};
-        final entry = prices[sym.toUpperCase()] as Map<String, dynamic>?;
+        final entry = _otcEntry(prices, sym);
         final st = entry?['st'] as String? ?? '';
         final t = (entry?['t'] as num?)?.toInt() ?? 0;
         final nowSec = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
@@ -309,7 +322,7 @@ class _MainScreenState extends State<MainScreen> {
             .maybeSingle()
             .timeout(const Duration(seconds: 8));
         final prices = (row?['data'] as Map<String, dynamic>?) ?? {};
-        final entry = prices[sym.toUpperCase()] as Map<String, dynamic>?;
+        final entry = _otcEntry(prices, sym);
         final t = (entry?['t'] as num?)?.toInt() ?? 0;
         final nowSec = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
         _otcUnhealthy = !(entry != null && (nowSec - t) < 20);
