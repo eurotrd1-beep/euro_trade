@@ -145,30 +145,30 @@ window.CandleChart = (function () {
     return 6;                      // sub-dollar pairs
   }
 
-  /* Candle frames are built on UTC epoch boundaries server-side (so data is
-     identical on every device), but the LABELS are shown in the user's LOCAL
-     time — so the newest candle reads the same as the phone's clock and the
-     broker platform (e.g. a live candle shows 13:50 for a UTC+3 user, not 10:50). */
+  /* Candle-time labels use UTC (getUTC*) — the same clock Pocket Option /
+     TradingView use — so timestamps match the broker platform and are identical
+     on every device regardless of the phone's local timezone. Frames are built
+     on UTC epoch boundaries server-side, and these labels must match. */
   function fmtShort(t, iv) {
     var d = new Date(t * 1000);
-    if (iv === '1D') return (d.getMonth()+1)+'/'+pad2(d.getDate());
-    return pad2(d.getHours())+':'+pad2(d.getMinutes());
+    if (iv === '1D') return (d.getUTCMonth()+1)+'/'+pad2(d.getUTCDate());
+    return pad2(d.getUTCHours())+':'+pad2(d.getUTCMinutes());
   }
   function fmtFull(t, iv) {
     var d = new Date(t * 1000);
-    if (iv === '1D') return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate());
-    return pad2(d.getMonth()+1)+'/'+pad2(d.getDate())+' '+pad2(d.getHours())+':'+pad2(d.getMinutes());
+    if (iv === '1D') return d.getUTCFullYear()+'-'+pad2(d.getUTCMonth()+1)+'-'+pad2(d.getUTCDate());
+    return pad2(d.getUTCMonth()+1)+'/'+pad2(d.getUTCDate())+' '+pad2(d.getUTCHours())+':'+pad2(d.getUTCMinutes());
   }
 
   function showLabel(t, iv) {
     var d = new Date(t * 1000);
     switch(iv) {
-      case '1m':  return d.getMinutes() % 30 === 0;
-      case '5m':  return d.getMinutes() === 0;
-      case '15m': return d.getHours() % 4 === 0 && d.getMinutes() === 0;
-      case '1h':  return d.getMinutes() === 0;
-      case '1D':  return d.getDay() === 1;
-      default:    return d.getMinutes() % 30 === 0;
+      case '1m':  return d.getUTCMinutes() % 30 === 0;
+      case '5m':  return d.getUTCMinutes() === 0;
+      case '15m': return d.getUTCHours() % 4 === 0 && d.getUTCMinutes() === 0;
+      case '1h':  return d.getUTCMinutes() === 0;
+      case '1D':  return d.getUTCDay() === 1;
+      default:    return d.getUTCMinutes() % 30 === 0;
     }
   }
 
@@ -751,7 +751,7 @@ window.CandleChart = (function () {
         .catch(function() { if (!self._destroyed) self._otcMsg('supabase'); });
     }
     poll();
-    this._otcPriceTimer = setInterval(poll, 1000);
+    this._otcPriceTimer = setInterval(poll, 700);   // sub-second refresh
   };
 
   Chart.prototype._onOtcData = function(status, prices) {
@@ -814,8 +814,9 @@ window.CandleChart = (function () {
     this._feedOtcPrice(entry.p);
   };
 
-  /* Feed one real OTC price into the candle series — same rule as the server:
-     a new candle opens only when the frame elapsed AND the price changed. */
+  /* Feed one real OTC price. The close is EASED toward the new price by the
+     animation loop (smooth up/down), and a new candle opens AT the previous
+     close (continuous — no price gap between candles). */
   Chart.prototype._feedOtcPrice = function(price, noDraw) {
     if (!isFinite(price) || !price) return;
     price = gwinAdjust(this, price);
@@ -824,22 +825,69 @@ window.CandleChart = (function () {
     var cTime = Math.floor(now / cs) * cs;
     if (!this.candles.length) {
       this.candles.push({ t: cTime, o: price, h: price, l: price, c: price });
-      if (!noDraw) this._draw();
+      this._animTarget = price;
+      this._startAnim();
       return;
     }
     var last = this.candles[this.candles.length - 1];
     if (cTime === last.t) {
-      if (price !== last.c) last.c = price;
-      if (price >  last.h)  last.h = price;
-      if (price <  last.l)  last.l = price;
-    } else if (cTime > last.t && price !== last.c) {
-      var nc = { t: cTime, o: price, h: price, l: price, c: price };
-      if (!validCandle(nc)) return;
+      // Same frame: extend H/L now for accuracy; the close eases toward price.
+      if (price > last.h) last.h = price;
+      if (price < last.l) last.l = price;
+      this._animTarget = price;
+    } else if (cTime > last.t) {
+      // New frame: open the candle AT the previous close so the series stays
+      // continuous (no visual gap), then ease the close toward the new price.
+      var open = last.c;
+      var nc = { t: cTime, o: open, h: Math.max(open, price), l: Math.min(open, price), c: open };
       this.candles.push(nc);
       if (this.candles.length > MAX_CANDLES) this.candles.shift();
+      this._animTarget = price;
     } else { return; }
     this._lastTVPrice = price;
-    if (!noDraw) this._draw();
+    this._startAnim();
+  };
+
+  /* Smooth animation loop: eases the current candle's close toward the latest
+     price (~60fps) so it glides up/down instead of jumping every poll; keeps the
+     countdown ticking (~2/s) when the price is steady. */
+  Chart.prototype._startAnim = function() {
+    if (this._animOn) return;
+    this._animOn = true;
+    var self = this;
+    var lastTick = -1;
+    function frame() {
+      if (self._destroyed || !self._animOn) { self._animRAF = null; return; }
+      var arr = self.candles, drew = false;
+      if (arr.length && self._animTarget != null) {
+        var last = arr[arr.length - 1];
+        var diff = self._animTarget - last.c;
+        var eps = Math.abs(self._animTarget) * 1e-7 || 1e-9;
+        if (Math.abs(diff) > eps) {
+          last.c += diff * 0.2;                       // ease toward target
+          if (last.c > last.h) last.h = last.c;
+          if (last.c < last.l) last.l = last.c;
+          if (!self._otcProblem || self._otcOverlay) self._draw();
+          drew = true;
+        } else if (last.c !== self._animTarget) {
+          last.c = self._animTarget;
+          if (last.c > last.h) last.h = last.c;
+          if (last.c < last.l) last.l = last.c;
+          if (!self._otcProblem || self._otcOverlay) self._draw();
+          drew = true;
+        }
+      }
+      if (!drew) {                                    // keep countdown alive ~2/s
+        var t = Math.floor(Date.now() / 500);
+        if (t !== lastTick) { lastTick = t; if (!self._otcProblem || self._otcOverlay) self._draw(); }
+      }
+      self._animRAF = requestAnimationFrame(frame);
+    }
+    self._animRAF = requestAnimationFrame(frame);
+  };
+  Chart.prototype._stopAnim = function() {
+    this._animOn = false;
+    if (this._animRAF) { cancelAnimationFrame(this._animRAF); this._animRAF = null; }
   };
 
   /* ── Live tick simulation ────────────────────────────────────── */
@@ -980,8 +1028,12 @@ window.CandleChart = (function () {
     var pad = (hi - lo) * 0.08 || 0.001;
     lo -= pad; hi += pad;
 
+    /* Right-align so the NEWEST candle sits on the right edge: a short series
+       fills from the right (like the broker platform) instead of leaving an
+       empty gap on the right. */
+    var xOff = cl + Math.max(0, maxVis - vis.length) * step;
     function py(p) { return cb - ((p - lo) / (hi - lo)) * ch; }
-    function cx(i) { return cl + i * step + Math.floor(step / 2); }
+    function cx(i) { return xOff + i * step + Math.floor(step / 2); }
 
     this._vis = vis; this._startIdx = startIdx;
     this._py = py; this._cx = cx;
@@ -1118,7 +1170,7 @@ window.CandleChart = (function () {
     var step = this._step;
     var W    = this.W;
 
-    var li = clamp(Math.round((mx - cl - step/2) / step), 0, vis.length - 1);
+    var li = clamp(Math.round((mx - cx(0)) / step), 0, vis.length - 1);
     var c  = vis[li];
     if (!c) return;
     var x  = cx(li);
@@ -1171,6 +1223,8 @@ window.CandleChart = (function () {
     this.scrollRight  = 0;
     this.candles      = [];
     this._resolvedSym = null;
+    this._stopAnim();
+    this._animTarget = null;
     /* Reset status-timing windows for the new symbol/interval. */
     this._loadStartedAt    = 0;
     this._sawEmptyResponse = false;
@@ -1207,6 +1261,7 @@ window.CandleChart = (function () {
 
   Chart.prototype.destroy = function() {
     this._destroyed = true;
+    this._stopAnim();
     if (this._tickTimer) clearInterval(this._tickTimer);
     if (this._tvTimer)   clearInterval(this._tvTimer);
     if (this._otcHistTimer)  clearInterval(this._otcHistTimer);
