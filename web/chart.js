@@ -658,6 +658,7 @@ window.CandleChart = (function () {
     supabase:       ['📡 مشكلة مؤقتة في تحميل البيانات، جاري المحاولة', '#F0C040'],
     warming:        ['📊 جاري تجهيز البيانات لأول مرة، يستغرق دقيقة', '#5AC8FA'],
     unavailable:    ['هذا الزوج غير متاح حاليًا', '#9CA3AF'],
+    market_closed:  ['🔒 السوق مغلق حاليًا', '#FF6B6B'],
   };
 
   /* Transient states keep the last candles visible with a calm banner overlay
@@ -672,15 +673,15 @@ window.CandleChart = (function () {
   Chart.prototype._otcMsg = function(kind) {
     this._otcProblem = kind;
     var m = OTC_MSG[kind] || OTC_MSG.unavailable;
-    /* Once we have candles on screen, NOTHING takes the chart over — every status
-       becomes a small banner so the user always keeps seeing the live chart.
-       A full-screen message is only used before the first candles have loaded. */
-    if (this.candles && this.candles.length) {
+    /* market_closed HIDES the chart entirely — the user asked to just show
+       "market closed" with no chart. Transient states keep candles + a banner.
+       Everything else keeps candles once loaded (calm banner). */
+    if (kind !== 'market_closed' && this.candles && this.candles.length) {
       this._otcOverlay = { text: m[0], color: m[1] };   // candles stay + banner
       this._draw();
     } else {
       this._otcOverlay = null;
-      this._drawMessage(m[0], m[1]);                     // no data yet → full message
+      this._drawMessage(m[0], m[1]);                     // full takeover (hide chart)
     }
   };
 
@@ -760,6 +761,11 @@ window.CandleChart = (function () {
     var now   = Date.now();
     var hbAge = status.updatedAt ? (now - Date.parse(status.updatedAt)) : Infinity;
     var entry = prices ? prices[sym] : null;
+
+    /* MARKET CLOSED (Pocket Option's own flag): if PO marks this asset closed
+       (po === false — the "N/A" state), HIDE the chart entirely and show only
+       "market closed" — even though PO keeps streaming the price. */
+    if (entry && entry.po === false) { this._otcMsg('market_closed'); return; }
 
     /* PRICES WIN: if THIS pair has a fresh live price, render it regardless of the
        global scraper status. The price source (e.g. a local worker) can be a
