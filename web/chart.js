@@ -145,30 +145,31 @@ window.CandleChart = (function () {
     return 6;                      // sub-dollar pairs
   }
 
-  /* Candle-time labels use UTC (getUTC*) — the same clock Pocket Option /
-     TradingView use — so timestamps match the broker platform and are identical
-     on every device regardless of the phone's local timezone. Frames are built
-     on UTC epoch boundaries server-side, and these labels must match. */
+  /* Candle frames are built on UTC epoch boundaries server-side (data identical
+     everywhere), but LABELS render in the device's LOCAL time so the newest
+     candle reads the SAME as the phone clock and the broker platform — e.g. a
+     live candle at 19:21 UTC shows 22:21 for a UTC+3 (Egypt) user, matching the
+     wall clock instead of looking 3 hours behind. */
   function fmtShort(t, iv) {
     var d = new Date(t * 1000);
-    if (iv === '1D') return (d.getUTCMonth()+1)+'/'+pad2(d.getUTCDate());
-    return pad2(d.getUTCHours())+':'+pad2(d.getUTCMinutes());
+    if (iv === '1D') return (d.getMonth()+1)+'/'+pad2(d.getDate());
+    return pad2(d.getHours())+':'+pad2(d.getMinutes());
   }
   function fmtFull(t, iv) {
     var d = new Date(t * 1000);
-    if (iv === '1D') return d.getUTCFullYear()+'-'+pad2(d.getUTCMonth()+1)+'-'+pad2(d.getUTCDate());
-    return pad2(d.getUTCMonth()+1)+'/'+pad2(d.getUTCDate())+' '+pad2(d.getUTCHours())+':'+pad2(d.getUTCMinutes());
+    if (iv === '1D') return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate());
+    return pad2(d.getMonth()+1)+'/'+pad2(d.getDate())+' '+pad2(d.getHours())+':'+pad2(d.getMinutes());
   }
 
   function showLabel(t, iv) {
     var d = new Date(t * 1000);
     switch(iv) {
-      case '1m':  return d.getUTCMinutes() % 30 === 0;
-      case '5m':  return d.getUTCMinutes() === 0;
-      case '15m': return d.getUTCHours() % 4 === 0 && d.getUTCMinutes() === 0;
-      case '1h':  return d.getUTCMinutes() === 0;
-      case '1D':  return d.getUTCDay() === 1;
-      default:    return d.getUTCMinutes() % 30 === 0;
+      case '1m':  return d.getMinutes() % 30 === 0;
+      case '5m':  return d.getMinutes() === 0;
+      case '15m': return d.getHours() % 4 === 0 && d.getMinutes() === 0;
+      case '1h':  return d.getMinutes() === 0;
+      case '1D':  return d.getDay() === 1;
+      default:    return d.getMinutes() % 30 === 0;
     }
   }
 
