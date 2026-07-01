@@ -2795,27 +2795,32 @@ class _MainScreenState extends State<MainScreen> {
                       color: AppConstants.accentCyan,
                       size: 22,
                     ),
-                    Row(
-                      children: [
-                        Text(
-                          _signalEngine.activePair.replaceAll(' (OTC)', ''),
-                          style: GoogleFonts.outfit(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            letterSpacing: 0.5,
+                    Builder(builder: (_) {
+                      final ap = _effectiveActivePairData();
+                      final sym = (ap['symbol'] as String? ??
+                              _signalEngine.activePair)
+                          .replaceAll(' (OTC)', '');
+                      final isPo = (ap['source'] as String? ?? 'tv') == 'po';
+                      return Row(
+                        children: [
+                          Text(
+                            sym,
+                            style: GoogleFonts.outfit(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                              letterSpacing: 0.5,
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        // Source badge: 📺 TradingView / 🎯 Pocket Option
-                        Text(
-                          (_activePairInfo()['source'] as String? ?? 'tv') == 'po'
-                              ? '🎯'
-                              : '📺',
-                          style: const TextStyle(fontSize: 16),
-                        ),
-                      ],
-                    ),
+                          const SizedBox(width: 10),
+                          // Source badge: 📺 TradingView / 🎯 Pocket Option
+                          Text(
+                            isPo ? '🎯' : '📺',
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                        ],
+                      );
+                    }),
                   ],
                 ),
               ),
@@ -3117,6 +3122,30 @@ class _MainScreenState extends State<MainScreen> {
     if (mounted) setState(() => _activeChartSymbol = cs);
     _signalEngine.selectPair(sym);
     _pollMarketStatus(); // refresh market status for the new pair
+  }
+
+  // The pair to SHOW outside the picker. If the active pair is no longer visible
+  // (deleted from admin, hidden by display_source, category switched…), fall back
+  // to the first visible pair of the selected category AND self-heal the engine
+  // after this frame — so the collapsed bar never shows a pair that isn't listed.
+  Map<String, dynamic> _effectiveActivePairData() {
+    final vis = _visiblePairs;
+    if (vis.isEmpty) return const <String, dynamic>{};
+    final active = vis.firstWhere(
+      (p) => p['symbol'] == _signalEngine.activePair,
+      orElse: () => const <String, dynamic>{},
+    );
+    if (active.isNotEmpty) return active;
+    final inCat = vis
+        .where((p) => _normCat(p['category'] as String?) == _selectedCategory)
+        .toList();
+    final pick = inCat.isNotEmpty ? inCat.first : vis.first;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _signalEngine.activePair != pick['symbol']) {
+        _selectFirstVisibleInCategory(_selectedCategory);
+      }
+    });
+    return pick;
   }
 
   Widget _buildCategoryTab(String categoryId, String label, IconData icon) {
