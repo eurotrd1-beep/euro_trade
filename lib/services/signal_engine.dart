@@ -2017,8 +2017,16 @@ class SignalEngine extends ChangeNotifier {
     final category = (pair['category'] as String? ?? '').toLowerCase();
     // Crypto is 24/7
     if (category == 'crypto') return false;
-    // forex category covers both regular and OTC forex — all close on weekends
-    if (category == 'forex') return true;
+    // Real markets close on weekends. (Pocket Option OTC variants trade on
+    // weekends, but those are handled via the OTC/PO market-status path.)
+    if (category == 'currencies' ||
+        category == 'commodities' ||
+        category == 'stocks' ||
+        category == 'indices' ||
+        category == 'forex' ||
+        category == 'metals') {
+      return true;
+    }
     // Fallback: infer from symbol name for unlisted pairs
     return !_activePair.contains('BTC') &&
         !_activePair.contains('ETH') &&

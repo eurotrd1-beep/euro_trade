@@ -39,38 +39,39 @@ class AppConstants {
   );
 
   // --- Trading Pairs (Always populated locally, independent of Firestore) ---
+  // Pre-load fallback (TradingView source). Uses the unified 5-category taxonomy
+  // + source/enabled/is_otc keys; the Supabase `pairs` stream replaces this list
+  // once it loads. Kept in sync with the admin's category names.
   static const List<Map<String, dynamic>> defaultCurrencyPairs = [
-    // --- FOREX ---
-    {'symbol': 'EUR/USD', 'chartSymbol': 'OANDA:EURUSD', 'category': 'forex', 'type': 'forex'},
-    {'symbol': 'GBP/USD', 'chartSymbol': 'OANDA:GBPUSD', 'category': 'forex', 'type': 'forex'},
-    {'symbol': 'USD/JPY', 'chartSymbol': 'OANDA:USDJPY', 'category': 'forex', 'type': 'forex'},
-    {'symbol': 'USD/CHF', 'chartSymbol': 'OANDA:USDCHF', 'category': 'forex', 'type': 'forex'},
-    {'symbol': 'AUD/USD', 'chartSymbol': 'OANDA:AUDUSD', 'category': 'forex', 'type': 'forex'},
-    {'symbol': 'USD/CAD', 'chartSymbol': 'OANDA:USDCAD', 'category': 'forex', 'type': 'forex'},
-    {'symbol': 'NZD/USD', 'chartSymbol': 'OANDA:NZDUSD', 'category': 'forex', 'type': 'forex'},
-    {'symbol': 'EUR/GBP', 'chartSymbol': 'OANDA:EURGBP', 'category': 'forex', 'type': 'forex'},
-    {'symbol': 'EUR/JPY', 'chartSymbol': 'OANDA:EURJPY', 'category': 'forex', 'type': 'forex'},
-    {'symbol': 'GBP/JPY', 'chartSymbol': 'OANDA:GBPJPY', 'category': 'forex', 'type': 'forex'},
+    // --- CURRENCIES ---
+    {'symbol': 'EUR/USD', 'chartSymbol': 'OANDA:EURUSD', 'category': 'currencies', 'type': 'currencies', 'source': 'tv', 'is_otc': false, 'enabled': true},
+    {'symbol': 'GBP/USD', 'chartSymbol': 'OANDA:GBPUSD', 'category': 'currencies', 'type': 'currencies', 'source': 'tv', 'is_otc': false, 'enabled': true},
+    {'symbol': 'USD/JPY', 'chartSymbol': 'OANDA:USDJPY', 'category': 'currencies', 'type': 'currencies', 'source': 'tv', 'is_otc': false, 'enabled': true},
+    {'symbol': 'USD/CHF', 'chartSymbol': 'OANDA:USDCHF', 'category': 'currencies', 'type': 'currencies', 'source': 'tv', 'is_otc': false, 'enabled': true},
+    {'symbol': 'AUD/USD', 'chartSymbol': 'OANDA:AUDUSD', 'category': 'currencies', 'type': 'currencies', 'source': 'tv', 'is_otc': false, 'enabled': true},
+    {'symbol': 'USD/CAD', 'chartSymbol': 'OANDA:USDCAD', 'category': 'currencies', 'type': 'currencies', 'source': 'tv', 'is_otc': false, 'enabled': true},
+    {'symbol': 'NZD/USD', 'chartSymbol': 'OANDA:NZDUSD', 'category': 'currencies', 'type': 'currencies', 'source': 'tv', 'is_otc': false, 'enabled': true},
+    {'symbol': 'EUR/GBP', 'chartSymbol': 'OANDA:EURGBP', 'category': 'currencies', 'type': 'currencies', 'source': 'tv', 'is_otc': false, 'enabled': true},
+    {'symbol': 'EUR/JPY', 'chartSymbol': 'OANDA:EURJPY', 'category': 'currencies', 'type': 'currencies', 'source': 'tv', 'is_otc': false, 'enabled': true},
+    {'symbol': 'GBP/JPY', 'chartSymbol': 'OANDA:GBPJPY', 'category': 'currencies', 'type': 'currencies', 'source': 'tv', 'is_otc': false, 'enabled': true},
 
-    // --- METALS ---
-    {'symbol': 'XAU/USD', 'chartSymbol': 'OANDA:XAUUSD', 'category': 'metals', 'type': 'metals'},
-    {'symbol': 'XAG/USD', 'chartSymbol': 'OANDA:XAGUSD', 'category': 'metals', 'type': 'metals'},
-    {'symbol': 'XPT/USD', 'chartSymbol': 'OANDA:XPTUSD', 'category': 'metals', 'type': 'metals'},
-    {'symbol': 'XPD/USD', 'chartSymbol': 'OANDA:XPDUSD', 'category': 'metals', 'type': 'metals'},
-
-    // --- COMMODITIES ---
-    {'symbol': 'BRENT/USD', 'chartSymbol': 'OANDA:BRENTUSD', 'category': 'commodities', 'type': 'commodities'},
-    {'symbol': 'WTI/USD', 'chartSymbol': 'OANDA:WTICOUSD', 'category': 'commodities', 'type': 'commodities'},
-    {'symbol': 'NGAS/USD', 'chartSymbol': 'OANDA:NATGASUSD', 'category': 'commodities', 'type': 'commodities'},
-    {'symbol': 'XCU/USD', 'chartSymbol': 'OANDA:XCUUSD', 'category': 'commodities', 'type': 'commodities'},
+    // --- COMMODITIES (metals + energy) ---
+    {'symbol': 'XAU/USD', 'chartSymbol': 'OANDA:XAUUSD', 'category': 'commodities', 'type': 'commodities', 'source': 'tv', 'is_otc': false, 'enabled': true},
+    {'symbol': 'XAG/USD', 'chartSymbol': 'OANDA:XAGUSD', 'category': 'commodities', 'type': 'commodities', 'source': 'tv', 'is_otc': false, 'enabled': true},
+    {'symbol': 'XPT/USD', 'chartSymbol': 'OANDA:XPTUSD', 'category': 'commodities', 'type': 'commodities', 'source': 'tv', 'is_otc': false, 'enabled': true},
+    {'symbol': 'XPD/USD', 'chartSymbol': 'OANDA:XPDUSD', 'category': 'commodities', 'type': 'commodities', 'source': 'tv', 'is_otc': false, 'enabled': true},
+    {'symbol': 'BRENT/USD', 'chartSymbol': 'OANDA:BRENTUSD', 'category': 'commodities', 'type': 'commodities', 'source': 'tv', 'is_otc': false, 'enabled': true},
+    {'symbol': 'WTI/USD', 'chartSymbol': 'OANDA:WTICOUSD', 'category': 'commodities', 'type': 'commodities', 'source': 'tv', 'is_otc': false, 'enabled': true},
+    {'symbol': 'NGAS/USD', 'chartSymbol': 'OANDA:NATGASUSD', 'category': 'commodities', 'type': 'commodities', 'source': 'tv', 'is_otc': false, 'enabled': true},
+    {'symbol': 'XCU/USD', 'chartSymbol': 'OANDA:XCUUSD', 'category': 'commodities', 'type': 'commodities', 'source': 'tv', 'is_otc': false, 'enabled': true},
 
     // --- CRYPTO ---
-    {'symbol': 'BTC/USDT', 'chartSymbol': 'BINANCE:BTCUSDT', 'category': 'crypto', 'type': 'crypto'},
-    {'symbol': 'ETH/USDT', 'chartSymbol': 'BINANCE:ETHUSDT', 'category': 'crypto', 'type': 'crypto'},
-    {'symbol': 'BNB/USDT', 'chartSymbol': 'BINANCE:BNBUSDT', 'category': 'crypto', 'type': 'crypto'},
-    {'symbol': 'SOL/USDT', 'chartSymbol': 'BINANCE:SOLUSDT', 'category': 'crypto', 'type': 'crypto'},
-    {'symbol': 'XRP/USDT', 'chartSymbol': 'BINANCE:XRPUSDT', 'category': 'crypto', 'type': 'crypto'},
-    {'symbol': 'ADA/USDT', 'chartSymbol': 'BINANCE:ADAUSDT', 'category': 'crypto', 'type': 'crypto'},
+    {'symbol': 'BTC/USDT', 'chartSymbol': 'BINANCE:BTCUSDT', 'category': 'crypto', 'type': 'crypto', 'source': 'tv', 'is_otc': false, 'enabled': true},
+    {'symbol': 'ETH/USDT', 'chartSymbol': 'BINANCE:ETHUSDT', 'category': 'crypto', 'type': 'crypto', 'source': 'tv', 'is_otc': false, 'enabled': true},
+    {'symbol': 'BNB/USDT', 'chartSymbol': 'BINANCE:BNBUSDT', 'category': 'crypto', 'type': 'crypto', 'source': 'tv', 'is_otc': false, 'enabled': true},
+    {'symbol': 'SOL/USDT', 'chartSymbol': 'BINANCE:SOLUSDT', 'category': 'crypto', 'type': 'crypto', 'source': 'tv', 'is_otc': false, 'enabled': true},
+    {'symbol': 'XRP/USDT', 'chartSymbol': 'BINANCE:XRPUSDT', 'category': 'crypto', 'type': 'crypto', 'source': 'tv', 'is_otc': false, 'enabled': true},
+    {'symbol': 'ADA/USDT', 'chartSymbol': 'BINANCE:ADAUSDT', 'category': 'crypto', 'type': 'crypto', 'source': 'tv', 'is_otc': false, 'enabled': true},
   ];
 
   static List<Map<String, dynamic>> currencyPairs = List.from(defaultCurrencyPairs);

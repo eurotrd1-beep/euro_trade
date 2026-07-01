@@ -27,7 +27,7 @@ class _MainScreenState extends State<MainScreen> {
   String _userAccountId = '----';
   String _userBroker = 'Quotex';
   bool _soundEnabled = true;
-  String _selectedCategory = 'forex';
+  String _selectedCategory = 'currencies';
   int _selectedMinutes = 1;
   double Function()? _tvPriceGetter;
   TradingSignal? _lastProcessedSignal;
@@ -40,7 +40,12 @@ class _MainScreenState extends State<MainScreen> {
   StreamSubscription<List<Map<String, dynamic>>>? _vipStrategyListener;
   StreamSubscription<List<Map<String, dynamic>>>? _chartModeListener;
   StreamSubscription<List<Map<String, dynamic>>>? _pairsListener;
+  StreamSubscription<List<Map<String, dynamic>>>? _priceSystemListener;
+  StreamSubscription<List<Map<String, dynamic>>>? _displaySourceListener;
   String _chartMode = 'sim';
+  // Admin System Settings (configs, live): price source + which source shows.
+  String? _priceSystemRaw;        // 'simulator' | 'scraping' (null = fall back to chart_settings)
+  String _displaySource = 'all';  // 'tv' | 'po' | 'all'
   String _activeChartSymbol = '';
   String _brokerLogoUrl = '';
   bool _updateChecked = false;
@@ -73,14 +78,11 @@ class _MainScreenState extends State<MainScreen> {
     _loadUserData();
     _startMaintenanceListener();
 
-    _selectedCategory = 'forex';
+    _selectedCategory = 'currencies';
     if (AppConstants.currencyPairs.isNotEmpty) {
-      final firstForex = AppConstants.currencyPairs.firstWhere(
-        (p) => (p['category'] as String? ?? '') == 'forex',
-        orElse: () => AppConstants.currencyPairs.first,
-      );
-      _activeChartSymbol = firstForex['chartSymbol'] as String? ?? '';
-      final firstSymbol = firstForex['symbol'] as String? ?? '';
+      final first = AppConstants.currencyPairs.first;
+      _activeChartSymbol = first['chartSymbol'] as String? ?? '';
+      final firstSymbol = first['symbol'] as String? ?? '';
       if (firstSymbol.isNotEmpty) {
         _signalEngine.selectPair(firstSymbol);
       }
@@ -112,8 +114,9 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  /// True when the active pair is an OTC pair (category 'otc'). OTC market
-  /// status comes from Supabase (the OTC scraper), not the TradingView proxy.
+  /// True when the active pair comes from Pocket Option (source 'po'). Its data
+  /// + market status come from Supabase (the PO scraper), not the TradingView
+  /// proxy — regardless of whether the asset itself is OTC or a real market.
   bool _isActiveOtc() {
     final cs = _activeChartSymbol.isNotEmpty
         ? _activeChartSymbol
@@ -122,7 +125,7 @@ class _MainScreenState extends State<MainScreen> {
       (e) => (e['chartSymbol'] as String? ?? '') == cs,
       orElse: () => const <String, dynamic>{},
     );
-    return (p['category'] as String? ?? '') == 'otc';
+    return (p['source'] as String? ?? 'tv') == 'po';
   }
 
   Future<void> _pollMarketStatus() async {
@@ -218,6 +221,7 @@ class _MainScreenState extends State<MainScreen> {
     _startVipExpiryWatch(accountId);
     _startStrategyListeners();
     _startChartModeListener();
+    _startSettingsListeners();
     _startPairsListener();
     _loadBrokerLogo(brokerName);
     setUserBroker(brokerName);
@@ -1891,6 +1895,8 @@ class _MainScreenState extends State<MainScreen> {
     _stdStrategyListener?.cancel();
     _vipStrategyListener?.cancel();
     _chartModeListener?.cancel();
+    _priceSystemListener?.cancel();
+    _displaySourceListener?.cancel();
     _pairsListener?.cancel();
     _marketStatusTimer?.cancel();
     _vipExpiryTimer?.cancel();
@@ -1916,6 +1922,70 @@ class _MainScreenState extends State<MainScreen> {
     } catch (_) {}
   }
 
+  // Admin System Settings, live: price system + which source shows to users.
+  void _startSettingsListeners() {
+    try {
+      _priceSystemListener?.cancel();
+      _priceSystemListener = Supabase.instance.client
+          .from('configs')
+          .stream(primaryKey: ['id'])
+          .eq('id', 'price_system')
+          .listen((rows) {
+            if (!mounted) return;
+            final v = rows.isNotEmpty
+                ? ((rows.first['data'] as Map?)?['value'] as String?)
+                : null;
+            if (v != _priceSystemRaw) setState(() => _priceSystemRaw = v);
+          });
+      _displaySourceListener?.cancel();
+      _displaySourceListener = Supabase.instance.client
+          .from('configs')
+          .stream(primaryKey: ['id'])
+          .eq('id', 'display_source')
+          .listen((rows) {
+            if (!mounted) return;
+            final v = (rows.isNotEmpty
+                    ? ((rows.first['data'] as Map?)?['value'] as String?)
+                    : null) ??
+                'all';
+            if (v != _displaySource) setState(() => _displaySource = v);
+          });
+    } catch (_) {}
+  }
+
+  // Effective price system: an explicit price_system config wins; otherwise fall
+  // back to the legacy chart_settings mode.
+  String get _effectivePriceSystem =>
+      _priceSystemRaw ?? (_chartMode == 'sim' ? 'simulator' : 'scraping');
+
+  // Normalize any legacy category onto the current 5-category taxonomy.
+  static String _normCat(String? c) {
+    switch (c) {
+      case 'forex':
+        return 'currencies';
+      case 'metals':
+        return 'commodities';
+      case 'currencies':
+      case 'commodities':
+      case 'stocks':
+      case 'indices':
+      case 'crypto':
+        return c!;
+      default:
+        return 'currencies';
+    }
+  }
+
+  // Enabled pairs the current display_source setting lets the user see.
+  List<Map<String, dynamic>> get _visiblePairs =>
+      AppConstants.currencyPairs.where((p) {
+        if (p['enabled'] == false) return false;
+        final src = (p['source'] as String? ?? 'tv');
+        if (_displaySource == 'tv' && src != 'tv') return false;
+        if (_displaySource == 'po' && src != 'po') return false;
+        return true;
+      }).toList();
+
   void _startPairsListener() {
     try {
       _pairsListener?.cancel();
@@ -1925,23 +1995,28 @@ class _MainScreenState extends State<MainScreen> {
           .listen((rows) {
             if (!mounted) return;
 
-            // Capture the active pair + whether it was an OTC pair BEFORE we
-            // swap in the new list, so we can detect "removed while open".
+            // Capture the active pair + whether it was a Pocket Option pair
+            // BEFORE we swap in the new list (to detect "removed while open").
             final oldActive = _signalEngine.activePair;
-            final wasOtc = AppConstants.currencyPairs.any((p) =>
+            final wasPo = AppConstants.currencyPairs.any((p) =>
                 p['symbol'] == oldActive &&
-                (p['category'] as String? ?? '') == 'otc');
+                (p['source'] as String? ?? 'tv') == 'po');
 
+            // Only ENABLED pairs reach the app; both sources, 5-category taxonomy.
             final pairs = rows
                 .map((d) => <String, dynamic>{
                       'id': d['id'],
                       'symbol': d['symbol'] as String? ?? '',
                       'chartSymbol': d['chart_symbol'] as String? ?? '',
-                      'category': d['category'] as String? ?? 'forex',
-                      'type': d['type'] as String? ?? 'forex',
+                      'category': _normCat(d['category'] as String?),
+                      'type': d['type'] as String? ?? '',
+                      'source': (d['source'] as String? ?? 'tv'),
+                      'isOtc': d['is_otc'] == true,
+                      'enabled': d['enabled'] != false,
                       'order': d['order'] as int? ?? 0,
                     })
-                .where((p) => (p['symbol'] as String).isNotEmpty)
+                .where((p) =>
+                    (p['symbol'] as String).isNotEmpty && p['enabled'] == true)
                 .toList()
               ..sort((a, b) => (a['order'] as int).compareTo(b['order'] as int));
 
@@ -1951,31 +2026,29 @@ class _MainScreenState extends State<MainScreen> {
             setState(() {
               AppConstants.currencyPairs = pairs;
 
-              // If the selected category now has no pairs, switch to the
+              // If the selected category now has no visible pairs, switch to the
               // first category that does so the picker isn't stuck empty.
-              if (pairs.isNotEmpty && !_categoryHasPairs(_selectedCategory)) {
+              final vis = _visiblePairs;
+              if (vis.isNotEmpty && !_categoryHasPairs(_selectedCategory)) {
                 _selectedCategory =
-                    pairs.first['category'] as String? ?? _selectedCategory;
+                    vis.first['category'] as String? ?? _selectedCategory;
               }
 
               // Verify active pair is still in the new list
-              if (!activeExists && pairs.isNotEmpty) {
-                final firstForex = pairs.firstWhere(
-                  (p) => (p['category'] as String? ?? '') == 'forex',
-                  orElse: () => pairs.first,
-                );
-                _activeChartSymbol =
-                    firstForex['chartSymbol'] as String? ?? '';
-                final firstSymbol = firstForex['symbol'] as String? ?? '';
-                if (firstSymbol.isNotEmpty)
+              if (!activeExists && vis.isNotEmpty) {
+                final first = vis.first;
+                _activeChartSymbol = first['chartSymbol'] as String? ?? '';
+                final firstSymbol = first['symbol'] as String? ?? '';
+                if (firstSymbol.isNotEmpty) {
                   _signalEngine.selectPair(firstSymbol);
+                }
               }
             });
 
             // STATE 9 — the OTC pair the user was viewing got disabled/removed
             // from the library while open. Tell them clearly (we already
             // switched them to another pair above).
-            if (!activeExists && wasOtc && mounted) {
+            if (!activeExists && wasPo && mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(
@@ -2437,17 +2510,11 @@ class _MainScreenState extends State<MainScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Row(
                 children: [
-                  if (_categoryHasPairs('forex'))
+                  if (_categoryHasPairs('currencies'))
                     _buildCategoryTab(
-                      'forex',
-                      'فوركس',
+                      'currencies',
+                      'عملات',
                       Icons.currency_exchange_rounded,
-                    ),
-                  if (_categoryHasPairs('metals'))
-                    _buildCategoryTab(
-                      'metals',
-                      'معادن',
-                      Icons.diamond_rounded,
                     ),
                   if (_categoryHasPairs('commodities'))
                     _buildCategoryTab(
@@ -2455,17 +2522,23 @@ class _MainScreenState extends State<MainScreen> {
                       'سلع',
                       Icons.local_gas_station_rounded,
                     ),
+                  if (_categoryHasPairs('stocks'))
+                    _buildCategoryTab(
+                      'stocks',
+                      'أسهم',
+                      Icons.business_rounded,
+                    ),
+                  if (_categoryHasPairs('indices'))
+                    _buildCategoryTab(
+                      'indices',
+                      'مؤشرات',
+                      Icons.show_chart_rounded,
+                    ),
                   if (_categoryHasPairs('crypto'))
                     _buildCategoryTab(
                       'crypto',
                       'كريبتو',
                       Icons.currency_bitcoin_rounded,
-                    ),
-                  if (_categoryHasPairs('otc'))
-                    _buildCategoryTab(
-                      'otc',
-                      'OTC',
-                      Icons.bolt_rounded,
                     ),
                 ],
               ),
@@ -2537,10 +2610,10 @@ class _MainScreenState extends State<MainScreen> {
     // Defensive: if the active category has no pairs, jump to the first
     // category that does so the picker doesn't open on an empty list.
     if (!_categoryHasPairs(_selectedCategory)) {
-      final firstWithPairs = AppConstants.currencyPairs.isNotEmpty
-          ? (AppConstants.currencyPairs.first['category'] as String? ?? '')
+      final vis = _visiblePairs;
+      _selectedCategory = vis.isNotEmpty
+          ? _normCat(vis.first['category'] as String?)
           : _selectedCategory;
-      _selectedCategory = firstWithPairs;
     }
 
     final screenWidth = MediaQuery.of(context).size.width;
@@ -2554,8 +2627,9 @@ class _MainScreenState extends State<MainScreen> {
       builder: (BuildContext context) {
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setModalState) {
-            final sourcePairs = AppConstants.currencyPairs
-                .where((pair) => pair['category'] == _selectedCategory)
+            final sourcePairs = _visiblePairs
+                .where((pair) =>
+                    _normCat(pair['category'] as String?) == _selectedCategory)
                 .toList();
 
             final filteredPairs = sourcePairs.where((pair) {
@@ -2778,9 +2852,29 @@ class _MainScreenState extends State<MainScreen> {
                                             ),
                                           ],
                                         ),
-                                        // Right side: Symbol + optional label
+                                        // Right side: source badge + symbol
                                         Row(
                                           children: [
+                                            // Source: 📺 TradingView / 🎯 Pocket Option
+                                            Text(
+                                              (pair['source'] as String? ?? 'tv') ==
+                                                      'po'
+                                                  ? '🎯'
+                                                  : '📺',
+                                              style: const TextStyle(fontSize: 14),
+                                            ),
+                                            if (pair['isOtc'] == true) ...[
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                'OTC',
+                                                style: GoogleFonts.outfit(
+                                                  fontSize: 9,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: AppConstants.accentCyan,
+                                                ),
+                                              ),
+                                            ],
+                                            const SizedBox(width: 8),
                                             Text(
                                               (pair['symbol'] as String)
                                                   .replaceAll(' (OTC)', ''),
@@ -2791,12 +2885,6 @@ class _MainScreenState extends State<MainScreen> {
                                                     ? Colors.white
                                                     : AppConstants.textPrimary,
                                               ),
-                                            ),
-                                            const SizedBox(width: 10),
-                                            Icon(
-                                              Icons.currency_exchange_rounded,
-                                              color: AppConstants.accentCyan,
-                                              size: 18,
                                             ),
                                           ],
                                         ),
@@ -2823,9 +2911,10 @@ class _MainScreenState extends State<MainScreen> {
     });
   }
 
-  // Returns true if at least one configured pair belongs to [cat].
-  bool _categoryHasPairs(String cat) => AppConstants.currencyPairs
-      .any((p) => (p['category'] as String? ?? '') == cat);
+  // Returns true if at least one VISIBLE pair (enabled + allowed by the current
+  // display_source) belongs to [cat]. Empty categories are hidden by callers.
+  bool _categoryHasPairs(String cat) =>
+      _visiblePairs.any((p) => _normCat(p['category'] as String?) == cat);
 
   Widget _buildCategoryTab(String categoryId, String label, IconData icon) {
     final isSelected = _selectedCategory == categoryId;
@@ -2942,14 +3031,18 @@ class _MainScreenState extends State<MainScreen> {
     final chartSymbol = _activeChartSymbol.isNotEmpty
         ? _activeChartSymbol
         : AppConstants.chartSymbolFor(_signalEngine.activePair);
-    // OTC pairs (category 'otc') are driven from Supabase, not TradingView — the
-    // chart gets a dedicated 'otc' mode regardless of the global sim/tv setting.
+    // Chart data source resolution:
+    //   • Simulator system → 'sim' (generated data) for every pair.
+    //   • Scraping system  → Pocket Option pairs (source 'po') use Supabase-fed
+    //     'otc' mode; TradingView pairs use 'tv' mode.
     final activePairData = AppConstants.currencyPairs.firstWhere(
       (p) => (p['chartSymbol'] as String? ?? '') == chartSymbol,
       orElse: () => const <String, dynamic>{},
     );
-    final bool isOtc = (activePairData['category'] as String? ?? '') == 'otc';
-    final String effectiveMode = isOtc ? 'otc' : _chartMode;
+    final bool isPo = (activePairData['source'] as String? ?? 'tv') == 'po';
+    final String effectiveMode = _effectivePriceSystem == 'simulator'
+        ? 'sim'
+        : (isPo ? 'otc' : 'tv');
     final tf = _signalEngine.chartTimeframe;
     final signal = _signalEngine.activeSignal;
     final isActive = signal?.status == 'ACTIVE';
