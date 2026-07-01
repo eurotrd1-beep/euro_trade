@@ -6545,9 +6545,14 @@ class SignalEngine extends ChangeNotifier {
     }
 
     final double diff = exitP - signal.entryPrice;
-    // Three outcomes: exit == entry → TIE (تعادل); otherwise WIN/LOSS by direction.
+    // Three outcomes: exit == entry → TIE (تعادل, stake refunded); otherwise
+    // WIN/LOSS by direction. "Equal" is judged at real price precision (no
+    // meaningful move ≈ half a tick), not exact float equality, so a flat close
+    // is correctly a tie. Applies to every mode (sim / TV / PO). Guaranteed-win
+    // forces a winning margin above this threshold, so it never ties.
+    final double tieEps = signal.entryPrice.abs() * 5e-6 + 1e-12;
     String result;
-    if (diff == 0) {
+    if (diff.abs() <= tieEps) {
       result = 'TIE';
     } else if (isCall) {
       result = diff > 0 ? 'WIN' : 'LOSS';

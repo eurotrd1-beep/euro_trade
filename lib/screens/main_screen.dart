@@ -286,24 +286,30 @@ class _MainScreenState extends State<MainScreen> {
     final isOtc = info['isOtc'] == true;
     final source = info['source'] as String? ?? 'tv';
 
-    // ── OTC assets: ALWAYS open (24/7). Never a close dialog. Health for the
-    // signal-button gate still comes from fresh price data. ──
-    if (isOtc) {
-      try {
-        final row = await Supabase.instance.client
-            .from('configs')
-            .select('data')
-            .eq('id', 'otc_prices')
-            .maybeSingle()
-            .timeout(const Duration(seconds: 8));
-        final prices = (row?['data'] as Map<String, dynamic>?) ?? {};
-        final entry = _otcEntry(prices, sym);
-        final st = entry?['st'] as String? ?? '';
-        final t = (entry?['t'] as num?)?.toInt() ?? 0;
-        final nowSec = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
-        final fresh = entry != null && (nowSec - t) < 20;
-        _otcUnhealthy = !(fresh && (st == 'live' || st == 'closed'));
-      } catch (_) {}
+    // ── OTC assets AND crypto: ALWAYS open (24/7). Never closed, never a close
+    // dialog — exempt from the time-rules AND the price-freeze rule (a frozen
+    // crypto/OTC price is a data hiccup, not a closed market). Health for the
+    // signal-button gate still comes from fresh price data (PO source only). ──
+    if (isOtc || category == 'crypto') {
+      if (source == 'po') {
+        try {
+          final row = await Supabase.instance.client
+              .from('configs')
+              .select('data')
+              .eq('id', 'otc_prices')
+              .maybeSingle()
+              .timeout(const Duration(seconds: 8));
+          final prices = (row?['data'] as Map<String, dynamic>?) ?? {};
+          final entry = _otcEntry(prices, sym);
+          final st = entry?['st'] as String? ?? '';
+          final t = (entry?['t'] as num?)?.toInt() ?? 0;
+          final nowSec = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
+          final fresh = entry != null && (nowSec - t) < 20;
+          _otcUnhealthy = !(fresh && (st == 'live' || st == 'closed'));
+        } catch (_) {}
+      } else {
+        _otcUnhealthy = false; // TV crypto (e.g. BINANCE) — proxy-driven
+      }
       _nextOpenLabel = '';
       if (mounted) _applyMarketStatus(true);
       return;
@@ -347,12 +353,13 @@ class _MainScreenState extends State<MainScreen> {
     }
 
     final stale = _pxStale(sym, px);
-    final open = mkt.open && priceLive && !stale;
-    // Only advertise a scheduled next-open when the CLOSE is time-based; a live
-    // freeze during open hours has no known reopen time.
-    _nextOpenLabel = (!open && !mkt.open)
-        ? MarketHours.nextOpenLabel(mkt.nextOpenUtc)
-        : '';
+    // CONFIRM BOTH (per request): a real market is declared CLOSED only when the
+    // SCHEDULE says out-of-hours AND the price is frozen — so it's OPEN if EITHER
+    // the time-rules say open OR the price is still moving. This self-corrects a
+    // wrong hard-coded schedule (e.g. a non-US index) via the live price.
+    final priceOpen = priceLive && !stale;
+    final open = mkt.open || priceOpen;
+    _nextOpenLabel = !open ? MarketHours.nextOpenLabel(mkt.nextOpenUtc) : '';
     if (!mounted) return;
     _applyMarketStatus(open);
   }
