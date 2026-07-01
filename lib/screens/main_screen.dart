@@ -134,24 +134,22 @@ class _MainScreenState extends State<MainScreen> {
     // "market closed" dialog exactly like TradingView pairs.
     if (_isActiveOtc()) {
       try {
-        final rows = await Supabase.instance.client
+        final row = await Supabase.instance.client
             .from('configs')
-            .select('id, data')
-            .inFilter('id', ['otc_prices', 'otc_status'])
+            .select('data')
+            .eq('id', 'otc_prices')
+            .maybeSingle()
             .timeout(const Duration(seconds: 8));
-        Map<String, dynamic> prices = {};
-        Map<String, dynamic> status = {};
-        for (final r in (rows as List)) {
-          if (r['id'] == 'otc_prices') prices = (r['data'] as Map<String, dynamic>?) ?? {};
-          if (r['id'] == 'otc_status') status = (r['data'] as Map<String, dynamic>?) ?? {};
-        }
+        final prices = (row?['data'] as Map<String, dynamic>?) ?? {};
         final entry = prices[sym.toUpperCase()] as Map<String, dynamic>?;
-        final phase = status['phase'] as String? ?? '';
         final st = entry?['st'] as String? ?? '';
-        // Healthy only when the scraper is live AND this pair is flowing (or just
-        // market-closed). Anything else (repairing/reconnecting/down/resolving)
-        // ⇒ block new signals so we never act on stale/incomplete data.
-        final healthy = phase == 'live' && entry != null && (st == 'live' || st == 'closed');
+        // Health is judged by FRESH live price data for THIS pair — NOT the global
+        // scraper phase (the price source can be a different worker than whatever
+        // last wrote otc_status). Fresh (<20s) + live/closed ⇒ signals allowed.
+        final t = (entry?['t'] as num?)?.toInt() ?? 0;
+        final nowSec = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
+        final fresh = entry != null && (nowSec - t) < 20;
+        final healthy = fresh && (st == 'live' || st == 'closed');
         if (!mounted) return;
         _otcUnhealthy = !healthy;
         if (entry != null) _applyMarketStatus(entry['o'] == true);

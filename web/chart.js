@@ -742,6 +742,18 @@ window.CandleChart = (function () {
     var hbAge = status.updatedAt ? (now - Date.parse(status.updatedAt)) : Infinity;
     var entry = prices ? prices[sym] : null;
 
+    /* PRICES WIN: if THIS pair has a fresh live price, render it regardless of the
+       global scraper status. The price source (e.g. a local worker) can be a
+       different process than whatever last wrote otc_status, so a stale/failed
+       status must never hide live data. */
+    var fresh = entry && entry.t && (now / 1000 - entry.t < 15) && entry.p > 0;
+    if (fresh && entry.st !== 'circuit' && entry.st !== 'resolving') {
+      this._otcProblem = null;
+      this._otcOverlay = null;
+      this._feedOtcPrice(entry.p);
+      return;
+    }
+
     /* ── Macro (whole scraper / server) states ── */
     /* STATE 8 — auto-repair gave up / token truly dead → manual re-capture. */
     if (status.phase === 'login_failed') { this._otcMsg('login_failed'); return; }
