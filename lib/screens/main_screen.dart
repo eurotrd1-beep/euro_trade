@@ -157,6 +157,7 @@ class _MainScreenState extends State<MainScreen> {
   static const String _proxyBase = 'https://euro-trade-proxy-1.onrender.com';
   Timer? _marketStatusTimer;
   Timer? _realCandlesTimer;
+  Timer? _accountCheckTimer;
   bool _marketOpen = true; // optimistic default until first poll
   // OTC data health: true while the OTC scraper is repairing/reconnecting/down,
   // so we block new-signal requests on stale/incomplete OTC data.
@@ -480,6 +481,7 @@ class _MainScreenState extends State<MainScreen> {
     _signalEngine.setAccountId(accountId);
     _loadTelegramContact();
     _startRoleListener(accountId);
+    _startAccountExistenceCheck(accountId);
     _startVipExpiryWatch(accountId);
     _startStrategyListeners();
     _startChartModeListener();
@@ -522,14 +524,7 @@ class _MainScreenState extends State<MainScreen> {
             // the row at least once, an empty emission means deletion → kick the
             // user out to the login screen (auto logout).
             if (rows.isEmpty) {
-              if (_userRowSeen && !_accountDeletedHandled) {
-                _accountDeletedHandled = true;
-                _roleListener?.cancel();
-                _maintenanceListener?.cancel();
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (mounted) _showAccountDeletedDialog();
-                });
-              }
+              if (_userRowSeen) _handleAccountDeleted();
               return;
             }
             _userRowSeen = true;
@@ -917,6 +912,40 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
+  // Central handler: account was deleted by the admin → auto logout.
+  void _handleAccountDeleted() {
+    if (_accountDeletedHandled || !mounted) return;
+    _accountDeletedHandled = true;
+    _roleListener?.cancel();
+    _maintenanceListener?.cancel();
+    _accountCheckTimer?.cancel();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _showAccountDeletedDialog();
+    });
+  }
+
+  // Reliable fallback to the realtime stream: poll the users row every 20s.
+  // Realtime DELETE events aren't always delivered to a filtered .stream(), so
+  // this guarantees the user is kicked out shortly after the admin deletes them.
+  void _startAccountExistenceCheck(String accountId) {
+    _accountCheckTimer?.cancel();
+    _accountCheckTimer = Timer.periodic(const Duration(seconds: 20), (_) async {
+      if (!mounted || _accountDeletedHandled) return;
+      try {
+        final row = await Supabase.instance.client
+            .from('users')
+            .select('id')
+            .eq('id', accountId)
+            .maybeSingle();
+        if (row == null) {
+          if (_userRowSeen) _handleAccountDeleted();
+        } else {
+          _userRowSeen = true; // confirmed the account exists
+        }
+      } catch (_) {}
+    });
+  }
+
   void _showAccountDeletedDialog() {
     showDialog(
       context: context,
@@ -981,6 +1010,7 @@ class _MainScreenState extends State<MainScreen> {
   Future<void> _logout() async {
     _roleListener?.cancel();
     _maintenanceListener?.cancel();
+    _accountCheckTimer?.cancel();
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
     if (mounted) {
@@ -2262,6 +2292,7 @@ class _MainScreenState extends State<MainScreen> {
     _pairsListener?.cancel();
     _marketStatusTimer?.cancel();
     _realCandlesTimer?.cancel();
+    _accountCheckTimer?.cancel();
     _vipExpiryTimer?.cancel();
     _signalEngine.removeListener(_onSignalEngineUpdate);
     _signalEngine.dispose();
