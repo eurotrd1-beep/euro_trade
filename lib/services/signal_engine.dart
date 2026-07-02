@@ -38,6 +38,7 @@ class TradingSignal {
   List<Candle>? candlesSnapshot;
   final String marketCondition;
   final String recommendation;
+  final String origin; // 'instant' | 'monitoring'
 
   TradingSignal({
     required this.pair,
@@ -53,6 +54,7 @@ class TradingSignal {
     this.candlesSnapshot,
     this.marketCondition = 'سوق مستقر وسليم',
     this.recommendation = 'دخول آمن',
+    this.origin = 'instant',
   });
 }
 
@@ -838,6 +840,7 @@ class SignalEngine extends ChangeNotifier {
       recommendation: isCall
           ? 'دخول صفقة صعود (CALL) على بداية الشمعة — أفضل لحظة دخول.'
           : 'دخول صفقة هبوط (PUT) على بداية الشمعة — أفضل لحظة دخول.',
+      origin: 'monitoring',
     );
 
     _secondsRemaining = alignedDuration;
@@ -1824,6 +1827,7 @@ class SignalEngine extends ChangeNotifier {
     'status': s.status,
     'marketCondition': s.marketCondition,
     'recommendation': s.recommendation,
+    'origin': s.origin,
   };
 
   TradingSignal _signalFromJson(Map<String, dynamic> j) {
@@ -1843,6 +1847,7 @@ class SignalEngine extends ChangeNotifier {
       exitPrice: exitPrice,
       marketCondition: j['marketCondition'] as String? ?? '',
       recommendation: j['recommendation'] as String? ?? '',
+      origin: j['origin'] as String? ?? 'instant',
     );
   }
 

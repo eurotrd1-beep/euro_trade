@@ -4115,6 +4115,20 @@ class _MainScreenState extends State<MainScreen> {
         : (isCall ? AppConstants.callGreen : AppConstants.putRed);
     final isActive = signal.status == 'ACTIVE';
 
+    // While a trade is ACTIVE, everything (direction, entry, remaining time,
+    // current price, live result) is shown on the chart card above — so we don't
+    // duplicate it here. We only keep the unique signal-strength bar for
+    // monitoring signals; instant signals show nothing below the chart.
+    if (isActive) {
+      if (_signalEngine.isMonitoring && _signalEngine.lastSignalStrength > 0) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+          child: _buildStrengthBar(_signalEngine.lastSignalStrength, accentColor),
+        );
+      }
+      return const SizedBox.shrink();
+    }
+
     return Padding(
       padding: const EdgeInsets.all(14),
       child: Column(
@@ -5565,6 +5579,40 @@ class _MainScreenState extends State<MainScreen> {
                                                     : AppConstants.putRed,
                                               ),
                                             ),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          // Origin badge: instant ⚡ vs monitoring 🎯
+                                          Builder(
+                                            builder: (_) {
+                                              final isMon =
+                                                  sig.origin == 'monitoring';
+                                              final oColor = isMon
+                                                  ? AppConstants.warningOrange
+                                                  : AppConstants.accentCyan;
+                                              return Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                  horizontal: 5,
+                                                  vertical: 1,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: oColor.withAlpha(28),
+                                                  borderRadius:
+                                                      BorderRadius.circular(4),
+                                                  border: Border.all(
+                                                    color: oColor.withAlpha(90),
+                                                  ),
+                                                ),
+                                                child: Text(
+                                                  isMon ? '🎯 مراقبة' : '⚡ فوري',
+                                                  style: GoogleFonts.outfit(
+                                                    fontSize: 9,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: oColor,
+                                                  ),
+                                                ),
+                                              );
+                                            },
                                           ),
                                         ],
                                       ),
