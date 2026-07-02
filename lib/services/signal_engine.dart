@@ -570,11 +570,30 @@ class SignalEngine extends ChangeNotifier {
   String _monPhase = 'idle'; // 'idle' | 'waiting' | 'trade'
   int _monCountdown = 0; // seconds until the next candle opens
   double _lastSignalStrength = 0.0; // score ÷ max_score × 100 of the last fire
+  DateTime? _monStartTime; // when the current monitoring session began
+  bool _monLastCheckFailed = false; // last new candle didn't meet conditions
+  int _monChecksDone = 0; // how many candles have been evaluated
 
   bool get isMonitoring => _monitoring;
   String get monitoringPhase => _monPhase;
   int get monitoringCountdown => _monCountdown;
   double get lastSignalStrength => _lastSignalStrength;
+  bool get monitoringLastCheckFailed => _monLastCheckFailed;
+  int get monitoringChecksDone => _monChecksDone;
+
+  int get monitoringElapsedSeconds {
+    if (_monStartTime == null) return 0;
+    final s = DateTime.now().difference(_monStartTime!).inSeconds;
+    return s > 0 ? s : 0;
+  }
+
+  String get formattedMonitoringElapsed {
+    final s = monitoringElapsedSeconds;
+    final h = s ~/ 3600;
+    final m = (s % 3600) ~/ 60;
+    final sec = s % 60;
+    return "${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}:${sec.toString().padLeft(2, '0')}";
+  }
 
   String get formattedMonitoringCountdown {
     final s = _monCountdown < 0 ? 0 : _monCountdown;
@@ -683,6 +702,9 @@ class SignalEngine extends ChangeNotifier {
     _tvPriceGetter = tvPriceGetter;
     _monitoring = true;
     _monPhase = 'waiting';
+    _monStartTime = DateTime.now();
+    _monLastCheckFailed = false;
+    _monChecksDone = 0;
     _activeSignal = null;
     _playActivateSound();
     notifyListeners();
@@ -724,9 +746,11 @@ class SignalEngine extends ChangeNotifier {
       final absScore = netScore.abs();
       final minScore = dyn?.minScore ?? 0.0;
       final rejected = _pyramidRejectReason.isNotEmpty;
+      _monChecksDone++;
 
       // 3) min_score met → fire on this new candle, then wait out the trade.
       if (!rejected && absScore >= minScore) {
+        _monLastCheckFailed = false;
         _fireMonitoringSignal(netScore, dyn);
         _monPhase = 'trade';
         notifyListeners();
@@ -742,13 +766,20 @@ class SignalEngine extends ChangeNotifier {
         while (_monitoring && _activeSignal != null) {
           await Future.delayed(const Duration(milliseconds: 250));
         }
+        _monLastCheckFailed = false;
+      } else {
+        // Not met → show "conditions not met, waiting for next candle" and loop.
+        _monLastCheckFailed = true;
+        _monPhase = 'waiting';
+        notifyListeners();
       }
-      // else: not met → loop back and wait for the next candle.
     }
 
     _monitoring = false;
     _monPhase = 'idle';
     _monCountdown = 0;
+    _monLastCheckFailed = false;
+    _monStartTime = null;
     notifyListeners();
   }
 
@@ -757,6 +788,8 @@ class SignalEngine extends ChangeNotifier {
     _monitoring = false;
     _monPhase = 'idle';
     _monCountdown = 0;
+    _monLastCheckFailed = false;
+    _monStartTime = null;
     notifyListeners();
   }
 

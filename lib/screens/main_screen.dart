@@ -3416,43 +3416,90 @@ class _MainScreenState extends State<MainScreen> {
           ),
           const SizedBox(height: 6),
           Text(
-            'يراقب النظام السوق وينتظر أفضل لحظة دخول على بداية الشمعة القادمة.',
+            _signalEngine.monitoringLastCheckFailed
+                ? 'لم تتوافق شروط الدخول، جاري انتظار الشمعة التالية...'
+                : 'يراقب النظام السوق وينتظر أفضل لحظة دخول على بداية الشمعة القادمة.',
             textAlign: TextAlign.center,
             style: GoogleFonts.outfit(
-              fontSize: 11,
-              color: AppConstants.textSecondary,
+              fontSize: 11.5,
+              color: _signalEngine.monitoringLastCheckFailed
+                  ? c
+                  : AppConstants.textSecondary,
+              fontWeight: _signalEngine.monitoringLastCheckFailed
+                  ? FontWeight.w700
+                  : FontWeight.normal,
               height: 1.4,
             ),
           ),
           const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              color: c.withAlpha(18),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: c.withAlpha(70)),
-            ),
-            child: Column(
-              children: [
-                Text(
-                  'الشمعة الجديدة بعد',
-                  style: GoogleFonts.outfit(
-                    fontSize: 10,
-                    color: AppConstants.textSecondary,
-                    letterSpacing: 1,
+          Row(
+            children: [
+              // Next candle countdown
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: c.withAlpha(18),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: c.withAlpha(70)),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        'الشمعة القادمة بعد',
+                        style: GoogleFonts.outfit(
+                          fontSize: 9.5,
+                          color: AppConstants.textSecondary,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _signalEngine.formattedMonitoringCountdown,
+                        style: GoogleFonts.robotoMono(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          color: c,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  _signalEngine.formattedMonitoringCountdown,
-                  style: GoogleFonts.robotoMono(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w900,
-                    color: c,
+              ),
+              const SizedBox(width: 10),
+              // Total monitoring elapsed (count-up)
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: AppConstants.accentCyan.withAlpha(15),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppConstants.accentCyan.withAlpha(60)),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        'مدة المراقبة',
+                        style: GoogleFonts.outfit(
+                          fontSize: 9.5,
+                          color: AppConstants.textSecondary,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _signalEngine.formattedMonitoringElapsed,
+                        style: GoogleFonts.robotoMono(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                          color: AppConstants.accentCyan,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
           const SizedBox(height: 14),
           SizedBox(
@@ -3950,7 +3997,6 @@ class _MainScreenState extends State<MainScreen> {
     final accentColor = isWait
         ? AppConstants.warningOrange
         : (isCall ? AppConstants.callGreen : AppConstants.putRed);
-    final remainingTime = _signalEngine.secondsRemaining;
     final isActive = signal.status == 'ACTIVE';
 
     return Padding(
@@ -4055,62 +4101,23 @@ class _MainScreenState extends State<MainScreen> {
           if (isWait) ...[
             // No transaction progress or result badge
           ] else if (isActive) ...[
-            // Expiry countdown progress
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      remainingTime > 0
-                          ? 'ACTIVE TRANSACTION SECONDS'
-                          : 'FINISHING TRANSACTION...',
-                      style: GoogleFonts.outfit(
-                        fontSize: 9,
-                        color: AppConstants.textSecondary,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    Text(
-                      '$remainingTime s',
-                      style: GoogleFonts.outfit(
-                        fontSize: 11,
-                        color: accentColor,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
+            // The remaining-time countdown is shown ONLY on the chart above
+            // (single source of truth for both instant + monitoring signals).
+            // Here we keep just the contextual note — no duplicate seconds counter.
+            Center(
+              child: Text(
+                _signalEngine.signalChangeNotice.isNotEmpty
+                    ? _signalEngine.signalChangeNotice
+                    : 'ملاحظة: بدأت هذه الصفقة مع بداية الشمعة الحالية',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.outfit(
+                  fontSize: 10,
+                  color: _signalEngine.signalChangeNotice.isNotEmpty
+                      ? AppConstants.warningOrange
+                      : AppConstants.accentCyan,
+                  fontWeight: FontWeight.bold,
                 ),
-                const SizedBox(height: 6),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: LinearProgressIndicator(
-                    value: remainingTime / (signal.durationMinutes * 60),
-                    color: remainingTime <= 10
-                        ? AppConstants.warningOrange
-                        : accentColor,
-                    backgroundColor: AppConstants.spaceBackground,
-                    minHeight: 6,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Center(
-                  child: Text(
-                    _signalEngine.signalChangeNotice.isNotEmpty
-                        ? _signalEngine.signalChangeNotice
-                        : 'ملاحظة: بدأت هذه الصفقة مع بداية الشمعة الحالية',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.outfit(
-                      fontSize: 10,
-                      color: _signalEngine.signalChangeNotice.isNotEmpty
-                          ? AppConstants.warningOrange
-                          : AppConstants.accentCyan,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           ] else ...[
             // Completed Result Badge
