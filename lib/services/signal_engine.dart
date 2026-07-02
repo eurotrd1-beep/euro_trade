@@ -218,6 +218,9 @@ class PyramidConfig {
 class DynamicStrategy {
   final String name;
   final double minScore;
+  // Optional cap for the "signal strength" bar (score ÷ max_score × 100%).
+  // 0 = auto (sum of enabled rule scores).
+  final double maxScore;
   final double confidenceBase;
   final double confidenceMax;
   final List<StrategyRule> rules;
@@ -227,15 +230,27 @@ class DynamicStrategy {
   const DynamicStrategy({
     this.name = 'Custom',
     this.minScore = 0.0,
+    this.maxScore = 0.0,
     this.confidenceBase = 92.5,
     this.confidenceMax = 98.9,
     this.pyramid,
     required this.rules,
   });
 
+  // Effective max score for the strength bar: explicit max_score, else the sum
+  // of the absolute scores of all enabled rules.
+  double get effectiveMaxScore {
+    if (maxScore > 0) return maxScore;
+    final sum = rules
+        .where((r) => r.enabled)
+        .fold<double>(0.0, (s, r) => s + r.score.abs());
+    return sum > 0 ? sum : 1.0;
+  }
+
   factory DynamicStrategy.fromJson(Map<String, dynamic> j) => DynamicStrategy(
     name: j['name'] as String? ?? 'Custom',
     minScore: (j['min_score'] as num?)?.toDouble() ?? 0.0,
+    maxScore: (j['max_score'] as num?)?.toDouble() ?? 0.0,
     confidenceBase: (j['confidence_base'] as num?)?.toDouble() ?? 92.5,
     confidenceMax: (j['confidence_max'] as num?)?.toDouble() ?? 98.9,
     pyramid: j['pyramid'] != null
@@ -531,10 +546,42 @@ class SignalEngine extends ChangeNotifier {
   DynamicStrategy? _stdDynamic;
   DynamicStrategy? _vipDynamic;
 
+  // Per-role MONITORING strategies (independent JSON from the signal strategies).
+  // Same format + same engine — only the trigger differs (wait for a new candle).
+  DynamicStrategy? _monStdDynamic;
+  DynamicStrategy? _monVipDynamic;
+
   StrategyConfig get _cfg => _userRole == 'vip' ? _vipStrategy : _stdStrategy;
 
   DynamicStrategy? get _activeDynamic =>
       _userRole == 'vip' ? _vipDynamic : _stdDynamic;
+
+  // The monitoring strategy for the current role (falls back to the other role's
+  // monitoring strategy, then to the normal signal strategy, so a signal can
+  // still fire if the admin only uploaded one).
+  DynamicStrategy? get _activeMonitoringDynamic =>
+      (_userRole == 'vip' ? _monVipDynamic : _monStdDynamic) ??
+      _monStdDynamic ??
+      _monVipDynamic ??
+      _activeDynamic;
+
+  // ── Smart monitoring state ────────────────────────────────────────────────
+  bool _monitoring = false; // monitoring loop running
+  String _monPhase = 'idle'; // 'idle' | 'waiting' | 'trade'
+  int _monCountdown = 0; // seconds until the next candle opens
+  double _lastSignalStrength = 0.0; // score ÷ max_score × 100 of the last fire
+
+  bool get isMonitoring => _monitoring;
+  String get monitoringPhase => _monPhase;
+  int get monitoringCountdown => _monCountdown;
+  double get lastSignalStrength => _lastSignalStrength;
+
+  String get formattedMonitoringCountdown {
+    final s = _monCountdown < 0 ? 0 : _monCountdown;
+    final m = s ~/ 60;
+    final sec = s % 60;
+    return "${m.toString().padLeft(2, '0')}:${sec.toString().padLeft(2, '0')}";
+  }
 
   VipAnalysisResult? _vipLastResult;
 
@@ -606,6 +653,166 @@ class SignalEngine extends ChangeNotifier {
       _vipDynamic = null;
       _vipStrategy = StrategyConfig.fromJson(json);
     }
+    notifyListeners();
+  }
+
+  void updateMonitoringStandardStrategy(Map<String, dynamic> json) {
+    _monStdDynamic =
+        json.containsKey('rules') ? DynamicStrategy.fromJson(json) : null;
+    notifyListeners();
+  }
+
+  void updateMonitoringVipStrategy(Map<String, dynamic> json) {
+    _monVipDynamic =
+        json.containsKey('rules') ? DynamicStrategy.fromJson(json) : null;
+    notifyListeners();
+  }
+
+  // ── Smart monitoring loop ──────────────────────────────────────────────────
+  // Waits for a NEW candle to open, evaluates the monitoring strategy on it, and
+  // fires a signal only when min_score is met. If not, it waits for the next
+  // candle and repeats. After a fired trade completes, monitoring resumes
+  // automatically for the next candle. All timing is wall-clock (candle
+  // boundaries), independent of the device clock display, and re-reads the
+  // timeframe/pair every loop so it adapts when the user changes either one.
+  Future<void> startMonitoring(
+    int selectedMinutes, {
+    double Function()? tvPriceGetter,
+  }) async {
+    if (_monitoring) return;
+    _tvPriceGetter = tvPriceGetter;
+    _monitoring = true;
+    _monPhase = 'waiting';
+    _activeSignal = null;
+    _playActivateSound();
+    notifyListeners();
+
+    while (_monitoring) {
+      if (_marketClosed) break;
+
+      // 1) Wait for the current candle to close (next boundary).
+      final cs = timeframeSeconds;
+      final startSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      final nextBoundary = (startSec ~/ cs + 1) * cs;
+      _monPhase = 'waiting';
+      while (_monitoring) {
+        final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+        final rem = nextBoundary - nowSec;
+        if (rem <= 0) break;
+        _monCountdown = rem;
+        notifyListeners();
+        await Future.delayed(const Duration(milliseconds: 250));
+      }
+      if (!_monitoring) break;
+      _monCountdown = 0;
+
+      // 2) Let the chart roll & seed the freshly-opened candle, then evaluate.
+      await Future.delayed(const Duration(milliseconds: 200));
+      if (!_monitoring) break;
+      _updateAllIndicators();
+
+      final dyn = _activeMonitoringDynamic;
+      _pyramidRejectReason = '';
+      double netScore;
+      try {
+        netScore = dyn != null
+            ? _evaluateRules(dyn)
+            : (_userRole == 'vip' ? _scoreV3VipEngine() : _scoreV2Engine());
+      } catch (_) {
+        netScore = 0.0;
+      }
+      final absScore = netScore.abs();
+      final minScore = dyn?.minScore ?? 0.0;
+      final rejected = _pyramidRejectReason.isNotEmpty;
+
+      // 3) min_score met → fire on this new candle, then wait out the trade.
+      if (!rejected && absScore >= minScore) {
+        _fireMonitoringSignal(netScore, dyn);
+        _monPhase = 'trade';
+        notifyListeners();
+        // Wait for the trade to finish...
+        while (_monitoring &&
+            _activeSignal != null &&
+            _activeSignal!.status == 'ACTIVE') {
+          await Future.delayed(const Duration(milliseconds: 250));
+        }
+        // ...then for the user to acknowledge the result (signal cleared), so a
+        // new signal is never fired over an open review dialog. Monitoring then
+        // resumes automatically for the next candle (no button press needed).
+        while (_monitoring && _activeSignal != null) {
+          await Future.delayed(const Duration(milliseconds: 250));
+        }
+      }
+      // else: not met → loop back and wait for the next candle.
+    }
+
+    _monitoring = false;
+    _monPhase = 'idle';
+    _monCountdown = 0;
+    notifyListeners();
+  }
+
+  void stopMonitoring() {
+    if (!_monitoring && _monPhase == 'idle') return;
+    _monitoring = false;
+    _monPhase = 'idle';
+    _monCountdown = 0;
+    notifyListeners();
+  }
+
+  // Builds + arms a signal from a monitoring hit on the just-opened candle.
+  // Trade duration = exactly ONE candle of the active timeframe
+  // (1m→1min, 5m→5min, 15m→15min, 1h→1h).
+  void _fireMonitoringSignal(double netScore, DynamicStrategy? dyn) {
+    final bool isCall = netScore >= 0;
+    final double absScore = netScore.abs();
+
+    final double maxScore = dyn?.effectiveMaxScore ?? (absScore > 0 ? absScore : 1.0);
+    _lastSignalStrength = (absScore / maxScore * 100).clamp(0.0, 100.0);
+
+    final double confBase = dyn?.confidenceBase ?? 92.5;
+    final double confMax = dyn?.confidenceMax ?? 98.9;
+    double confidence =
+        (confBase + (absScore / 45.0) * (confMax - confBase)).clamp(confBase, confMax);
+
+    final int nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final int cs = timeframeSeconds;
+    final int cStartSec = (nowSec ~/ cs) * cs;
+    final int expirySec = cStartSec + cs; // exactly one candle
+    final alignedExpiry = DateTime.fromMillisecondsSinceEpoch(expirySec * 1000);
+    final int alignedDuration = (expirySec - nowSec).clamp(1, cs + cs);
+
+    final double liveNow = _tvPriceGetter?.call() ?? 0;
+    final double entryP = liveNow > 0 ? liveNow : _currentPrice;
+
+    _activeSignal = TradingSignal(
+      pair: _activePair,
+      direction: isCall ? 'CALL' : 'PUT',
+      durationMinutes: (cs / 60).round().clamp(1, 600),
+      entryPrice: entryP,
+      currentPrice: entryP,
+      confidence: confidence,
+      entryTime: DateTime.fromMillisecondsSinceEpoch(cStartSec * 1000),
+      expiryTime: alignedExpiry,
+      status: 'ACTIVE',
+      marketCondition: isCall
+          ? '🎯 مراقبة ذكية — لحظة دخول صعود مؤكدة ✅'
+          : '🎯 مراقبة ذكية — لحظة دخول هبوط مؤكدة ✅',
+      recommendation: isCall
+          ? 'دخول صفقة صعود (CALL) على بداية الشمعة — أفضل لحظة دخول.'
+          : 'دخول صفقة هبوط (PUT) على بداية الشمعة — أفضل لحظة دخول.',
+    );
+
+    _secondsRemaining = alignedDuration;
+    // Distinct alert per direction (rising for CALL, falling for PUT).
+    if (isCall) {
+      _playCallSound();
+    } else {
+      _playPutSound();
+    }
+    evalJs(
+      "CandleChart.setGlobalEntryLine($entryP, '${isCall ? 'CALL' : 'PUT'}')",
+    );
     notifyListeners();
   }
 
@@ -1755,6 +1962,8 @@ class SignalEngine extends ChangeNotifier {
         (_activeSignal != null && _activeSignal!.status == 'ACTIVE')) {
       return;
     }
+    // The instant button takes over from monitoring if it was running.
+    if (_monitoring) stopMonitoring();
     _tvPriceGetter = tvPriceGetter; // save for entry + exit price lookups
 
     _isAnalyzing = true;
@@ -6674,6 +6883,83 @@ class SignalEngine extends ChangeNotifier {
           
           osc.start();
           osc.stop(ctx.currentTime + 0.45);
+        } catch(e) {}
+        """);
+    } catch (e) {
+      debugPrint('Error playing sound: $e');
+    }
+  }
+
+  // Monitoring: "activated" blip — a short, soft two-note confirmation.
+  void _playActivateSound() {
+    if (!kIsWeb) return;
+    try {
+      evalJs("""
+        try {
+          var ctx = new (window.AudioContext || window.webkitAudioContext)();
+          var osc = ctx.createOscillator();
+          var gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(440.00, ctx.currentTime); // A4
+          osc.frequency.setValueAtTime(587.33, ctx.currentTime + 0.09); // D5
+          gain.gain.setValueAtTime(0.07, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.22);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.22);
+        } catch(e) {}
+        """);
+    } catch (e) {
+      debugPrint('Error playing sound: $e');
+    }
+  }
+
+  // Monitoring CALL alert — bright, rising, positive triple-note.
+  void _playCallSound() {
+    if (!kIsWeb) return;
+    try {
+      evalJs("""
+        try {
+          var ctx = new (window.AudioContext || window.webkitAudioContext)();
+          var osc = ctx.createOscillator();
+          var gain = ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(523.25, ctx.currentTime);       // C5
+          osc.frequency.setValueAtTime(659.25, ctx.currentTime + 0.11); // E5
+          osc.frequency.setValueAtTime(880.00, ctx.currentTime + 0.22); // A5
+          gain.gain.setValueAtTime(0.14, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.5);
+        } catch(e) {}
+        """);
+    } catch (e) {
+      debugPrint('Error playing sound: $e');
+    }
+  }
+
+  // Monitoring PUT alert — lower, descending, cautionary triple-note.
+  void _playPutSound() {
+    if (!kIsWeb) return;
+    try {
+      evalJs("""
+        try {
+          var ctx = new (window.AudioContext || window.webkitAudioContext)();
+          var osc = ctx.createOscillator();
+          var gain = ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(440.00, ctx.currentTime);       // A4
+          osc.frequency.setValueAtTime(349.23, ctx.currentTime + 0.11); // F4
+          osc.frequency.setValueAtTime(261.63, ctx.currentTime + 0.22); // C4
+          gain.gain.setValueAtTime(0.12, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.5);
         } catch(e) {}
         """);
     } catch (e) {

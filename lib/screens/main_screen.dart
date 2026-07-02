@@ -139,6 +139,8 @@ class _MainScreenState extends State<MainScreen> {
   StreamSubscription<List<Map<String, dynamic>>>? _maintenanceListener;
   StreamSubscription<List<Map<String, dynamic>>>? _stdStrategyListener;
   StreamSubscription<List<Map<String, dynamic>>>? _vipStrategyListener;
+  StreamSubscription<List<Map<String, dynamic>>>? _monStdStrategyListener;
+  StreamSubscription<List<Map<String, dynamic>>>? _monVipStrategyListener;
   StreamSubscription<List<Map<String, dynamic>>>? _chartModeListener;
   StreamSubscription<List<Map<String, dynamic>>>? _pairsListener;
   StreamSubscription<List<Map<String, dynamic>>>? _priceSystemListener;
@@ -186,14 +188,12 @@ class _MainScreenState extends State<MainScreen> {
     _startMaintenanceListener();
 
     _selectedCategory = 'currencies';
-    if (AppConstants.currencyPairs.isNotEmpty) {
-      final first = AppConstants.currencyPairs.first;
-      _activeChartSymbol = first['chartSymbol'] as String? ?? '';
-      final firstSymbol = first['symbol'] as String? ?? '';
-      if (firstSymbol.isNotEmpty) {
-        _signalEngine.selectPair(firstSymbol);
-      }
-    }
+    // Do NOT default to a hardcoded TradingView pair (e.g. EUR/USD). The real
+    // pair list comes from the admin `pairs` table via _startPairsListener; until
+    // it arrives (and if the admin enabled nothing) we show an empty state. This
+    // starts empty so the first shown pair is the first ENABLED pair (PO or TV),
+    // never a stale default.
+    AppConstants.currencyPairs = [];
 
     // Server-driven market status: poll immediately, then every 5s.
     _startMarketStatusPolling();
@@ -2120,6 +2120,8 @@ class _MainScreenState extends State<MainScreen> {
     _maintenanceListener?.cancel();
     _stdStrategyListener?.cancel();
     _vipStrategyListener?.cancel();
+    _monStdStrategyListener?.cancel();
+    _monVipStrategyListener?.cancel();
     _chartModeListener?.cancel();
     _priceSystemListener?.cancel();
     _displaySourceListener?.cancel();
@@ -2281,6 +2283,11 @@ class _MainScreenState extends State<MainScreen> {
                 final s = pick['symbol'] as String? ?? '';
                 if (s.isNotEmpty) _signalEngine.selectPair(s);
               }
+
+              // No visible pairs at all → stop monitoring (nothing to watch).
+              if (vis.isEmpty && _signalEngine.isMonitoring) {
+                _signalEngine.stopMonitoring();
+              }
             });
 
             // STATE 9 — the OTC pair the user was viewing got disabled/removed
@@ -2326,6 +2333,30 @@ class _MainScreenState extends State<MainScreen> {
             if (rows.isEmpty || !mounted) return;
             final data = rows.first['data'] as Map<String, dynamic>? ?? {};
             if (data.isNotEmpty) _signalEngine.updateVipStrategy(data);
+          });
+
+      _monStdStrategyListener?.cancel();
+      _monStdStrategyListener = Supabase.instance.client
+          .from('configs')
+          .stream(primaryKey: ['id'])
+          .eq('id', 'monitoring_standard')
+          .listen((rows) {
+            if (rows.isEmpty || !mounted) return;
+            final data = rows.first['data'] as Map<String, dynamic>? ?? {};
+            if (data.isNotEmpty) {
+              _signalEngine.updateMonitoringStandardStrategy(data);
+            }
+          });
+
+      _monVipStrategyListener?.cancel();
+      _monVipStrategyListener = Supabase.instance.client
+          .from('configs')
+          .stream(primaryKey: ['id'])
+          .eq('id', 'monitoring_vip')
+          .listen((rows) {
+            if (rows.isEmpty || !mounted) return;
+            final data = rows.first['data'] as Map<String, dynamic>? ?? {};
+            if (data.isNotEmpty) _signalEngine.updateMonitoringVipStrategy(data);
           });
     } catch (_) {}
   }
@@ -3279,8 +3310,377 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
+  // Small circular "?" help button placed next to a signal button.
+  Widget _buildHelpButton({
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 46,
+        height: 46,
+        decoration: BoxDecoration(
+          color: color.withAlpha(20),
+          shape: BoxShape.circle,
+          border: Border.all(color: color.withAlpha(90)),
+        ),
+        child: Icon(Icons.question_mark_rounded, color: color, size: 20),
+      ),
+    );
+  }
+
+  void _onMonitorPressed() {
+    if (!_marketOpen || _signalEngine.isMarketClosed) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('السوق مغلق حالياً — لا يمكن بدء المراقبة'),
+          backgroundColor: AppConstants.putRed,
+        ),
+      );
+      return;
+    }
+    if (_isActiveOtc() && _otcUnhealthy) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('جارٍ إعادة الاتصال بمصدر السعر... حاول بعد لحظات'),
+          backgroundColor: AppConstants.warningOrange,
+        ),
+      );
+      return;
+    }
+    _signalEngine.startMonitoring(
+      _selectedMinutes,
+      tvPriceGetter: _tvPriceGetter,
+    );
+  }
+
+  // The smart-monitoring button (distinct icon + color from the instant button).
+  Widget _buildMonitorButton() {
+    const c = AppConstants.warningOrange;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: _onMonitorPressed,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            gradient: LinearGradient(
+              colors: [c.withAlpha(60), c.withAlpha(25)],
+            ),
+            border: Border.all(color: c.withAlpha(140)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.radar_rounded, color: c, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'المراقبة الذكية 🎯',
+                style: GoogleFonts.outfit(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Panel shown while monitoring is running but no trade has fired yet.
+  Widget _buildMonitoringWaitingPanel() {
+    const c = AppConstants.warningOrange;
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.radar_rounded, color: c, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'جاري المراقبة...',
+                style: GoogleFonts.outfit(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'يراقب النظام السوق وينتظر أفضل لحظة دخول على بداية الشمعة القادمة.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.outfit(
+              fontSize: 11,
+              color: AppConstants.textSecondary,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: c.withAlpha(18),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: c.withAlpha(70)),
+            ),
+            child: Column(
+              children: [
+                Text(
+                  'الشمعة الجديدة بعد',
+                  style: GoogleFonts.outfit(
+                    fontSize: 10,
+                    color: AppConstants.textSecondary,
+                    letterSpacing: 1,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _signalEngine.formattedMonitoringCountdown,
+                  style: GoogleFonts.robotoMono(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w900,
+                    color: c,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => _signalEngine.stopMonitoring(),
+              icon: const Icon(Icons.stop_circle_rounded, size: 18),
+              label: const Text('إيقاف المراقبة'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppConstants.putRed,
+                side: const BorderSide(color: AppConstants.putRed),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Signal-strength bar (score ÷ max_score × 100%) for monitoring signals.
+  Widget _buildStrengthBar(double pct, Color color) {
+    final p = (pct / 100).clamp(0.0, 1.0);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'قوة الإشارة',
+              style: GoogleFonts.outfit(
+                fontSize: 9,
+                color: AppConstants.textSecondary,
+                letterSpacing: 1,
+              ),
+            ),
+            Text(
+              '${pct.toStringAsFixed(0)}%',
+              style: GoogleFonts.outfit(
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 5),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: LinearProgressIndicator(
+            value: p,
+            minHeight: 8,
+            backgroundColor: AppConstants.borderGlow,
+            valueColor: AlwaysStoppedAnimation<Color>(color),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showInstantSignalHelp() {
+    _showUsageHelpDialog(
+      icon: Icons.bolt_rounded,
+      accent: AppConstants.accentCyan,
+      title: 'زر الإشارة الفورية',
+      lines: const [
+        'اضغط الزر في أي وقت.',
+        'النظام يحلل السوق فوراً وبعد ثوانٍ قليلة تظهر لك الإشارة.',
+        '',
+        '⚡ سريع وفوري',
+        '⏱️ النتيجة في أقل من 5 ثوانٍ',
+      ],
+    );
+  }
+
+  void _showMonitoringHelp() {
+    _showUsageHelpDialog(
+      icon: Icons.radar_rounded,
+      accent: AppConstants.warningOrange,
+      title: 'زر المراقبة الذكية',
+      lines: const [
+        'اضغط الزر وسيبه يشتغل.',
+        'النظام يراقب السوق باستمرار وينتظر أفضل لحظة للدخول.',
+        '',
+        '⏳ ممكن ياخد وقت (دقائق أو أكثر حسب السوق)',
+        '',
+        'لما اللحظة تيجي:',
+        '🔔 هتسمع صوت تنبيه فوراً',
+        '📊 هتلاقي الإشارة واضحة قدامك',
+        '⏱️ وعداد الصفقة هيبدأ تلقائياً',
+        '',
+        '💡 نصيحة: فعّل الصوت على جهازك عشان ما تفوتك الإشارة.',
+      ],
+    );
+  }
+
+  // Simple, jargon-free usage dialog (no strategy details, no numbers).
+  void _showUsageHelpDialog({
+    required IconData icon,
+    required Color accent,
+    required String title,
+    required List<String> lines,
+  }) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          backgroundColor: const Color(0xFF12102A),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: accent.withAlpha(120), width: 1.5),
+          ),
+          title: Row(
+            children: [
+              Icon(icon, color: accent, size: 26),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  style: GoogleFonts.outfit(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 17,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: lines
+                .map(
+                  (l) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2.5),
+                    child: Text(
+                      l,
+                      style: GoogleFonts.outfit(
+                        color: l.isEmpty ? Colors.transparent : Colors.white70,
+                        fontSize: 13.5,
+                        height: 1.5,
+                        fontWeight: l.startsWith('⚡') ||
+                                l.startsWith('🔔') ||
+                                l.startsWith('📊') ||
+                                l.startsWith('⏱️') ||
+                                l.startsWith('⏳') ||
+                                l.startsWith('💡')
+                            ? FontWeight.w700
+                            : FontWeight.normal,
+                      ),
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
+          actions: [
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(ctx),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: accent,
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: Text(
+                  'فهمت',
+                  style: GoogleFonts.outfit(fontWeight: FontWeight.w900),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Shown instead of the chart when the admin hasn't enabled any pair.
+  Widget _buildNoPairsCard() {
+    return _buildGlassCard(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 20),
+        child: Column(
+          children: [
+            Icon(
+              Icons.show_chart_rounded,
+              color: AppConstants.textSecondary.withAlpha(120),
+              size: 54,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'لا توجد أزواج متاحة حالياً',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.outfit(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'اختر زوجاً من القائمة عند توفره',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.outfit(
+                fontSize: 12.5,
+                color: AppConstants.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // WIDGET: Chart + Signal Panel (combined card)
   Widget _buildChartCard() {
+    // No enabled pairs at all → don't show any chart, show a friendly empty state.
+    if (_visiblePairs.isEmpty) {
+      return _buildNoPairsCard();
+    }
     final chartSymbol = _activeChartSymbol.isNotEmpty
         ? _activeChartSymbol
         : AppConstants.chartSymbolFor(_signalEngine.activePair);
@@ -3447,6 +3847,11 @@ class _MainScreenState extends State<MainScreen> {
 
     final signal = _signalEngine.activeSignal;
 
+    // 1.5 Monitoring (waiting for a new candle) — no active trade yet.
+    if (_signalEngine.isMonitoring && signal == null) {
+      return _buildMonitoringWaitingPanel();
+    }
+
     // 2. Idle State
     if (signal == null) {
       return Padding(
@@ -3506,9 +3911,33 @@ class _MainScreenState extends State<MainScreen> {
             const SizedBox(height: 12),
             _buildDurationSelector(),
             const SizedBox(height: 12),
-            _buildRequestButton(
-              enabled: true,
-              text: 'استخراج الإشارة التالية ⚡',
+            // Instant signal button + its help "?"
+            Row(
+              children: [
+                Expanded(
+                  child: _buildRequestButton(
+                    enabled: true,
+                    text: 'استخراج الإشارة الفورية ⚡',
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _buildHelpButton(
+                  color: AppConstants.accentCyan,
+                  onTap: _showInstantSignalHelp,
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            // Smart monitoring button + its help "?"
+            Row(
+              children: [
+                Expanded(child: _buildMonitorButton()),
+                const SizedBox(width: 8),
+                _buildHelpButton(
+                  color: AppConstants.warningOrange,
+                  onTap: _showMonitoringHelp,
+                ),
+              ],
             ),
           ],
         ),
@@ -3585,6 +4014,14 @@ class _MainScreenState extends State<MainScreen> {
             ],
           ),
           const Divider(color: AppConstants.borderGlow, height: 16),
+
+          // Signal strength bar — only for smart-monitoring signals.
+          if (isActive &&
+              _signalEngine.isMonitoring &&
+              _signalEngine.lastSignalStrength > 0) ...[
+            _buildStrengthBar(_signalEngine.lastSignalStrength, accentColor),
+            const SizedBox(height: 12),
+          ],
 
           // Grid of signals metrics
           Row(
