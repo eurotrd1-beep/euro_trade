@@ -1848,12 +1848,45 @@ class SignalEngine extends ChangeNotifier {
   double _currentPrice = 1.08450;
   String _chartTimeframe = '1m';
 
+  // When true, the candle buffer holds REAL OHLC (from the `candles` table) and
+  // the synthetic ticker stops fabricating prices/candles. All indicators/rules
+  // then evaluate on real market data. Toggled by the app based on price_system.
+  bool _realCandlesMode = false;
+  bool get realCandlesMode => _realCandlesMode;
+
+  // Replace the candle buffer with REAL OHLC and recompute every indicator on it.
+  // Called by the app after fetching from Supabase `candles` (scraping mode).
+  void setRealCandles(List<Candle> candles) {
+    if (candles.isEmpty) return;
+    _realCandlesMode = true;
+    _candles
+      ..clear()
+      ..addAll(candles);
+    _currentPrice = candles.last.close;
+    _updateAllIndicators();
+    notifyListeners();
+  }
+
+  // Return to simulator behaviour (synthetic candles). Used when the admin sets
+  // price_system = simulator, or when no real candles are available for a pair.
+  void disableRealCandles() {
+    if (!_realCandlesMode) return;
+    _realCandlesMode = false;
+    _initChart();
+    _updateAllIndicators();
+    notifyListeners();
+  }
+
   // Real-time signals
   TradingSignal? _activeSignal;
   final List<TradingSignal> _signalHistory = [];
   bool _isAnalyzing = false;
   String _analysisStageText = '';
   String _signalChangeNotice = '';
+  // Instant mode: set when a press yielded no valid opportunity (min_score not
+  // reached / pyramid rejected). Shown as a banner instead of forcing a signal.
+  String _lastWaitNotice = '';
+  String get lastWaitNotice => _lastWaitNotice;
 
   // Social win feed simulated log
   final List<String> _socialWinLogs = [];
@@ -2002,6 +2035,7 @@ class SignalEngine extends ChangeNotifier {
     _isAnalyzing = true;
     _marketClosed = false;
     _signalChangeNotice = ''; // Clear previous warning notice
+    _lastWaitNotice = ''; // Clear previous "no opportunity" banner
     _activeSignal =
         null; // Clear previous signal card to show analysis progress
 
@@ -6054,36 +6088,41 @@ class SignalEngine extends ChangeNotifier {
         }
       }
 
-      double volatility = _currentPrice * 0.00025;
-      double priceChange =
-          (_random.nextDouble() - 0.492) * volatility; // slight upward drift
+      // Synthetic price walk — ONLY in simulator mode. When real OHLC candles
+      // are fed (scraping mode), we never fabricate prices/candles; the buffer is
+      // refreshed from the real `candles` table by the app.
+      if (!_realCandlesMode) {
+        double volatility = _currentPrice * 0.00025;
+        double priceChange =
+            (_random.nextDouble() - 0.492) * volatility; // slight upward drift
 
-      // Guaranteed win: tiny additive bias keeps Dart's internal price trending toward win
-      // (visual guaranteed win is handled by chart.js's own tick micro-bias via _trade.gwin)
-      if (_isGuaranteedWin &&
-          _activeSignal != null &&
-          _activeSignal!.status == 'ACTIVE') {
-        final signal = _activeSignal!;
-        final isCall = signal.direction == 'CALL';
-        final diff = _currentPrice - signal.entryPrice;
-        final losing = isCall ? diff <= 0 : diff >= 0;
-        if (losing) {
-          priceChange += isCall ? volatility * 0.08 : -volatility * 0.08;
+        // Guaranteed win: tiny additive bias keeps Dart's internal price trending toward win
+        // (visual guaranteed win is handled by chart.js's own tick micro-bias via _trade.gwin)
+        if (_isGuaranteedWin &&
+            _activeSignal != null &&
+            _activeSignal!.status == 'ACTIVE') {
+          final signal = _activeSignal!;
+          final isCall = signal.direction == 'CALL';
+          final diff = _currentPrice - signal.entryPrice;
+          final losing = isCall ? diff <= 0 : diff >= 0;
+          if (losing) {
+            priceChange += isCall ? volatility * 0.08 : -volatility * 0.08;
+          }
         }
+
+        // Update price
+        _currentPrice += priceChange;
+
+        // Update active candle (the last one)
+        Candle activeCandle = _candles.last;
+        activeCandle.close = _currentPrice;
+        if (_currentPrice > activeCandle.high) activeCandle.high = _currentPrice;
+        if (_currentPrice < activeCandle.low) activeCandle.low = _currentPrice;
+        // Accumulate tick volume on active candle
+        activeCandle.volume += 10.0 + _random.nextDouble() * 50.0;
       }
 
-      // Update price
-      _currentPrice += priceChange;
-
-      // Update active candle (the last one)
-      Candle activeCandle = _candles.last;
-      activeCandle.close = _currentPrice;
-      if (_currentPrice > activeCandle.high) activeCandle.high = _currentPrice;
-      if (_currentPrice < activeCandle.low) activeCandle.low = _currentPrice;
-      // Accumulate tick volume on active candle
-      activeCandle.volume += 10.0 + _random.nextDouble() * 50.0;
-
-      // Re-calculate ALL indicator states from live chart prices
+      // Re-calculate ALL indicator states from the current candle buffer
       _updateAllIndicators();
 
       // Update active signal countdown using real-time difference from expiry
@@ -6098,23 +6137,27 @@ class SignalEngine extends ChangeNotifier {
         }
       }
 
-      // Roll candles based on timeframe
-      DateTime now = DateTime.now();
-      if (now.difference(activeCandle.time).inSeconds >= timeframeSeconds) {
-        _candles.removeAt(0);
-        _candles.add(
-          Candle(
-            open: _currentPrice,
-            high: _currentPrice,
-            low: _currentPrice,
-            close: _currentPrice,
-            time: now,
-            volume: 0.0,
-          ),
-        );
+      // Roll candles based on timeframe — simulator mode only. In real mode the
+      // rolling comes from the refreshed `candles` table data.
+      if (!_realCandlesMode) {
+        DateTime now = DateTime.now();
+        final Candle activeCandle = _candles.last;
+        if (now.difference(activeCandle.time).inSeconds >= timeframeSeconds) {
+          _candles.removeAt(0);
+          _candles.add(
+            Candle(
+              open: _currentPrice,
+              high: _currentPrice,
+              low: _currentPrice,
+              close: _currentPrice,
+              time: now,
+              volume: 0.0,
+            ),
+          );
 
-        // Re-evaluate signal dynamically at candle boundary
-        _reEvaluateActiveSignalDirection();
+          // Re-evaluate signal dynamically at candle boundary
+          _reEvaluateActiveSignalDirection();
+        }
       }
 
       notifyListeners();
@@ -6621,9 +6664,27 @@ class SignalEngine extends ChangeNotifier {
     double netScore = _userRole == 'vip'
         ? _scoreV3VipEngine()
         : _scoreV2Engine();
-    // Pyramid rejection was already handled in requestNextSignal — ignore here
-    bool isCall = netScore >= 0;
     double absScore = netScore.abs();
+
+    // Respect the strategy's gates (same as monitoring): if min_score isn't met
+    // or the pyramid rejected the setup, DON'T force a signal — show a
+    // "no opportunity now" banner instead.
+    final DynamicStrategy? gateDyn = _activeDynamic;
+    final double minScore = gateDyn?.minScore ?? 0.0;
+    final bool rejected = _pyramidRejectReason.isNotEmpty;
+    if (rejected || absScore < minScore) {
+      _lastWaitNotice = rejected
+          ? 'لا توجد فرصة دخول الآن — لم تتحقق شروط الاستراتيجية'
+          : 'لا توجد فرصة دخول الآن — لم يتحقق الحد الأدنى للتوافق (min_score)';
+      _activeSignal = null;
+      _secondsRemaining = 0;
+      evalJs("CandleChart.setGlobalEntryLine(null, null)");
+      notifyListeners();
+      return;
+    }
+    _lastWaitNotice = '';
+
+    bool isCall = netScore >= 0;
 
     double confidence;
     if (_userRole == 'vip') {

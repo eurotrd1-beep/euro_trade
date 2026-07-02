@@ -156,6 +156,7 @@ class _MainScreenState extends State<MainScreen> {
   // --- Server-driven market status (from proxy `marketOpen`) ---
   static const String _proxyBase = 'https://euro-trade-proxy-1.onrender.com';
   Timer? _marketStatusTimer;
+  Timer? _realCandlesTimer;
   bool _marketOpen = true; // optimistic default until first poll
   // OTC data health: true while the OTC scraper is repairing/reconnecting/down,
   // so we block new-signal requests on stale/incomplete OTC data.
@@ -197,6 +198,59 @@ class _MainScreenState extends State<MainScreen> {
 
     // Server-driven market status: poll immediately, then every 5s.
     _startMarketStatusPolling();
+
+    // Feed REAL OHLC candles into the signal engine so indicators/rules compute
+    // on the real market (scraping mode). Refreshes every 3s + on demand.
+    _syncEngineCandles();
+    _realCandlesTimer = Timer.periodic(
+      const Duration(seconds: 3),
+      (_) => _syncEngineCandles(),
+    );
+  }
+
+  // Loads the real OHLC candle series for the active pair+timeframe from the
+  // Supabase `candles` table (key `<chartSymbol>_<interval>`) and hands it to the
+  // engine. In simulator mode it falls back to the engine's synthetic candles.
+  Future<void> _syncEngineCandles() async {
+    if (!mounted) return;
+    if (_effectivePriceSystem == 'simulator') {
+      _signalEngine.disableRealCandles();
+      return;
+    }
+    final sym = _activeChartSymbol;
+    if (sym.isEmpty) return;
+    final iv = _signalEngine.chartTimeframe;
+    final key = '${sym}_$iv';
+    try {
+      final row = await Supabase.instance.client
+          .from('candles')
+          .select('data')
+          .eq('key', key)
+          .maybeSingle();
+      final data = row?['data'] as List?;
+      if (data == null || data.isEmpty) return; // keep current buffer
+      final candles = <Candle>[];
+      for (final e in data) {
+        if (e is! Map) continue;
+        final o = (e['o'] as num?)?.toDouble();
+        final h = (e['h'] as num?)?.toDouble();
+        final l = (e['l'] as num?)?.toDouble();
+        final c = (e['c'] as num?)?.toDouble();
+        final t = (e['t'] as num?)?.toInt();
+        if (o == null || h == null || l == null || c == null || t == null) {
+          continue;
+        }
+        candles.add(Candle(
+          open: o,
+          high: h,
+          low: l,
+          close: c,
+          time: DateTime.fromMillisecondsSinceEpoch(t * 1000),
+          volume: 1000.0,
+        ));
+      }
+      if (candles.isNotEmpty && mounted) _signalEngine.setRealCandles(candles);
+    } catch (_) {}
   }
 
   // ── Market status polling ────────────────────────────────────────────────
@@ -2127,6 +2181,7 @@ class _MainScreenState extends State<MainScreen> {
     _displaySourceListener?.cancel();
     _pairsListener?.cancel();
     _marketStatusTimer?.cancel();
+    _realCandlesTimer?.cancel();
     _vipExpiryTimer?.cancel();
     _signalEngine.removeListener(_onSignalEngineUpdate);
     _signalEngine.dispose();
@@ -3065,6 +3120,7 @@ class _MainScreenState extends State<MainScreen> {
                                         pair['chartSymbol'] as String? ?? '';
                                     if (cs.isNotEmpty)
                                       setState(() => _activeChartSymbol = cs);
+                                    _syncEngineCandles();
                                     Navigator.pop(context);
                                     // Re-evaluate market status for the new pair right away.
                                     _pollMarketStatus();
@@ -3171,6 +3227,7 @@ class _MainScreenState extends State<MainScreen> {
     if (sym.isEmpty) return;
     if (mounted) setState(() => _activeChartSymbol = cs);
     _signalEngine.selectPair(sym);
+    _syncEngineCandles(); // load the new pair's real candles into the engine
     _pollMarketStatus(); // refresh market status for the new pair
   }
 
@@ -3956,6 +4013,37 @@ class _MainScreenState extends State<MainScreen> {
               ),
             ),
             const SizedBox(height: 12),
+            // "No opportunity now" banner (instant press that didn't meet the strategy)
+            if (_signalEngine.lastWaitNotice.isNotEmpty) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppConstants.warningOrange.withAlpha(20),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppConstants.warningOrange.withAlpha(90)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.hourglass_empty_rounded,
+                        color: AppConstants.warningOrange, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _signalEngine.lastWaitNotice,
+                        style: GoogleFonts.outfit(
+                          fontSize: 11.5,
+                          color: AppConstants.warningOrange,
+                          fontWeight: FontWeight.w700,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
             _buildDurationSelector(),
             const SizedBox(height: 12),
             // Instant signal button + its help "?"
@@ -4459,6 +4547,8 @@ class _MainScreenState extends State<MainScreen> {
           setState(() {
             _signalEngine.setChartTimeframe(tf);
           });
+          // Load the real candles for the new interval immediately.
+          _syncEngineCandles();
         },
         borderRadius: BorderRadius.circular(6),
         child: AnimatedContainer(
