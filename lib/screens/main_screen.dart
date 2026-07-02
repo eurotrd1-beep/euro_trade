@@ -180,6 +180,10 @@ class _MainScreenState extends State<MainScreen> {
   // --- Promotional announcement (admin-controlled, configs/promo) ---
   bool _promoChecked = false; // fetch & decide only once per session
 
+  // --- Account-deletion detection ---
+  bool _userRowSeen = false; // we've seen our users row at least once
+  bool _accountDeletedHandled = false; // guard so the dialog shows only once
+
   @override
   void initState() {
     super.initState();
@@ -513,7 +517,22 @@ class _MainScreenState extends State<MainScreen> {
           .stream(primaryKey: ['id'])
           .eq('id', accountId)
           .listen((rows) async {
-            if (rows.isEmpty || !mounted) return;
+            if (!mounted) return;
+            // Account deleted by the admin → the row disappears. Once we've seen
+            // the row at least once, an empty emission means deletion → kick the
+            // user out to the login screen (auto logout).
+            if (rows.isEmpty) {
+              if (_userRowSeen && !_accountDeletedHandled) {
+                _accountDeletedHandled = true;
+                _roleListener?.cancel();
+                _maintenanceListener?.cancel();
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) _showAccountDeletedDialog();
+                });
+              }
+              return;
+            }
+            _userRowSeen = true;
             final data = rows.first;
 
             final isBanned = data['is_banned'] as bool? ?? false;
@@ -889,6 +908,67 @@ class _MainScreenState extends State<MainScreen> {
               ),
               child: Text(
                 'موافق',
+                style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showAccountDeletedDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: AppConstants.spaceBackground.withAlpha(220),
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          backgroundColor: AppConstants.cardBgColor,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(
+              color: AppConstants.putRed.withAlpha(100),
+              width: 1.5,
+            ),
+          ),
+          title: Row(
+            children: [
+              const Icon(
+                Icons.person_off_rounded,
+                color: AppConstants.putRed,
+                size: 22,
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'تم حذف حسابك',
+                style: GoogleFonts.outfit(
+                  color: AppConstants.textPrimary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            'تم حذف حسابك من قِبَل الإدارة.\nيرجى تسجيل الدخول مرة أخرى أو التواصل مع الدعم.',
+            style: GoogleFonts.outfit(
+              color: AppConstants.textSecondary,
+              height: 1.6,
+            ),
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await _logout();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppConstants.putRed,
+                foregroundColor: Colors.white,
+              ),
+              child: Text(
+                'تسجيل الدخول',
                 style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
               ),
             ),
