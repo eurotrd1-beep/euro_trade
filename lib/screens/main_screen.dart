@@ -3471,6 +3471,34 @@ class _MainScreenState extends State<MainScreen> {
               ),
             ],
           ),
+          // Signals fired so far this session — so a user who looked away knows
+          // an alert already happened (and how many).
+          if (_signalEngine.monitoringSignalsFired > 0) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppConstants.callGreen.withAlpha(22),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: AppConstants.callGreen.withAlpha(90)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('🔔', style: TextStyle(fontSize: 13)),
+                  const SizedBox(width: 6),
+                  Text(
+                    'إشارات صدرت حتى الآن: ${_signalEngine.monitoringSignalsFired}',
+                    style: GoogleFonts.outfit(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w800,
+                      color: AppConstants.callGreen,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 6),
           Text(
             _signalEngine.monitoringLastCheckFailed

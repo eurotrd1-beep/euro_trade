@@ -573,6 +573,7 @@ class SignalEngine extends ChangeNotifier {
   DateTime? _monStartTime; // when the current monitoring session began
   bool _monLastCheckFailed = false; // last new candle didn't meet conditions
   int _monChecksDone = 0; // how many candles have been evaluated
+  int _monSignalsFired = 0; // signals fired since monitoring started (missed-alert)
 
   bool get isMonitoring => _monitoring;
   String get monitoringPhase => _monPhase;
@@ -580,6 +581,7 @@ class SignalEngine extends ChangeNotifier {
   double get lastSignalStrength => _lastSignalStrength;
   bool get monitoringLastCheckFailed => _monLastCheckFailed;
   int get monitoringChecksDone => _monChecksDone;
+  int get monitoringSignalsFired => _monSignalsFired;
 
   int get monitoringElapsedSeconds {
     if (_monStartTime == null) return 0;
@@ -705,6 +707,7 @@ class SignalEngine extends ChangeNotifier {
     _monStartTime = DateTime.now();
     _monLastCheckFailed = false;
     _monChecksDone = 0;
+    _monSignalsFired = 0;
     _activeSignal = null;
     _playActivateSound();
     notifyListeners();
@@ -751,6 +754,7 @@ class SignalEngine extends ChangeNotifier {
       // 3) min_score met → fire on this new candle, then wait out the trade.
       if (!rejected && absScore >= minScore) {
         _monLastCheckFailed = false;
+        _monSignalsFired++;
         _fireMonitoringSignal(netScore, dyn);
         _monPhase = 'trade';
         notifyListeners();
