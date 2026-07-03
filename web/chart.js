@@ -332,6 +332,7 @@ window.CandleChart = (function () {
     this._loadStartedAt  = 0;     // start of current tv load cycle (for status timing)
     this._sawEmptyResponse = false; // received >=1 valid JSON with empty candles
     this._marketClosedNote = false; // overlay 'market closed' note on next _draw
+    this._poClosed       = false; // PO marks this pair closed → history load must not repaint
     this._trade          = null; // { direction, entryPrice, secondsLeft, gwin }
     this._gwinBias       = 0;    // current guaranteed-win price offset (eased in/out — never snaps)
 
@@ -710,7 +711,9 @@ window.CandleChart = (function () {
             self.candles = arr.slice(-MAX_CANDLES);
             self._otcProblem = null;      // never let a transient message hide the chart
             self._otcOverlay = null;
-            self._draw();
+            // Don't paint over the "market closed" takeover — the price poll owns
+            // that state. Adopt the candles now; they'll show when it reopens.
+            if (!self._poClosed) self._draw();
             return;
           }
           /* Periodic top-up: adopt stored history only when it's at/ahead of our
@@ -719,7 +722,7 @@ window.CandleChart = (function () {
           var lastStored = arr[arr.length - 1].t;
           if (lastStored >= lastLocal) {
             self.candles = arr.slice(-MAX_CANDLES);
-            if (!self._otcProblem) self._draw();
+            if (!self._otcProblem && !self._poClosed) self._draw();
           }
         })
         .catch(function() { /* surfaced by the status poll (supabase down) */ });
@@ -765,7 +768,8 @@ window.CandleChart = (function () {
     /* MARKET CLOSED (Pocket Option's own flag): if PO marks this asset closed
        (po === false — the "N/A" state), HIDE the chart entirely and show only
        "market closed" — even though PO keeps streaming the price. */
-    if (entry && entry.po === false) { this._otcMsg('market_closed'); return; }
+    if (entry && entry.po === false) { this._poClosed = true; this._otcMsg('market_closed'); return; }
+    this._poClosed = false;   // market is open for this pair → history load may draw
 
     /* PRICES WIN: if THIS pair has a fresh live price, render it regardless of the
        global scraper status. The price source (e.g. a local worker) can be a
