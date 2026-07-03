@@ -21,8 +21,10 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _idController = TextEditingController();
+  final TextEditingController _promoController = TextEditingController();
   String _selectedBroker = ''; // no default — the user MUST pick a platform
   String _selectedBrokerKey = '';
+  String _selectedBrokerPromo = ''; // admin promo code required for this platform
   bool _isVerifying = false;
   String _verificationStepText = '';
   double _verificationProgress = 0.0;
@@ -271,6 +273,67 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   // Execute verification handshake simulation
+  void _showPromoRequiredDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          backgroundColor: AppConstants.cardBgColor,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(
+              color: AppConstants.warningOrange.withAlpha(120),
+              width: 1.5,
+            ),
+          ),
+          title: Row(
+            children: [
+              const Icon(
+                Icons.local_offer_rounded,
+                color: AppConstants.warningOrange,
+                size: 22,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'كود البرومو غير صحيح',
+                  style: GoogleFonts.outfit(
+                    color: AppConstants.textPrimary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            'للدخول عبر منصة $_selectedBroker يجب إنشاء حساب جديد على هذه المنصة '
+            'باستخدام كود البرومو الخاص بنا، ثم إدخال الكود في خانة البرومو مع '
+            'معرّف الحساب.\n\nالكود اللي أدخلته غير مطابق — تأكد منه وحاول مرة أخرى.',
+            style: GoogleFonts.outfit(
+              color: AppConstants.textSecondary,
+              height: 1.7,
+              fontSize: 13.5,
+            ),
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppConstants.warningOrange,
+                foregroundColor: Colors.black,
+              ),
+              child: Text(
+                'حسناً',
+                style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _startVerification() {
     final accountId = _idController.text.trim();
     if (accountId.isEmpty) {
@@ -294,6 +357,16 @@ class _LoginScreenState extends State<LoginScreen> {
         _errorMessage = 'اختر منصة التداول أولاً (الخطوة 1)';
       });
       return;
+    }
+
+    // Promo gate: if the selected platform has an admin promo code, the user must
+    // enter it and it must match exactly (case-insensitive). Otherwise → dialog.
+    if (_selectedBrokerPromo.trim().isNotEmpty) {
+      final entered = _promoController.text.trim();
+      if (entered.toLowerCase() != _selectedBrokerPromo.trim().toLowerCase()) {
+        _showPromoRequiredDialog();
+        return;
+      }
     }
 
     setState(() {
@@ -671,6 +744,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         final logoUrl  = d['logo_url']  as String? ?? '';
                         final clickKey = d['click_key'] as String? ??
                             name.toLowerCase().replaceAll(' ', '_');
+                        final promoCode = d['promo_code'] as String? ?? '';
                         return [
                           if (i > 0) const SizedBox(width: spacing),
                           SizedBox(
@@ -679,6 +753,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               name: name,
                               logoUrl: logoUrl,
                               clickKey: clickKey,
+                              promoCode: promoCode,
                               isSelected: _selectedBroker == name,
                             ),
                           ),
@@ -730,6 +805,47 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
             ),
+
+            // Step 3: Promo code — shown ONLY when the selected platform has a
+            // promo code set by the admin (then it's mandatory + must match).
+            if (_selectedBrokerPromo.trim().isNotEmpty) ...[
+              const SizedBox(height: 25),
+              Text(
+                '3. أدخل كود البرومو (إجباري لمنصة $_selectedBroker)',
+                style: GoogleFonts.outfit(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: AppConstants.accentCyan,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _promoController,
+                style: GoogleFonts.outfit(color: Colors.white, fontSize: 16),
+                textCapitalization: TextCapitalization.characters,
+                decoration: InputDecoration(
+                  hintText: 'أدخل كود البرومو الخاص بالمنصة',
+                  hintStyle: GoogleFonts.outfit(
+                    color: AppConstants.textSecondary.withAlpha(100),
+                  ),
+                  filled: true,
+                  fillColor: AppConstants.spaceBackground.withAlpha(180),
+                  prefixIcon: const Icon(
+                    Icons.local_offer_rounded,
+                    color: AppConstants.textSecondary,
+                    size: 18,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: AppConstants.borderGlow),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: AppConstants.accentCyan),
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 35),
 
             // Verify Button
@@ -865,12 +981,15 @@ class _LoginScreenState extends State<LoginScreen> {
     required String name,
     required String logoUrl,
     required String clickKey,
+    required String promoCode,
     required bool isSelected,
   }) {
     return InkWell(
       onTap: () => setState(() {
         _selectedBroker = name;
         _selectedBrokerKey = clickKey;
+        _selectedBrokerPromo = promoCode;
+        _promoController.clear(); // reset the promo field when platform changes
       }),
       borderRadius: BorderRadius.circular(10),
       child: AnimatedContainer(
