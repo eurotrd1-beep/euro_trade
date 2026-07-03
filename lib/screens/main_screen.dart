@@ -185,6 +185,10 @@ class _MainScreenState extends State<MainScreen> {
   bool _userRowSeen = false; // we've seen our users row at least once
   bool _accountDeletedHandled = false; // guard so the dialog shows only once
 
+  // --- VIP single-device lock ---
+  String _deviceId = ''; // this device/browser id
+  bool _deviceMismatchHandled = false; // guard so the kick happens once
+
   @override
   void initState() {
     super.initState();
@@ -478,6 +482,7 @@ class _MainScreenState extends State<MainScreen> {
       _userAccountId = accountId;
       _userBroker = brokerName;
     });
+    _deviceId = await AppConstants.getDeviceId();
     _signalEngine.setAccountId(accountId);
     _loadTelegramContact();
     _startRoleListener(accountId);
@@ -542,6 +547,26 @@ class _MainScreenState extends State<MainScreen> {
             }
 
             final newRole = data['role'] ?? 'standard';
+
+            // VIP is locked to ONE device. Enforce at runtime (covers sessions
+            // that were already open before VIP was activated). Standard accounts
+            // are never device-locked — they work everywhere.
+            if (newRole == 'vip' && _deviceId.isNotEmpty) {
+              final storedDevice = (data['device_id'] as String?) ?? '';
+              if (storedDevice.isEmpty) {
+                // First VIP device → claim this device.
+                try {
+                  await Supabase.instance.client
+                      .from('users')
+                      .update({'device_id': _deviceId}).eq('id', accountId);
+                } catch (_) {}
+              } else if (storedDevice != _deviceId) {
+                // Another device owns this VIP account → kick this one out.
+                _handleDeviceMismatch();
+                return;
+              }
+            }
+
             final vipExpiryStr = data['vip_expiry'] as String?;
             DateTime? newExpiry;
             if (vipExpiryStr != null) newExpiry = DateTime.tryParse(vipExpiryStr);
@@ -944,6 +969,82 @@ class _MainScreenState extends State<MainScreen> {
         }
       } catch (_) {}
     });
+  }
+
+  // VIP account is being used on another device → kick this one out.
+  void _handleDeviceMismatch() {
+    if (_deviceMismatchHandled || !mounted) return;
+    _deviceMismatchHandled = true;
+    _roleListener?.cancel();
+    _maintenanceListener?.cancel();
+    _accountCheckTimer?.cancel();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _showDeviceMismatchDialog();
+    });
+  }
+
+  void _showDeviceMismatchDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: AppConstants.spaceBackground.withAlpha(220),
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          backgroundColor: AppConstants.cardBgColor,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(
+              color: AppConstants.warningOrange.withAlpha(120),
+              width: 1.5,
+            ),
+          ),
+          title: Row(
+            children: [
+              const Icon(
+                Icons.devices_other_rounded,
+                color: AppConstants.warningOrange,
+                size: 22,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'تم فتح الحساب على جهاز آخر',
+                  style: GoogleFonts.outfit(
+                    color: AppConstants.textPrimary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            'حساب VIP مسموح له بالعمل على جهاز واحد فقط.\n'
+            'تم تسجيل الدخول بهذا الحساب من جهاز آخر، لذلك تم إنهاء الجلسة هنا.',
+            style: GoogleFonts.outfit(
+              color: AppConstants.textSecondary,
+              height: 1.6,
+            ),
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await _logout();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppConstants.warningOrange,
+                foregroundColor: Colors.black,
+              ),
+              child: Text(
+                'تسجيل الدخول',
+                style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showAccountDeletedDialog() {

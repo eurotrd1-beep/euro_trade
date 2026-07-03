@@ -1,4 +1,6 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AppConstants {
   // Central price formatting helper
@@ -6,6 +8,20 @@ class AppConstants {
     if (price >= 1000) return price.toStringAsFixed(2);
     if (price >= 10) return price.toStringAsFixed(3);
     return price.toStringAsFixed(5);
+  }
+
+  // A stable per-device/browser id (generated once, persisted locally). Used to
+  // lock a VIP account to a single device.
+  static const String keyDeviceId = 'device_id';
+  static Future<String> getDeviceId() async {
+    final prefs = await SharedPreferences.getInstance();
+    var id = prefs.getString(keyDeviceId);
+    if (id == null || id.isEmpty) {
+      id = 'd${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}'
+          '${Random().nextInt(0x7fffffff).toRadixString(36)}';
+      await prefs.setString(keyDeviceId, id);
+    }
+    return id;
   }
 
   // --- Broker Affiliate Links ---
