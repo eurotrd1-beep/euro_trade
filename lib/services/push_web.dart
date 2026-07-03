@@ -58,3 +58,13 @@ String appUrl() {
     return '';
   }
 }
+
+String lastError() {
+  try {
+    final ep = _ep;
+    if (ep == null) return 'no_euroPush';
+    return (ep.callMethod('getError', const []) as String?) ?? '';
+  } catch (e) {
+    return 'err:$e';
+  }
+}

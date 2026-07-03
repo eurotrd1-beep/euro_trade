@@ -36,6 +36,7 @@
   window.euroPush = {
     _done: false,
     _result: null,
+    _error: null,
 
     isSupported: function () {
       return (
@@ -63,12 +64,14 @@
       var self = this;
       self._done = false;
       self._result = null;
+      self._error = null;
       (async function () {
         try {
-          if (!self.isSupported() || !vapidPublicKey) return;
+          if (!self.isSupported()) { self._error = 'unsupported'; return; }
+          if (!vapidPublicKey) { self._error = 'no_vapid_key'; return; }
           if (Notification.permission !== 'granted') {
             var perm = await Notification.requestPermission();
-            if (perm !== 'granted') return;
+            if (perm !== 'granted') { self._error = 'permission_' + perm; return; }
           }
           var reg = await navigator.serviceWorker.register(SW_PATH, { scope: SW_SCOPE });
           await waitForActive(reg);
@@ -81,6 +84,7 @@
           }
           self._result = JSON.stringify(sub);
         } catch (e) {
+          self._error = (e && e.name ? e.name + ': ' : '') + (e && e.message ? e.message : String(e));
           console.warn('euroPush subscribe failed:', e);
           self._result = null;
         } finally {
@@ -90,6 +94,7 @@
     },
 
     isDone: function () { return this._done === true; },
-    getResult: function () { return this._result; }
+    getResult: function () { return this._result; },
+    getError: function () { return this._error; }
   };
 })();
