@@ -1,6 +1,6 @@
 // Web implementation: bridges to window.euroPush (see web/push/push_client.js)
-// via dart:js interop. JS Promises are turned into Dart Futures with a Completer
-// (keeps this file dependency-free / consistent with the rest of the project).
+// via dart:js. Subscription uses a poll-based API instead of Promise bridging,
+// which is reliable across browsers and avoids dart:js Promise quirks.
 import 'dart:async';
 import 'dart:js' as js;
 
@@ -10,26 +10,6 @@ js.JsObject? get _ep {
   } catch (_) {
     return null;
   }
-}
-
-Future<dynamic> _promiseToFuture(dynamic promise) {
-  final completer = Completer<dynamic>();
-  try {
-    final p = promise as js.JsObject;
-    p.callMethod('then', [
-      (value) {
-        if (!completer.isCompleted) completer.complete(value);
-      }
-    ]);
-    p.callMethod('catch', [
-      (_) {
-        if (!completer.isCompleted) completer.complete(null);
-      }
-    ]);
-  } catch (_) {
-    if (!completer.isCompleted) completer.complete(null);
-  }
-  return completer.future;
 }
 
 bool isSupported() {
@@ -42,26 +22,31 @@ bool isSupported() {
   }
 }
 
+/// Fires the native permission prompt. We don't need the result here.
 Future<String> requestPermission() async {
   try {
-    final ep = _ep;
-    if (ep == null) return 'denied';
-    final result = await _promiseToFuture(ep.callMethod('requestPermission', const []));
-    return (result as String?) ?? 'denied';
-  } catch (_) {
-    return 'denied';
-  }
+    _ep?.callMethod('requestPermission', const []);
+  } catch (_) {}
+  return 'default';
 }
 
+/// Starts subscription in JS and polls until it finishes, returning the
+/// subscription JSON string (endpoint + keys) or null.
 Future<String?> subscribe(String vapidPublicKey) async {
+  final ep = _ep;
+  if (ep == null) return null;
   try {
-    final ep = _ep;
-    if (ep == null) return null;
-    final result = await _promiseToFuture(ep.callMethod('subscribe', [vapidPublicKey]));
-    return result as String?;
-  } catch (_) {
-    return null;
-  }
+    ep.callMethod('startSubscribe', [vapidPublicKey]);
+    // Poll up to ~14s (SW install + subscribe + permission prompt).
+    for (var i = 0; i < 70; i++) {
+      await Future.delayed(const Duration(milliseconds: 200));
+      if (ep.callMethod('isDone', const []) == true) {
+        final res = ep.callMethod('getResult', const []);
+        return res as String?;
+      }
+    }
+  } catch (_) {}
+  return null;
 }
 
 String appUrl() {
