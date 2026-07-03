@@ -57,11 +57,17 @@ class _TradingViewChartState extends State<TradingViewChart> {
     super.initState();
     _id = 'cc-${DateTime.now().millisecondsSinceEpoch}';
     ui.platformViewRegistry.registerViewFactory(_id, (_) {
-      return html.DivElement()
+      final el = html.DivElement()
         ..id = _id
         ..style.width = '100%'
         ..style.height = '100%'
         ..style.backgroundColor = '#0A0714';
+      // Prevent selection / iOS long-press image callout on the chart container.
+      el.style.setProperty('user-select', 'none');
+      el.style.setProperty('-webkit-user-select', 'none');
+      el.style.setProperty('-webkit-touch-callout', 'none');
+      el.onContextMenu.listen((e) => e.preventDefault());
+      return el;
     });
   }
 

@@ -337,16 +337,27 @@ window.CandleChart = (function () {
     this._gwinBias       = 0;    // current guaranteed-win price offset (eased in/out — never snaps)
 
     this.canvas = document.createElement('canvas');
-    this.canvas.style.cssText = 'display:block;width:100%;height:100%;cursor:crosshair;';
+    /* Lock the chart down: no text selection, no iOS long-press "Save/Open image"
+       callout, no drag-out of the canvas as an image. This closes the loophole
+       where touching/long-pressing the chart opened it as an image. */
+    this.canvas.style.cssText = 'display:block;width:100%;height:100%;cursor:crosshair;' +
+      'user-select:none;-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;' +
+      '-webkit-touch-callout:none;-webkit-user-drag:none;';
+    this.canvas.setAttribute('draggable', 'false');
     container.appendChild(this.canvas);
     this.ctx = this.canvas.getContext('2d');
 
     var self = this;
     this._mm  = function(e) { self._onMM(e); };
     this._ml  = function()  { self.mouse = null; self._draw(); };
+    this._ctx_menu = function(e) { e.preventDefault(); return false; };
+    this._drag = function(e) { e.preventDefault(); return false; };
 
     this.canvas.addEventListener('mousemove',  this._mm);
     this.canvas.addEventListener('mouseleave', this._ml);
+    // Block the browser context menu + image drag on the chart (all platforms).
+    this.canvas.addEventListener('contextmenu', this._ctx_menu);
+    this.canvas.addEventListener('dragstart',   this._drag);
 
     if (window.ResizeObserver) {
       this._ro = new ResizeObserver(function() { self._resize(); });
@@ -1285,6 +1296,8 @@ window.CandleChart = (function () {
     if (this._ro)        this._ro.disconnect();
     this.canvas.removeEventListener('mousemove',  this._mm);
     this.canvas.removeEventListener('mouseleave', this._ml);
+    if (this._ctx_menu) this.canvas.removeEventListener('contextmenu', this._ctx_menu);
+    if (this._drag)     this.canvas.removeEventListener('dragstart',   this._drag);
     if (this.canvas.parentNode) this.canvas.parentNode.removeChild(this.canvas);
   };
 
