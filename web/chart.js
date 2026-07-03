@@ -1146,6 +1146,7 @@ window.CandleChart = (function () {
 
     /* Entry line */
     this._drawEntryLine(py, cl, cr, ct, cb, dec, last ? last.c : null);
+    this._drawEntryMarker();
 
     /* State 6: market-closed note near the top (candles stay visible). */
     if (this._marketClosedNote) {
@@ -1305,6 +1306,83 @@ window.CandleChart = (function () {
     ctx.fillText(ep.toFixed(autoDec(ep)), cr + RM / 2, epy + 4);
   };
 
+  /* ── Entry marker (BUY/SELL arrow on the candle the signal started from) ──
+     CALL → green "BUY" arrow BELOW the candle low (pointing up).
+     PUT  → red   "SELL" arrow ABOVE the candle high (pointing down).
+     Anchored to the entry candle by time so it tracks as candles scroll. */
+  Chart.prototype._drawEntryMarker = function() {
+    var el = this._entryLine;
+    if (!el || el.t == null) return;
+    var vis = this._vis, cx = this._cx, py = this._py;
+    if (!vis || !cx || !py) return;
+
+    var vi = -1;
+    for (var i = 0; i < vis.length; i++) {
+      if (vis[i].t === el.t) { vi = i; break; }
+    }
+    if (vi < 0) return;                 // entry candle scrolled off-screen
+
+    var c = vis[vi];
+    var x = cx(vi);
+    var isCall = el.direction === 'CALL';
+    var color = isCall ? BULL : BEAR;
+    var label = isCall ? 'BUY' : 'SELL';
+    var ctx = this.ctx;
+
+    function roundRect(c2, rx, ry, rw, rh, r) {
+      c2.beginPath();
+      c2.moveTo(rx + r, ry);
+      c2.arcTo(rx + rw, ry, rx + rw, ry + rh, r);
+      c2.arcTo(rx + rw, ry + rh, rx, ry + rh, r);
+      c2.arcTo(rx, ry + rh, rx, ry, r);
+      c2.arcTo(rx, ry, rx + rw, ry, r);
+      c2.closePath();
+    }
+
+    ctx.save();
+    ctx.font = 'bold 9px Outfit,sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    var tw = ctx.measureText(label).width;
+    var pw = Math.ceil(tw) + 12, ph = 15;
+    var gap = 5, ah = 9, aw = 6;        // gap, arrow height, arrow half-width
+
+    ctx.shadowColor = 'rgba(0,0,0,0.45)';
+    ctx.shadowBlur = 4;
+    ctx.fillStyle = color;
+
+    if (isCall) {
+      // Below the candle low, arrow points UP toward the candle.
+      var ay = py(c.l) + gap;           // arrow tip
+      ctx.beginPath();
+      ctx.moveTo(x, ay);
+      ctx.lineTo(x - aw, ay + ah);
+      ctx.lineTo(x + aw, ay + ah);
+      ctx.closePath();
+      ctx.fill();
+      roundRect(ctx, x - pw / 2, ay + ah, pw, ph, 3);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = BG;
+      ctx.fillText(label, x, ay + ah + ph / 2 + 0.5);
+    } else {
+      // Above the candle high, arrow points DOWN toward the candle.
+      var by = py(c.h) - gap;           // arrow tip
+      ctx.beginPath();
+      ctx.moveTo(x, by);
+      ctx.lineTo(x - aw, by - ah);
+      ctx.lineTo(x + aw, by - ah);
+      ctx.closePath();
+      ctx.fill();
+      roundRect(ctx, x - pw / 2, by - ah - ph, pw, ph, 3);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = BG;
+      ctx.fillText(label, x, by - ah - ph / 2 + 0.5);
+    }
+    ctx.restore();
+  };
+
   Chart.prototype._setTradeState = function(active, direction, entryPrice, secondsLeft, gwin) {
     if (!active) { this._trade = null; return; }
     var prev = this._trade;
@@ -1359,7 +1437,12 @@ window.CandleChart = (function () {
     setEntryLine: function(id, price, direction) {
       var inst = instances[id];
       if (!inst) return;
-      inst._entryLine = (price && direction) ? { price: price, direction: direction } : null;
+      if (price && direction) {
+        var t = inst.candles.length ? inst.candles[inst.candles.length - 1].t : null;
+        inst._entryLine = { price: price, direction: direction, t: t };
+      } else {
+        inst._entryLine = null;
+      }
       inst._draw();
     },
     setTradeState: function(id, active, direction, entryPrice, secondsLeft, gwin) {
@@ -1372,7 +1455,12 @@ window.CandleChart = (function () {
       Object.keys(instances).forEach(function(id) {
         var inst = instances[id];
         if (!inst) return;
-        inst._entryLine = hasLine ? { price: Number(price), direction: String(direction) } : null;
+        if (hasLine) {
+          var t = inst.candles.length ? inst.candles[inst.candles.length - 1].t : null;
+          inst._entryLine = { price: Number(price), direction: String(direction), t: t };
+        } else {
+          inst._entryLine = null;
+        }
         inst._draw();
       });
     },
