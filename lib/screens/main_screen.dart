@@ -9,11 +9,14 @@ import 'package:google_fonts/google_fonts.dart';
 import '../utils/web_utils.dart';
 import '../constants.dart';
 import '../services/signal_engine.dart';
+import '../services/language_service.dart';
+import '../services/push_notifications.dart';
 import '../widgets/particles.dart';
 import '../widgets/trading_background.dart';
 import '../widgets/tradingview_chart.dart';
 import 'notice_screen.dart';
 import 'maintenance_screen.dart';
+import 'language_screen.dart';
 
 /// Result of a market-hours check: whether it's open + (if closed) the next
 /// open time in UTC.
@@ -31,6 +34,9 @@ class MarketStatus {
 class MarketHours {
   static const _arDays = [
     '', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد'
+  ];
+  static const _enDays = [
+    '', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
   ];
 
   static MarketStatus statusFor(String category, bool isOtc) {
@@ -106,13 +112,14 @@ class MarketHours {
     return DateTime.utc(day.year, day.month, day.day, 13, 30);
   }
 
-  /// "يفتح [اليوم] الساعة HH:MM" in the device's local timezone.
+  /// "Opens [Day] at HH:MM" in the device's local timezone.
   static String nextOpenLabel(DateTime? nextOpenUtc) {
     if (nextOpenUtc == null) return '';
     final l = nextOpenUtc.toLocal();
     final hh = l.hour.toString().padLeft(2, '0');
     final mm = l.minute.toString().padLeft(2, '0');
-    return 'يفتح ${_arDays[l.weekday]} الساعة $hh:$mm';
+    return tr('يفتح ${_arDays[l.weekday]} الساعة $hh:$mm',
+        'Opens ${_enDays[l.weekday]} at $hh:$mm');
   }
 }
 
@@ -132,6 +139,7 @@ class _MainScreenState extends State<MainScreen> {
   int _selectedMinutes = 1;
   double Function()? _tvPriceGetter;
   TradingSignal? _lastProcessedSignal;
+  TradingSignal? _lastPushedSignal; // guards against duplicate push per signal
   String _searchQuery = '';
   String _historyFilter = 'today';
   DateTimeRange? _customDateRange;
@@ -494,6 +502,9 @@ class _MainScreenState extends State<MainScreen> {
     _startPairsListener();
     _loadBrokerLogo(brokerName);
     setUserBroker(brokerName);
+    // Subscribe this device to Web Push for the logged-in account (no-op if
+    // unsupported, permission not granted, or VAPID not configured yet).
+    PushNotifications.registerForUser(accountId);
     // Delay update check so it doesn't block startup rendering
     Future.delayed(const Duration(seconds: 2), () => _checkForUpdate());
     // Promotional announcement: fetch & decide once, after account id is known.
@@ -730,7 +741,7 @@ class _MainScreenState extends State<MainScreen> {
       barrierDismissible: !isForced,
       barrierColor: AppConstants.spaceBackground.withAlpha(220),
       builder: (ctx) => Directionality(
-        textDirection: TextDirection.rtl,
+        textDirection: LanguageService.direction,
         child: AlertDialog(
           backgroundColor: AppConstants.cardBgColor,
           shape: RoundedRectangleBorder(
@@ -749,7 +760,7 @@ class _MainScreenState extends State<MainScreen> {
               ),
               const SizedBox(width: 10),
               Text(
-                'تحديث جديد متاح 🚀',
+                tr('تحديث جديد متاح 🚀', 'New update available 🚀'),
                 style: GoogleFonts.outfit(
                   color: AppConstants.textPrimary,
                   fontWeight: FontWeight.bold,
@@ -763,7 +774,7 @@ class _MainScreenState extends State<MainScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'النسخة الجديدة: $version',
+                tr('النسخة الجديدة: $version', 'New version: $version'),
                 style: GoogleFonts.outfit(
                   color: AppConstants.accentCyan,
                   fontWeight: FontWeight.bold,
@@ -772,7 +783,7 @@ class _MainScreenState extends State<MainScreen> {
               if (features.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 Text(
-                  'المميزات الجديدة:',
+                  tr('المميزات الجديدة:', 'What\'s new:'),
                   style: GoogleFonts.outfit(
                     color: AppConstants.textPrimary,
                     fontSize: 13,
@@ -819,7 +830,7 @@ class _MainScreenState extends State<MainScreen> {
                     ),
                   ),
                   child: Text(
-                    '⚠️ هذا التحديث إجباري ولا يمكن تخطيه',
+                    tr('⚠️ هذا التحديث إجباري ولا يمكن تخطيه', '⚠️ This update is mandatory and cannot be skipped'),
                     style: GoogleFonts.outfit(
                       color: AppConstants.putRed,
                       fontSize: 11,
@@ -835,7 +846,7 @@ class _MainScreenState extends State<MainScreen> {
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
                 child: Text(
-                  'لاحقاً',
+                  tr('لاحقاً', 'Later'),
                   style: GoogleFonts.outfit(color: AppConstants.textSecondary),
                 ),
               ),
@@ -846,7 +857,7 @@ class _MainScreenState extends State<MainScreen> {
               },
               icon: const Icon(Icons.download_rounded, size: 16),
               label: Text(
-                'تحميل التحديث',
+                tr('تحميل التحديث', 'Download update'),
                 style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
               ),
               style: ElevatedButton.styleFrom(
@@ -880,7 +891,7 @@ class _MainScreenState extends State<MainScreen> {
       barrierDismissible: false,
       barrierColor: AppConstants.spaceBackground.withAlpha(220),
       builder: (ctx) => Directionality(
-        textDirection: TextDirection.rtl,
+        textDirection: LanguageService.direction,
         child: AlertDialog(
           backgroundColor: AppConstants.cardBgColor,
           shape: RoundedRectangleBorder(
@@ -899,7 +910,7 @@ class _MainScreenState extends State<MainScreen> {
               ),
               const SizedBox(width: 10),
               Text(
-                'تم حظر حسابك',
+                tr('تم حظر حسابك', 'Your account is banned'),
                 style: GoogleFonts.outfit(
                   color: AppConstants.textPrimary,
                   fontWeight: FontWeight.bold,
@@ -909,8 +920,8 @@ class _MainScreenState extends State<MainScreen> {
           ),
           content: Text(
             reason.isNotEmpty
-                ? 'تم حظر حسابك من قِبَل الإدارة.\nالسبب: $reason'
-                : 'تم حظر حسابك من قِبَل الإدارة.\nللمزيد من المعلومات تواصل مع الدعم.',
+                ? tr('تم حظر حسابك من قِبَل الإدارة.\nالسبب: $reason', 'Your account has been banned by the administration.\nReason: $reason')
+                : tr('تم حظر حسابك من قِبَل الإدارة.\nللمزيد من المعلومات تواصل مع الدعم.', 'Your account has been banned by the administration.\nContact support for more information.'),
             style: GoogleFonts.outfit(
               color: AppConstants.textSecondary,
               height: 1.6,
@@ -927,7 +938,7 @@ class _MainScreenState extends State<MainScreen> {
                 foregroundColor: Colors.white,
               ),
               child: Text(
-                'موافق',
+                tr('موافق', 'OK'),
                 style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
               ),
             ),
@@ -989,7 +1000,7 @@ class _MainScreenState extends State<MainScreen> {
       barrierDismissible: false,
       barrierColor: AppConstants.spaceBackground.withAlpha(220),
       builder: (ctx) => Directionality(
-        textDirection: TextDirection.rtl,
+        textDirection: LanguageService.direction,
         child: AlertDialog(
           backgroundColor: AppConstants.cardBgColor,
           shape: RoundedRectangleBorder(
@@ -1009,7 +1020,7 @@ class _MainScreenState extends State<MainScreen> {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'تم فتح الحساب على جهاز آخر',
+                  tr('تم فتح الحساب على جهاز آخر', 'Account opened on another device'),
                   style: GoogleFonts.outfit(
                     color: AppConstants.textPrimary,
                     fontWeight: FontWeight.bold,
@@ -1019,8 +1030,12 @@ class _MainScreenState extends State<MainScreen> {
             ],
           ),
           content: Text(
-            'حساب VIP مسموح له بالعمل على جهاز واحد فقط.\n'
-            'تم تسجيل الدخول بهذا الحساب من جهاز آخر، لذلك تم إنهاء الجلسة هنا.',
+            tr(
+              'حساب VIP مسموح له بالعمل على جهاز واحد فقط.\n'
+                  'تم تسجيل الدخول بهذا الحساب من جهاز آخر، لذلك تم إنهاء الجلسة هنا.',
+              'A VIP account is allowed to run on one device only.\n'
+                  'This account was signed in on another device, so the session here has been ended.',
+            ),
             style: GoogleFonts.outfit(
               color: AppConstants.textSecondary,
               height: 1.6,
@@ -1037,7 +1052,7 @@ class _MainScreenState extends State<MainScreen> {
                 foregroundColor: Colors.black,
               ),
               child: Text(
-                'تسجيل الدخول',
+                tr('تسجيل الدخول', 'Sign in'),
                 style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
               ),
             ),
@@ -1053,7 +1068,7 @@ class _MainScreenState extends State<MainScreen> {
       barrierDismissible: false,
       barrierColor: AppConstants.spaceBackground.withAlpha(220),
       builder: (ctx) => Directionality(
-        textDirection: TextDirection.rtl,
+        textDirection: LanguageService.direction,
         child: AlertDialog(
           backgroundColor: AppConstants.cardBgColor,
           shape: RoundedRectangleBorder(
@@ -1072,7 +1087,7 @@ class _MainScreenState extends State<MainScreen> {
               ),
               const SizedBox(width: 10),
               Text(
-                'تم حذف حسابك',
+                tr('تم حذف حسابك', 'Your account was deleted'),
                 style: GoogleFonts.outfit(
                   color: AppConstants.textPrimary,
                   fontWeight: FontWeight.bold,
@@ -1081,7 +1096,7 @@ class _MainScreenState extends State<MainScreen> {
             ],
           ),
           content: Text(
-            'تم حذف حسابك من قِبَل الإدارة.\nيرجى تسجيل الدخول مرة أخرى أو التواصل مع الدعم.',
+            tr('تم حذف حسابك من قِبَل الإدارة.\nيرجى تسجيل الدخول مرة أخرى أو التواصل مع الدعم.', 'Your account has been deleted by the administration.\nPlease sign in again or contact support.'),
             style: GoogleFonts.outfit(
               color: AppConstants.textSecondary,
               height: 1.6,
@@ -1098,7 +1113,7 @@ class _MainScreenState extends State<MainScreen> {
                 foregroundColor: Colors.white,
               ),
               child: Text(
-                'تسجيل الدخول',
+                tr('تسجيل الدخول', 'Sign in'),
                 style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
               ),
             ),
@@ -1127,6 +1142,17 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _onSignalEngineUpdate() {
+    // A freshly-fired trade (ACTIVE, real direction) → push a notification so
+    // the user sees it even if the tab/app is in the background.
+    final fired = _signalEngine.activeSignal;
+    if (fired != null &&
+        fired.status == 'ACTIVE' &&
+        fired.direction != 'WAIT' &&
+        fired != _lastPushedSignal) {
+      _lastPushedSignal = fired;
+      _pushSignalNotification(fired);
+    }
+
     if (_signalEngine.vipJustExpired) {
       _signalEngine.clearVipJustExpired();
       // Route through the central handler so Supabase is updated and the dialog
@@ -1157,6 +1183,27 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
+  // Builds a localized title/body for a fired signal and hands it to the push
+  // service (which relays through the Edge Function to the browser push).
+  void _pushSignalNotification(TradingSignal s) {
+    final pair = s.pair.replaceAll(' (OTC)', '');
+    final emoji = s.direction == 'CALL' ? '🟢' : '🔴';
+    final title = '$pair • ${s.direction} $emoji';
+    final t = s.entryTime.toLocal();
+    final hh = t.hour.toString().padLeft(2, '0');
+    final mm = t.minute.toString().padLeft(2, '0');
+    final acc = '${s.confidence.toStringAsFixed(1)}%';
+    final body = tr(
+      'الدخول $hh:$mm • الدقة $acc • ${s.marketCondition}',
+      'Entry $hh:$mm • Accuracy $acc • ${s.marketCondition}',
+    );
+    PushNotifications.notifyNewSignal(
+      userId: _userAccountId,
+      title: title,
+      body: body,
+    );
+  }
+
   void _showVipExpiredDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -1164,7 +1211,7 @@ class _MainScreenState extends State<MainScreen> {
       barrierColor: AppConstants.spaceBackground.withAlpha(220),
       builder: (BuildContext context) {
         return Directionality(
-          textDirection: TextDirection.rtl,
+          textDirection: LanguageService.direction,
           child: AlertDialog(
             backgroundColor: AppConstants.cardBgColor,
             shape: RoundedRectangleBorder(
@@ -1183,7 +1230,7 @@ class _MainScreenState extends State<MainScreen> {
                 ),
                 const SizedBox(width: 10),
                 Text(
-                  'انتهت عضويتك VIP ⚠️',
+                  tr('انتهت عضويتك VIP ⚠️', 'Your VIP membership has expired ⚠️'),
                   style: GoogleFonts.outfit(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
@@ -1193,7 +1240,7 @@ class _MainScreenState extends State<MainScreen> {
               ],
             ),
             content: Text(
-              'تم تحويل حسابك إلى Standard. يمكنك الترقية مجدداً في أي وقت.',
+              tr('تم تحويل حسابك إلى Standard. يمكنك الترقية مجدداً في أي وقت.', 'Your account has been switched to Standard. You can upgrade again anytime.'),
               style: GoogleFonts.outfit(
                 fontSize: 14,
                 color: AppConstants.textSecondary,
@@ -1206,7 +1253,7 @@ class _MainScreenState extends State<MainScreen> {
                   Navigator.of(context).pop();
                 },
                 child: Text(
-                  'موافق',
+                  tr('موافق', 'OK'),
                   style: GoogleFonts.outfit(
                     color: AppConstants.accentCyan,
                     fontWeight: FontWeight.bold,
@@ -1230,7 +1277,7 @@ class _MainScreenState extends State<MainScreen> {
       barrierColor: AppConstants.spaceBackground.withAlpha(220),
       builder: (BuildContext context) {
         return Directionality(
-          textDirection: TextDirection.rtl,
+          textDirection: LanguageService.direction,
           child: AlertDialog(
             backgroundColor: AppConstants.cardBgColor,
             shape: RoundedRectangleBorder(
@@ -1250,7 +1297,7 @@ class _MainScreenState extends State<MainScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'تنبيه انتهاء VIP ⏳',
+                    tr('تنبيه انتهاء VIP ⏳', 'VIP expiry alert ⏳'),
                     style: GoogleFonts.outfit(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -1265,7 +1312,7 @@ class _MainScreenState extends State<MainScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'عضويتك VIP ستنتهي خلال أقل من 24 ساعة.',
+                  tr('عضويتك VIP ستنتهي خلال أقل من 24 ساعة.', 'Your VIP membership will expire in less than 24 hours.'),
                   style: GoogleFonts.outfit(
                     fontSize: 14,
                     color: AppConstants.textSecondary,
@@ -1275,7 +1322,7 @@ class _MainScreenState extends State<MainScreen> {
                 if (tg.isNotEmpty) ...[
                   const SizedBox(height: 10),
                   Text(
-                    'للتجديد تواصل معنا: $tg',
+                    tr('للتجديد تواصل معنا: $tg', 'To renew, contact us: $tg'),
                     style: GoogleFonts.outfit(
                       fontSize: 13,
                       color: AppConstants.accentCyan,
@@ -1299,7 +1346,7 @@ class _MainScreenState extends State<MainScreen> {
                     color: AppConstants.accentCyan,
                   ),
                   label: Text(
-                    'تواصل معنا',
+                    tr('تواصل معنا', 'Contact us'),
                     style: GoogleFonts.outfit(
                       color: AppConstants.accentCyan,
                       fontWeight: FontWeight.bold,
@@ -1309,7 +1356,7 @@ class _MainScreenState extends State<MainScreen> {
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
                 child: Text(
-                  'حسناً',
+                  tr('حسناً', 'OK'),
                   style: GoogleFonts.outfit(
                     color: AppConstants.textSecondary,
                     fontWeight: FontWeight.bold,
@@ -1352,7 +1399,7 @@ class _MainScreenState extends State<MainScreen> {
             ),
             padding: const EdgeInsets.all(28),
             child: Directionality(
-              textDirection: TextDirection.rtl,
+              textDirection: LanguageService.direction,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -1383,7 +1430,7 @@ class _MainScreenState extends State<MainScreen> {
                   ),
                   const SizedBox(height: 18),
                   Text(
-                    'السوق مغلق مؤقتاً',
+                    tr('السوق مغلق مؤقتاً', 'Market temporarily closed'),
                     style: GoogleFonts.outfit(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
@@ -1392,7 +1439,7 @@ class _MainScreenState extends State<MainScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'السعر ثابت أو السوق خارج أوقات التداول الرسمية.\nانتظر حتى يُفتح السوق ثم أعد المحاولة.',
+                    tr('السعر ثابت أو السوق خارج أوقات التداول الرسمية.\nانتظر حتى يُفتح السوق ثم أعد المحاولة.', 'The price is flat or the market is outside official trading hours.\nWait until the market opens, then try again.'),
                     textAlign: TextAlign.center,
                     style: GoogleFonts.outfit(
                       fontSize: 13,
@@ -1424,7 +1471,7 @@ class _MainScreenState extends State<MainScreen> {
                   ],
                   const SizedBox(height: 6),
                   Text(
-                    '💡 جرب أزواج OTC — متاحة 24/7 حتى في عطلات نهاية الأسبوع',
+                    tr('💡 جرب أزواج OTC — متاحة 24/7 حتى في عطلات نهاية الأسبوع', '💡 Try OTC pairs — available 24/7 even on weekends'),
                     textAlign: TextAlign.center,
                     style: GoogleFonts.outfit(
                       fontSize: 12,
@@ -1459,7 +1506,7 @@ class _MainScreenState extends State<MainScreen> {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          'السوق: مغلق',
+                          tr('السوق: مغلق', 'Market: Closed'),
                           style: GoogleFonts.outfit(
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
@@ -1484,7 +1531,7 @@ class _MainScreenState extends State<MainScreen> {
                         elevation: 6,
                       ),
                       child: Text(
-                        'حسناً، سأنتظر',
+                        tr('حسناً، سأنتظر', 'OK, I\'ll wait'),
                         style: GoogleFonts.outfit(
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
@@ -1552,7 +1599,7 @@ class _MainScreenState extends State<MainScreen> {
             ),
             padding: const EdgeInsets.all(20),
             child: Directionality(
-              textDirection: TextDirection.rtl,
+              textDirection: LanguageService.direction,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1572,7 +1619,7 @@ class _MainScreenState extends State<MainScreen> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        'مراجعة الصفقة المغلقة',
+                        tr('مراجعة الصفقة المغلقة', 'Closed trade review'),
                         style: GoogleFonts.outfit(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -1596,8 +1643,8 @@ class _MainScreenState extends State<MainScreen> {
                     ),
                     child: Text(
                       isTie
-                          ? '➖  تعادل'
-                          : (isWin ? '✅  صفقة ناجحة' : '❌  صفقة خاسرة'),
+                          ? tr('➖  تعادل', '➖  Tie')
+                          : (isWin ? tr('✅  صفقة ناجحة', '✅  Winning trade') : tr('❌  صفقة خاسرة', '❌  Losing trade')),
                       textAlign: TextAlign.center,
                       style: GoogleFonts.outfit(
                         fontSize: 18,
@@ -1632,7 +1679,7 @@ class _MainScreenState extends State<MainScreen> {
                     child: Column(
                       children: [
                         _buildDialogStatRow(
-                          'زوج العملات',
+                          tr('زوج العملات', 'Currency pair'),
                           signal.pair.replaceAll(' (OTC)', ''),
                         ),
                         const Divider(
@@ -1640,15 +1687,15 @@ class _MainScreenState extends State<MainScreen> {
                           height: 16,
                         ),
                         _buildDialogStatRow(
-                          'الاتجاه',
-                          isCall ? 'صعود  🟢' : 'هبوط  🔴',
+                          tr('الاتجاه', 'Direction'),
+                          isCall ? tr('صعود  🟢', 'Up  🟢') : tr('هبوط  🔴', 'Down  🔴'),
                         ),
                         const Divider(
                           color: AppConstants.borderGlow,
                           height: 16,
                         ),
                         _buildDialogStatRow(
-                          'سعر الدخول',
+                          tr('سعر الدخول', 'Entry price'),
                           AppConstants.formatPrice(signal.entryPrice),
                         ),
                         const Divider(
@@ -1656,7 +1703,7 @@ class _MainScreenState extends State<MainScreen> {
                           height: 16,
                         ),
                         _buildDialogStatRow(
-                          'سعر الإغلاق',
+                          tr('سعر الإغلاق', 'Close price'),
                           AppConstants.formatPrice(exitP),
                         ),
                         const Divider(
@@ -1664,8 +1711,8 @@ class _MainScreenState extends State<MainScreen> {
                           height: 16,
                         ),
                         _buildDialogStatRow(
-                          'المدة',
-                          '${signal.durationMinutes} دقيقة',
+                          tr('المدة', 'Duration'),
+                          tr('${signal.durationMinutes} دقيقة', '${signal.durationMinutes} min'),
                         ),
                       ],
                     ),
@@ -1689,7 +1736,7 @@ class _MainScreenState extends State<MainScreen> {
                       elevation: 8,
                     ),
                     child: Text(
-                      'متابعة الصفقة التالية 🚀',
+                      tr('متابعة الصفقة التالية 🚀', 'Continue to next trade 🚀'),
                       style: GoogleFonts.outfit(
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
@@ -1777,7 +1824,7 @@ class _MainScreenState extends State<MainScreen> {
                         ),
                       ),
                       Text(
-                        exitOnTop ? 'إغلاق' : 'دخول',
+                        exitOnTop ? tr('إغلاق', 'Close') : tr('دخول', 'Entry'),
                         style: GoogleFonts.outfit(
                           fontSize: 9,
                           color: exitOnTop
@@ -1787,7 +1834,7 @@ class _MainScreenState extends State<MainScreen> {
                       ),
                       const Spacer(),
                       Text(
-                        exitOnTop ? 'دخول' : 'إغلاق',
+                        exitOnTop ? tr('دخول', 'Entry') : tr('إغلاق', 'Close'),
                         style: GoogleFonts.outfit(
                           fontSize: 9,
                           color: exitOnTop
@@ -1863,7 +1910,7 @@ class _MainScreenState extends State<MainScreen> {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        exitOnTop ? 'سعر الخروج' : 'سعر الدخول',
+                        exitOnTop ? tr('سعر الخروج', 'Exit price') : tr('سعر الدخول', 'Entry price'),
                         style: GoogleFonts.outfit(
                           fontSize: 9,
                           color: exitOnTop
@@ -1873,7 +1920,7 @@ class _MainScreenState extends State<MainScreen> {
                       ),
                       const Spacer(),
                       Text(
-                        exitOnTop ? 'سعر الدخول' : 'سعر الخروج',
+                        exitOnTop ? tr('سعر الدخول', 'Entry price') : tr('سعر الخروج', 'Exit price'),
                         style: GoogleFonts.outfit(
                           fontSize: 9,
                           color: exitOnTop
@@ -1967,7 +2014,7 @@ class _MainScreenState extends State<MainScreen> {
     final save = (d['save'] as String? ?? '').trim();
     final ctaText = (d['ctaText'] as String? ?? '').trim().isNotEmpty
         ? (d['ctaText'] as String).trim()
-        : 'تواصل معايا';
+        : tr('تواصل معايا', 'Contact me');
     final version = d['version'] as int? ?? 0;
     final autoCloseSeconds = (d['autoCloseSeconds'] as int? ?? 0)
         .clamp(0, 3600);
@@ -1996,7 +2043,7 @@ class _MainScreenState extends State<MainScreen> {
       final m = diff.inMinutes % 60;
       final s = diff.inSeconds % 60;
       String two(int v) => v.toString().padLeft(2, '0');
-      if (d > 0) return '$d يوم ${two(h)}:${two(m)}:${two(s)}';
+      if (d > 0) return tr('$d يوم ${two(h)}:${two(m)}:${two(s)}', '${d}d ${two(h)}:${two(m)}:${two(s)}');
       return '${two(h)}:${two(m)}:${two(s)}';
     }
 
@@ -2047,7 +2094,7 @@ class _MainScreenState extends State<MainScreen> {
                 endsAtUtc?.difference(DateTime.now().toUtc());
 
             return Directionality(
-              textDirection: TextDirection.rtl,
+              textDirection: LanguageService.direction,
               child: Dialog(
                 backgroundColor: Colors.transparent,
                 insetPadding: const EdgeInsets.symmetric(
@@ -2120,7 +2167,7 @@ class _MainScreenState extends State<MainScreen> {
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Text(
-                                    title.isNotEmpty ? title : 'عرض خاص',
+                                    title.isNotEmpty ? title : tr('عرض خاص', 'Special offer'),
                                     style: GoogleFonts.outfit(
                                       fontSize: 19,
                                       fontWeight: FontWeight.w800,
@@ -2171,7 +2218,7 @@ class _MainScreenState extends State<MainScreen> {
                                               CrossAxisAlignment.start,
                                           children: [
                                             Text(
-                                              'السعر',
+                                              tr('السعر', 'Price'),
                                               style: GoogleFonts.outfit(
                                                 fontSize: 10,
                                                 color:
@@ -2267,7 +2314,7 @@ class _MainScreenState extends State<MainScreen> {
                                     ),
                                     const SizedBox(width: 8),
                                     Text(
-                                      'ينتهي خلال ${fmtCountdown(offerRemaining ?? Duration.zero)}',
+                                      tr('ينتهي خلال ${fmtCountdown(offerRemaining ?? Duration.zero)}', 'Ends in ${fmtCountdown(offerRemaining ?? Duration.zero)}'),
                                       style: GoogleFonts.outfit(
                                         fontSize: 14,
                                         fontWeight: FontWeight.w700,
@@ -2339,7 +2386,7 @@ class _MainScreenState extends State<MainScreen> {
                                   color: AppConstants.textSecondary,
                                   size: 22,
                                 ),
-                                tooltip: 'إغلاق',
+                                tooltip: tr('إغلاق', 'Close'),
                               )
                             : Container(
                                 margin: const EdgeInsets.all(6),
@@ -2564,7 +2611,7 @@ class _MainScreenState extends State<MainScreen> {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(
-                    'هذا الزوج لم يعد متاحًا، يرجى اختيار زوج آخر',
+                    tr('هذا الزوج لم يعد متاحًا، يرجى اختيار زوج آخر', 'This pair is no longer available, please choose another pair'),
                     style: GoogleFonts.outfit(),
                     textAlign: TextAlign.right,
                   ),
@@ -2843,8 +2890,8 @@ class _MainScreenState extends State<MainScreen> {
                   Flexible(
                     child: Text(
                       isVip
-                          ? 'منصة التداول: $_userBroker VIP'
-                          : 'منصة التداول: $_userBroker',
+                          ? tr('منصة التداول: $_userBroker VIP', 'Trading platform: $_userBroker VIP')
+                          : tr('منصة التداول: $_userBroker', 'Trading platform: $_userBroker'),
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.outfit(
                         fontSize: 11,
@@ -2866,12 +2913,12 @@ class _MainScreenState extends State<MainScreen> {
     if (isVip) {
       final parts = _getVipCountdownParts(_signalEngine.vipExpiry);
       return Directionality(
-        textDirection: TextDirection.rtl,
+        textDirection: LanguageService.direction,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'ينتهي الـ VIP خلال',
+              tr('ينتهي الـ VIP خلال', 'VIP ends in'),
               style: GoogleFonts.outfit(
                 fontSize: 9,
                 fontWeight: FontWeight.w600,
@@ -2883,13 +2930,13 @@ class _MainScreenState extends State<MainScreen> {
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _buildCountdownBox(parts['d']!, 'يوم'),
+                _buildCountdownBox(parts['d']!, tr('يوم', 'days')),
                 _buildCountdownSeparator(),
-                _buildCountdownBox(parts['h']!, 'ساعة'),
+                _buildCountdownBox(parts['h']!, tr('ساعة', 'hrs')),
                 _buildCountdownSeparator(),
-                _buildCountdownBox(parts['m']!, 'دقيقة'),
+                _buildCountdownBox(parts['m']!, tr('دقيقة', 'min')),
                 _buildCountdownSeparator(),
-                _buildCountdownBox(parts['s']!, 'ثانية'),
+                _buildCountdownBox(parts['s']!, tr('ثانية', 'sec')),
               ],
             ),
           ],
@@ -2922,7 +2969,7 @@ class _MainScreenState extends State<MainScreen> {
               const Icon(Icons.star_rounded, color: Colors.black, size: 16),
               const SizedBox(width: 6),
               Text(
-                'ترقية الحساب إلى VIP 👑',
+                tr('ترقية الحساب إلى VIP 👑', 'Upgrade account to VIP 👑'),
                 style: GoogleFonts.outfit(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
@@ -2990,6 +3037,20 @@ class _MainScreenState extends State<MainScreen> {
       children: [
         IconButton(
           onPressed: () {
+            Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => const LanguageScreen(),
+            ));
+          },
+          icon: Icon(
+            Icons.language_rounded,
+            color: AppConstants.accentCyan,
+            size: 20,
+          ),
+          tooltip: tr('اللغة', 'Language'),
+        ),
+        const SizedBox(width: 4),
+        IconButton(
+          onPressed: () {
             setState(() {
               _soundEnabled = !_soundEnabled;
             });
@@ -3049,31 +3110,31 @@ class _MainScreenState extends State<MainScreen> {
                   if (_categoryHasPairs('currencies'))
                     _buildCategoryTab(
                       'currencies',
-                      'عملات',
+                      tr('عملات', 'Currencies'),
                       Icons.currency_exchange_rounded,
                     ),
                   if (_categoryHasPairs('commodities'))
                     _buildCategoryTab(
                       'commodities',
-                      'سلع',
+                      tr('سلع', 'Commodities'),
                       Icons.local_gas_station_rounded,
                     ),
                   if (_categoryHasPairs('stocks'))
                     _buildCategoryTab(
                       'stocks',
-                      'أسهم',
+                      tr('أسهم', 'Stocks'),
                       Icons.business_rounded,
                     ),
                   if (_categoryHasPairs('indices'))
                     _buildCategoryTab(
                       'indices',
-                      'مؤشرات',
+                      tr('مؤشرات', 'Indices'),
                       Icons.show_chart_rounded,
                     ),
                   if (_categoryHasPairs('crypto'))
                     _buildCategoryTab(
                       'crypto',
-                      'كريبتو',
+                      tr('كريبتو', 'Crypto'),
                       Icons.currency_bitcoin_rounded,
                     ),
                 ],
@@ -3239,7 +3300,7 @@ class _MainScreenState extends State<MainScreen> {
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    'اختر الأصل للتداول',
+                                    tr('اختر الأصل للتداول', 'Choose an asset to trade'),
                                     style: GoogleFonts.outfit(
                                       fontSize: 12,
                                       color: AppConstants.textSecondary,
@@ -3275,7 +3336,7 @@ class _MainScreenState extends State<MainScreen> {
                         style: GoogleFonts.outfit(color: Colors.white),
                         textAlign: TextAlign.right,
                         decoration: InputDecoration(
-                          hintText: 'البحث عن أصول (مثال: USD)...',
+                          hintText: tr('البحث عن أصول (مثال: USD)...', 'Search assets (e.g. USD)...'),
                           hintStyle: GoogleFonts.outfit(
                             color: AppConstants.textSecondary,
                             fontSize: 13,
@@ -3304,7 +3365,7 @@ class _MainScreenState extends State<MainScreen> {
                     child: filteredPairs.isEmpty
                         ? Center(
                             child: Text(
-                              'لا توجد أصول تطابق البحث',
+                              tr('لا توجد أصول تطابق البحث', 'No assets match your search'),
                               textAlign: TextAlign.center,
                               style: GoogleFonts.outfit(
                                 color: AppConstants.textSecondary,
@@ -3602,8 +3663,8 @@ class _MainScreenState extends State<MainScreen> {
   void _onMonitorPressed() {
     if (!_marketOpen || _signalEngine.isMarketClosed) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('السوق مغلق حالياً — لا يمكن بدء المراقبة'),
+        SnackBar(
+          content: Text(tr('السوق مغلق حالياً — لا يمكن بدء المراقبة', 'The market is currently closed — monitoring can\'t start')),
           backgroundColor: AppConstants.putRed,
         ),
       );
@@ -3611,8 +3672,8 @@ class _MainScreenState extends State<MainScreen> {
     }
     if (_isActiveOtc() && _otcUnhealthy) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('جارٍ إعادة الاتصال بمصدر السعر... حاول بعد لحظات'),
+        SnackBar(
+          content: Text(tr('جارٍ إعادة الاتصال بمصدر السعر... حاول بعد لحظات', 'Reconnecting to the price source... try again in a moment')),
           backgroundColor: AppConstants.warningOrange,
         ),
       );
@@ -3647,7 +3708,7 @@ class _MainScreenState extends State<MainScreen> {
               const Icon(Icons.radar_rounded, color: c, size: 20),
               const SizedBox(width: 8),
               Text(
-                'المراقبة الذكية 🎯',
+                tr('المراقبة الذكية 🎯', 'Smart monitoring 🎯'),
                 style: GoogleFonts.outfit(
                   fontSize: 14,
                   fontWeight: FontWeight.w900,
@@ -3674,7 +3735,7 @@ class _MainScreenState extends State<MainScreen> {
               const Icon(Icons.radar_rounded, color: c, size: 20),
               const SizedBox(width: 8),
               Text(
-                'جاري المراقبة...',
+                tr('جاري المراقبة...', 'Monitoring...'),
                 style: GoogleFonts.outfit(
                   fontSize: 15,
                   fontWeight: FontWeight.w900,
@@ -3700,7 +3761,7 @@ class _MainScreenState extends State<MainScreen> {
                   const Text('🔔', style: TextStyle(fontSize: 13)),
                   const SizedBox(width: 6),
                   Text(
-                    'إشارات صدرت حتى الآن: ${_signalEngine.monitoringSignalsFired}',
+                    tr('إشارات صدرت حتى الآن: ${_signalEngine.monitoringSignalsFired}', 'Signals fired so far: ${_signalEngine.monitoringSignalsFired}'),
                     style: GoogleFonts.outfit(
                       fontSize: 11.5,
                       fontWeight: FontWeight.w800,
@@ -3714,8 +3775,8 @@ class _MainScreenState extends State<MainScreen> {
           const SizedBox(height: 6),
           Text(
             _signalEngine.monitoringLastCheckFailed
-                ? 'لم تتوافق شروط الدخول، جاري انتظار الشمعة التالية...'
-                : 'يراقب النظام السوق وينتظر أفضل لحظة دخول على بداية الشمعة القادمة.',
+                ? tr('لم تتوافق شروط الدخول، جاري انتظار الشمعة التالية...', 'Entry conditions weren\'t met, waiting for the next candle...')
+                : tr('يراقب النظام السوق وينتظر أفضل لحظة دخول على بداية الشمعة القادمة.', 'The system is watching the market and waiting for the best entry at the start of the next candle.'),
             textAlign: TextAlign.center,
             style: GoogleFonts.outfit(
               fontSize: 11.5,
@@ -3743,7 +3804,7 @@ class _MainScreenState extends State<MainScreen> {
                   child: Column(
                     children: [
                       Text(
-                        'الشمعة القادمة بعد',
+                        tr('الشمعة القادمة بعد', 'Next candle in'),
                         style: GoogleFonts.outfit(
                           fontSize: 9.5,
                           color: AppConstants.textSecondary,
@@ -3776,7 +3837,7 @@ class _MainScreenState extends State<MainScreen> {
                   child: Column(
                     children: [
                       Text(
-                        'مدة المراقبة',
+                        tr('مدة المراقبة', 'Monitoring time'),
                         style: GoogleFonts.outfit(
                           fontSize: 9.5,
                           color: AppConstants.textSecondary,
@@ -3804,7 +3865,7 @@ class _MainScreenState extends State<MainScreen> {
             child: OutlinedButton.icon(
               onPressed: () => _signalEngine.stopMonitoring(),
               icon: const Icon(Icons.stop_circle_rounded, size: 18),
-              label: const Text('إيقاف المراقبة'),
+              label: Text(tr('إيقاف المراقبة', 'Stop monitoring')),
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppConstants.putRed,
                 side: const BorderSide(color: AppConstants.putRed),
@@ -3830,7 +3891,7 @@ class _MainScreenState extends State<MainScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'قوة الإشارة',
+              tr('قوة الإشارة', 'Signal strength'),
               style: GoogleFonts.outfit(
                 fontSize: 9,
                 color: AppConstants.textSecondary,
@@ -3865,13 +3926,13 @@ class _MainScreenState extends State<MainScreen> {
     _showUsageHelpDialog(
       icon: Icons.bolt_rounded,
       accent: AppConstants.accentCyan,
-      title: 'زر الإشارة الفورية',
-      lines: const [
-        'اضغط الزر في أي وقت.',
-        'النظام يحلل السوق فوراً وبعد ثوانٍ قليلة تظهر لك الإشارة.',
+      title: tr('زر الإشارة الفورية', 'Instant signal button'),
+      lines: [
+        tr('اضغط الزر في أي وقت.', 'Tap the button anytime.'),
+        tr('النظام يحلل السوق فوراً وبعد ثوانٍ قليلة تظهر لك الإشارة.', 'The system analyzes the market instantly and shows you a signal within a few seconds.'),
         '',
-        '⚡ سريع وفوري',
-        '⏱️ النتيجة في أقل من 5 ثوانٍ',
+        tr('⚡ سريع وفوري', '⚡ Fast and instant'),
+        tr('⏱️ النتيجة في أقل من 5 ثوانٍ', '⏱️ Result in under 5 seconds'),
       ],
     );
   }
@@ -3880,19 +3941,19 @@ class _MainScreenState extends State<MainScreen> {
     _showUsageHelpDialog(
       icon: Icons.radar_rounded,
       accent: AppConstants.warningOrange,
-      title: 'زر المراقبة الذكية',
-      lines: const [
-        'اضغط الزر وسيبه يشتغل.',
-        'النظام يراقب السوق باستمرار وينتظر أفضل لحظة للدخول.',
+      title: tr('زر المراقبة الذكية', 'Smart monitoring button'),
+      lines: [
+        tr('اضغط الزر وسيبه يشتغل.', 'Tap the button and let it run.'),
+        tr('النظام يراقب السوق باستمرار وينتظر أفضل لحظة للدخول.', 'The system continuously watches the market and waits for the best moment to enter.'),
         '',
-        '⏳ ممكن ياخد وقت (دقائق أو أكثر حسب السوق)',
+        tr('⏳ ممكن ياخد وقت (دقائق أو أكثر حسب السوق)', '⏳ It may take a while (minutes or more depending on the market)'),
         '',
-        'لما اللحظة تيجي:',
-        '🔔 هتسمع صوت تنبيه فوراً',
-        '📊 هتلاقي الإشارة واضحة قدامك',
-        '⏱️ وعداد الصفقة هيبدأ تلقائياً',
+        tr('لما اللحظة تيجي:', 'When the moment comes:'),
+        tr('🔔 هتسمع صوت تنبيه فوراً', '🔔 You\'ll hear an alert sound immediately'),
+        tr('📊 هتلاقي الإشارة واضحة قدامك', '📊 The signal will appear clearly in front of you'),
+        tr('⏱️ وعداد الصفقة هيبدأ تلقائياً', '⏱️ And the trade timer will start automatically'),
         '',
-        '💡 نصيحة: فعّل الصوت على جهازك عشان ما تفوتك الإشارة.',
+        tr('💡 نصيحة: فعّل الصوت على جهازك عشان ما تفوتك الإشارة.', '💡 Tip: turn on sound on your device so you don\'t miss the signal.'),
       ],
     );
   }
@@ -3907,7 +3968,7 @@ class _MainScreenState extends State<MainScreen> {
     showDialog(
       context: context,
       builder: (ctx) => Directionality(
-        textDirection: TextDirection.rtl,
+        textDirection: LanguageService.direction,
         child: AlertDialog(
           backgroundColor: const Color(0xFF12102A),
           shape: RoundedRectangleBorder(
@@ -3971,7 +4032,7 @@ class _MainScreenState extends State<MainScreen> {
                   ),
                 ),
                 child: Text(
-                  'فهمت',
+                  tr('فهمت', 'Got it'),
                   style: GoogleFonts.outfit(fontWeight: FontWeight.w900),
                 ),
               ),
@@ -3996,7 +4057,7 @@ class _MainScreenState extends State<MainScreen> {
             ),
             const SizedBox(height: 16),
             Text(
-              'لا توجد أزواج متاحة حالياً',
+              tr('لا توجد أزواج متاحة حالياً', 'No pairs available right now'),
               textAlign: TextAlign.center,
               style: GoogleFonts.outfit(
                 fontSize: 16,
@@ -4006,7 +4067,7 @@ class _MainScreenState extends State<MainScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'اختر زوجاً من القائمة عند توفره',
+              tr('اختر زوجاً من القائمة عند توفره', 'Choose a pair from the list once available'),
               textAlign: TextAlign.center,
               style: GoogleFonts.outfit(
                 fontSize: 12.5,
@@ -4231,7 +4292,7 @@ class _MainScreenState extends State<MainScreen> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'التحليل جاهز للاستخراج',
+                      tr('التحليل جاهز للاستخراج', 'Analysis ready to extract'),
                       style: GoogleFonts.outfit(
                         fontSize: 14,
                         fontWeight: FontWeight.w900,
@@ -4244,7 +4305,7 @@ class _MainScreenState extends State<MainScreen> {
             ),
             const Divider(color: AppConstants.borderGlow, height: 16),
             Text(
-              'اضغط أدناه لبدء تحليل شامل للزوج ${_signalEngine.activePair.replaceAll(' (OTC)', '')} بفريم ${_signalEngine.chartTimeframe} واستخراج الصفقة ذات الاحتمالية الأكبر.',
+              tr('اضغط أدناه لبدء تحليل شامل للزوج ${_signalEngine.activePair.replaceAll(' (OTC)', '')} بفريم ${_signalEngine.chartTimeframe} واستخراج الصفقة ذات الاحتمالية الأكبر.', 'Tap below to start a full analysis of ${_signalEngine.activePair.replaceAll(' (OTC)', '')} on the ${_signalEngine.chartTimeframe} timeframe and extract the highest-probability trade.'),
               textAlign: TextAlign.center,
               style: GoogleFonts.outfit(
                 fontSize: 11,
@@ -4292,7 +4353,7 @@ class _MainScreenState extends State<MainScreen> {
                 Expanded(
                   child: _buildRequestButton(
                     enabled: true,
-                    text: 'استخراج الإشارة الفورية ⚡',
+                    text: tr('استخراج الإشارة الفورية ⚡', 'Extract instant signal ⚡'),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -4388,8 +4449,8 @@ class _MainScreenState extends State<MainScreen> {
                     const SizedBox(width: 4),
                     Text(
                       isWait
-                          ? 'انتظار (WAIT)'
-                          : (isCall ? 'صعود (CALL)' : 'هبوط (PUT)'),
+                          ? tr('انتظار (WAIT)', 'WAIT')
+                          : (isCall ? tr('صعود (CALL)', 'Up (CALL)') : tr('هبوط (PUT)', 'Down (PUT)')),
                       style: GoogleFonts.outfit(
                         fontSize: 11,
                         fontWeight: FontWeight.w900,
@@ -4450,7 +4511,7 @@ class _MainScreenState extends State<MainScreen> {
               child: Text(
                 _signalEngine.signalChangeNotice.isNotEmpty
                     ? _signalEngine.signalChangeNotice
-                    : 'ملاحظة: بدأت هذه الصفقة مع بداية الشمعة الحالية',
+                    : tr('ملاحظة: بدأت هذه الصفقة مع بداية الشمعة الحالية', 'Note: this trade started at the beginning of the current candle'),
                 textAlign: TextAlign.center,
                 style: GoogleFonts.outfit(
                   fontSize: 10,
@@ -4523,8 +4584,8 @@ class _MainScreenState extends State<MainScreen> {
                     const SizedBox(width: 6),
                     Text(
                       isWait
-                          ? 'حالة السوق: تذبذب وحالة غير آمنة ⚠️'
-                          : 'حالة السوق: دخول آمن ومستقر ✅',
+                          ? tr('حالة السوق: تذبذب وحالة غير آمنة ⚠️', 'Market state: choppy and unsafe ⚠️')
+                          : tr('حالة السوق: دخول آمن ومستقر ✅', 'Market state: safe and stable entry ✅'),
                       style: GoogleFonts.outfit(
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
@@ -4544,7 +4605,7 @@ class _MainScreenState extends State<MainScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'التوصية: ${signal.recommendation}',
+                  tr('التوصية: ${signal.recommendation}', 'Recommendation: ${signal.recommendation}'),
                   style: GoogleFonts.outfit(
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
@@ -4566,8 +4627,8 @@ class _MainScreenState extends State<MainScreen> {
           _buildRequestButton(
             enabled: !isActive,
             text: isActive
-                ? 'الصفقة جارية حالياً...'
-                : 'تحليل الصفقة التالية ⚡',
+                ? tr('الصفقة جارية حالياً...', 'Trade is currently running...')
+                : tr('تحليل الصفقة التالية ⚡', 'Analyze next trade ⚡'),
           ),
         ],
       ),
@@ -4583,7 +4644,7 @@ class _MainScreenState extends State<MainScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'مدة الصفقة المستهدفة:',
+              tr('مدة الصفقة المستهدفة:', 'Target trade duration:'),
               style: GoogleFonts.outfit(
                 fontSize: 11,
                 color: AppConstants.textSecondary,
@@ -4591,7 +4652,7 @@ class _MainScreenState extends State<MainScreen> {
               ),
             ),
             Text(
-              '$_selectedMinutes ${_selectedMinutes >= 5 ? "دقائق" : (_selectedMinutes == 1 ? "دقيقة واحدة" : "دقيقتين")}',
+              tr('$_selectedMinutes ${_selectedMinutes >= 5 ? "دقائق" : (_selectedMinutes == 1 ? "دقيقة واحدة" : "دقيقتين")}', '$_selectedMinutes ${_selectedMinutes == 1 ? "minute" : "minutes"}'),
               style: GoogleFonts.outfit(
                 fontSize: 11.5,
                 color: AppConstants.accentCyan,
@@ -4605,7 +4666,7 @@ class _MainScreenState extends State<MainScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: options.map((minutes) {
             final isSelected = _selectedMinutes == minutes;
-            String label = '$minutes د';
+            String label = tr('$minutes د', '${minutes}m');
             return InkWell(
               onTap: () {
                 setState(() {
@@ -4676,7 +4737,7 @@ class _MainScreenState extends State<MainScreen> {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
-                          'السوق مغلق الان حاول في وقت لاحق',
+                          tr('السوق مغلق الان حاول في وقت لاحق', 'The market is closed now, try again later'),
                           textAlign: TextAlign.center,
                           style: GoogleFonts.outfit(
                             fontWeight: FontWeight.bold,
@@ -4695,7 +4756,7 @@ class _MainScreenState extends State<MainScreen> {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
-                          'النظام بيستعيد الاتصال بمصدر البيانات، استنى لحظات',
+                          tr('النظام بيستعيد الاتصال بمصدر البيانات، استنى لحظات', 'The system is reconnecting to the data source, please wait a moment'),
                           textAlign: TextAlign.center,
                           style: GoogleFonts.outfit(
                             fontWeight: FontWeight.bold,
@@ -5131,7 +5192,7 @@ class _MainScreenState extends State<MainScreen> {
         final tgUrl = data['telegramUrl'] as String? ?? 'https://t.me/euro_trd1';
 
         return Directionality(
-          textDirection: TextDirection.rtl,
+          textDirection: LanguageService.direction,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -5145,7 +5206,7 @@ class _MainScreenState extends State<MainScreen> {
               // Subtle centered title.
               Center(
                 child: Text(
-                  'تابعنا على',
+                  tr('تابعنا على', 'Follow us on'),
                   style: GoogleFonts.outfit(
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
@@ -5161,7 +5222,7 @@ class _MainScreenState extends State<MainScreen> {
                     child: _socialBtn(
                       icon: Icons.play_circle_fill_rounded,
                       color: Colors.red,
-                      label: 'يوتيوب',
+                      label: tr('يوتيوب', 'YouTube'),
                       sublabel: '@euro_trader',
                       url: ytUrl,
                     ),
@@ -5171,7 +5232,7 @@ class _MainScreenState extends State<MainScreen> {
                     child: _socialBtn(
                       icon: Icons.send_rounded,
                       color: const Color(0xFF29B6F6),
-                      label: 'تليجرام',
+                      label: tr('تليجرام', 'Telegram'),
                       sublabel: '@euro_trd1',
                       url: tgUrl,
                     ),
@@ -5267,7 +5328,7 @@ class _MainScreenState extends State<MainScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'السوق مغلق حالياً',
+                tr('السوق مغلق حالياً', 'The market is currently closed'),
                 textAlign: TextAlign.center,
                 style: GoogleFonts.outfit(
                   fontSize: 13,
@@ -5277,7 +5338,7 @@ class _MainScreenState extends State<MainScreen> {
               ),
               const SizedBox(height: 4),
               Text(
-                'الغرفة ستعود للعمل مع فتح الأسواق',
+                tr('الغرفة ستعود للعمل مع فتح الأسواق', 'The room will resume when the markets open'),
                 textAlign: TextAlign.center,
                 style: GoogleFonts.outfit(
                   fontSize: 10,
@@ -5350,7 +5411,7 @@ class _MainScreenState extends State<MainScreen> {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            'في انتظار أولى الصفقات...',
+                            tr('في انتظار أولى الصفقات...', 'Waiting for the first trades...'),
                             style: GoogleFonts.outfit(
                               color: AppConstants.textSecondary,
                               fontSize: 11,
@@ -5510,7 +5571,7 @@ class _MainScreenState extends State<MainScreen> {
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Directionality(
-          textDirection: TextDirection.rtl,
+          textDirection: LanguageService.direction,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -5524,7 +5585,7 @@ class _MainScreenState extends State<MainScreen> {
                   ),
                   const SizedBox(width: 10),
                   Text(
-                    'إحصائيات وسجل صفقات الـ VIP',
+                    tr('إحصائيات وسجل صفقات الـ VIP', 'VIP stats & trade history'),
                     style: GoogleFonts.outfit(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -5538,11 +5599,11 @@ class _MainScreenState extends State<MainScreen> {
               // Filter Tabs
               Row(
                 children: [
-                  _buildFilterTab('صفقات اليوم', 'today'),
+                  _buildFilterTab(tr('صفقات اليوم', 'Today'), 'today'),
                   const SizedBox(width: 8),
-                  _buildFilterTab('صفقات الأمس', 'yesterday'),
+                  _buildFilterTab(tr('صفقات الأمس', 'Yesterday'), 'yesterday'),
                   const SizedBox(width: 8),
-                  _buildFilterTab('فترة مخصصة 🗓️', 'custom'),
+                  _buildFilterTab(tr('فترة مخصصة 🗓️', 'Custom range 🗓️'), 'custom'),
                 ],
               ),
 
@@ -5563,14 +5624,14 @@ class _MainScreenState extends State<MainScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'الفترة الزمنية المحددة:',
+                        tr('الفترة الزمنية المحددة:', 'Selected date range:'),
                         style: GoogleFonts.outfit(
                           fontSize: 12,
                           color: AppConstants.textSecondary,
                         ),
                       ),
                       Text(
-                        '${_customDateRange!.start.year}/${_customDateRange!.start.month.toString().padLeft(2, '0')}/${_customDateRange!.start.day.toString().padLeft(2, '0')}  إلى  ${_customDateRange!.end.year}/${_customDateRange!.end.month.toString().padLeft(2, '0')}/${_customDateRange!.end.day.toString().padLeft(2, '0')}',
+                        '${_customDateRange!.start.year}/${_customDateRange!.start.month.toString().padLeft(2, '0')}/${_customDateRange!.start.day.toString().padLeft(2, '0')}  ${tr('إلى', 'to')}  ${_customDateRange!.end.year}/${_customDateRange!.end.month.toString().padLeft(2, '0')}/${_customDateRange!.end.day.toString().padLeft(2, '0')}',
                         style: GoogleFonts.outfit(
                           fontSize: 12,
                           color: AppConstants.accentCyan,
@@ -5598,7 +5659,7 @@ class _MainScreenState extends State<MainScreen> {
                       child: Column(
                         children: [
                           Text(
-                            'نسبة النجاح',
+                            tr('نسبة النجاح', 'Win rate'),
                             style: GoogleFonts.outfit(
                               fontSize: 11,
                               color: AppConstants.textSecondary,
@@ -5632,7 +5693,7 @@ class _MainScreenState extends State<MainScreen> {
                       child: Column(
                         children: [
                           Text(
-                            'إجمالي الصفقات',
+                            tr('إجمالي الصفقات', 'Total trades'),
                             style: GoogleFonts.outfit(
                               fontSize: 11,
                               color: AppConstants.textSecondary,
@@ -5641,8 +5702,8 @@ class _MainScreenState extends State<MainScreen> {
                           const SizedBox(height: 4),
                           Text(
                             tiesCount > 0
-                                ? '$winsCount رابحة / $lossesCount خاسرة / $tiesCount تعادل'
-                                : '$winsCount رابحة / $lossesCount خاسرة',
+                                ? tr('$winsCount رابحة / $lossesCount خاسرة / $tiesCount تعادل', '$winsCount won / $lossesCount lost / $tiesCount tie')
+                                : tr('$winsCount رابحة / $lossesCount خاسرة', '$winsCount won / $lossesCount lost'),
                             style: GoogleFonts.outfit(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
@@ -5650,7 +5711,7 @@ class _MainScreenState extends State<MainScreen> {
                             ),
                           ),
                           Text(
-                            '($totalCount صفقات إجمالية)',
+                            tr('($totalCount صفقات إجمالية)', '($totalCount trades total)'),
                             style: GoogleFonts.outfit(
                               fontSize: 9,
                               color: AppConstants.textSecondary,
@@ -5677,7 +5738,7 @@ class _MainScreenState extends State<MainScreen> {
                       ),
                       child: Center(
                         child: Text(
-                          'لا توجد صفقات مسجلة في هذه الفترة.',
+                          tr('لا توجد صفقات مسجلة في هذه الفترة.', 'No trades recorded in this period.'),
                           style: GoogleFonts.outfit(
                             color: AppConstants.textSecondary,
                             fontSize: 13,
@@ -5701,8 +5762,8 @@ class _MainScreenState extends State<MainScreen> {
                                     ? AppConstants.callGreen
                                     : AppConstants.putRed);
                           final directionText = sig.direction == 'CALL'
-                              ? 'صعود'
-                              : 'هبوط';
+                              ? tr('صعود', 'Up')
+                              : tr('هبوط', 'Down');
 
                           final dateStr =
                               "${sig.entryTime.hour.toString().padLeft(2, '0')}:${sig.entryTime.minute.toString().padLeft(2, '0')}";
@@ -5740,8 +5801,8 @@ class _MainScreenState extends State<MainScreen> {
                                   ),
                                   child: Text(
                                     isTie
-                                        ? '➖ تعادل'
-                                        : (isWin ? '✓ كسب' : '✗ خسارة'),
+                                        ? tr('➖ تعادل', '➖ Tie')
+                                        : (isWin ? tr('✓ كسب', '✓ Win') : tr('✗ خسارة', '✗ Loss')),
                                     style: GoogleFonts.outfit(
                                       fontSize: 10,
                                       color: outcomeColor,
@@ -5816,7 +5877,7 @@ class _MainScreenState extends State<MainScreen> {
                                                   ),
                                                 ),
                                                 child: Text(
-                                                  isMon ? '🎯 مراقبة' : '⚡ فوري',
+                                                  isMon ? tr('🎯 مراقبة', '🎯 Monitor') : tr('⚡ فوري', '⚡ Instant'),
                                                   style: GoogleFonts.outfit(
                                                     fontSize: 9,
                                                     fontWeight: FontWeight.bold,
@@ -5830,7 +5891,7 @@ class _MainScreenState extends State<MainScreen> {
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
-                                        'دخول: ${AppConstants.formatPrice(sig.entryPrice)} | إغلاق: ${AppConstants.formatPrice(sig.exitPrice ?? sig.currentPrice)}',
+                                        tr('دخول: ${AppConstants.formatPrice(sig.entryPrice)} | إغلاق: ${AppConstants.formatPrice(sig.exitPrice ?? sig.currentPrice)}', 'Entry: ${AppConstants.formatPrice(sig.entryPrice)} | Close: ${AppConstants.formatPrice(sig.exitPrice ?? sig.currentPrice)}'),
                                         style: GoogleFonts.outfit(
                                           fontSize: 10,
                                           color: AppConstants.textSecondary,

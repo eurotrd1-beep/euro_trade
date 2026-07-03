@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../constants.dart';
 import '../utils/web_utils.dart';
+import 'language_service.dart';
 
 class Candle {
   final double open;
@@ -213,7 +214,7 @@ class PyramidConfig {
     requireAllFilters: j['require_all_filters'] as bool? ?? true,
     waitMessage:
         j['wait_message'] as String? ??
-        'الهرم لم يكتمل — انتظار الشمعة القادمة',
+        tr('الهرم لم يكتمل — انتظار الشمعة القادمة', 'Pyramid not complete — waiting for the next candle'),
   );
 }
 
@@ -835,11 +836,11 @@ class SignalEngine extends ChangeNotifier {
       expiryTime: alignedExpiry,
       status: 'ACTIVE',
       marketCondition: isCall
-          ? '🎯 مراقبة ذكية — لحظة دخول صعود مؤكدة ✅'
-          : '🎯 مراقبة ذكية — لحظة دخول هبوط مؤكدة ✅',
+          ? tr('🎯 مراقبة ذكية — لحظة دخول صعود مؤكدة ✅', '🎯 Smart monitoring — confirmed CALL entry moment ✅')
+          : tr('🎯 مراقبة ذكية — لحظة دخول هبوط مؤكدة ✅', '🎯 Smart monitoring — confirmed PUT entry moment ✅'),
       recommendation: isCall
-          ? 'دخول صفقة صعود (CALL) على بداية الشمعة — أفضل لحظة دخول.'
-          : 'دخول صفقة هبوط (PUT) على بداية الشمعة — أفضل لحظة دخول.',
+          ? tr('دخول صفقة صعود (CALL) على بداية الشمعة — أفضل لحظة دخول.', 'Enter a CALL trade at the candle open — the best entry moment.')
+          : tr('دخول صفقة هبوط (PUT) على بداية الشمعة — أفضل لحظة دخول.', 'Enter a PUT trade at the candle open — the best entry moment.'),
       origin: 'monitoring',
     );
 
@@ -2059,8 +2060,9 @@ class SignalEngine extends ChangeNotifier {
 
     // Stage 1: Support & Resistance
     final sr = _calculateSupportResistance();
-    _analysisStageText =
-        '📊 تحليل مستويات الدعم والمقاومة لـ ${_activePair.replaceAll(' (OTC)', '')} | الدعم: ${AppConstants.formatPrice(sr['support']!)} | المقاومة: ${AppConstants.formatPrice(sr['resistance']!)}...';
+    _analysisStageText = tr(
+        '📊 تحليل مستويات الدعم والمقاومة لـ ${_activePair.replaceAll(' (OTC)', '')} | الدعم: ${AppConstants.formatPrice(sr['support']!)} | المقاومة: ${AppConstants.formatPrice(sr['resistance']!)}...',
+        '📊 Analyzing support & resistance for ${_activePair.replaceAll(' (OTC)', '')} | Support: ${AppConstants.formatPrice(sr['support']!)} | Resistance: ${AppConstants.formatPrice(sr['resistance']!)}...');
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 400));
     samplePrice();
@@ -2069,8 +2071,9 @@ class SignalEngine extends ChangeNotifier {
     final rsi = _calculateRsi(14);
     final stoch = _calculateStochastic(14, 3);
     final cci = _calculateCci(20);
-    _analysisStageText =
-        '📈 فحص مؤشرات التذبذب ومناطق التشبع | RSI: ${rsi.toStringAsFixed(1)} | Stochastic: ${stoch['k']!.toStringAsFixed(1)} | CCI: ${cci.toStringAsFixed(0)}...';
+    _analysisStageText = tr(
+        '📈 فحص مؤشرات التذبذب ومناطق التشبع | RSI: ${rsi.toStringAsFixed(1)} | Stochastic: ${stoch['k']!.toStringAsFixed(1)} | CCI: ${cci.toStringAsFixed(0)}...',
+        '📈 Checking oscillators & overbought/oversold zones | RSI: ${rsi.toStringAsFixed(1)} | Stochastic: ${stoch['k']!.toStringAsFixed(1)} | CCI: ${cci.toStringAsFixed(0)}...');
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 400));
     samplePrice();
@@ -2078,8 +2081,9 @@ class SignalEngine extends ChangeNotifier {
     // Stage 3: Volatility & Trend Strength
     final atr = _calculateAtr(14);
     final adxFull = _calculateAdxFull(14);
-    _analysisStageText =
-        '⚡ فحص قوة الاتجاه ومعدل التذبذب | ATR: ${atr.toStringAsFixed(5)} | ADX: ${adxFull['adx']!.toStringAsFixed(1)}...';
+    _analysisStageText = tr(
+        '⚡ فحص قوة الاتجاه ومعدل التذبذب | ATR: ${atr.toStringAsFixed(5)} | ADX: ${adxFull['adx']!.toStringAsFixed(1)}...',
+        '⚡ Checking trend strength & volatility | ATR: ${atr.toStringAsFixed(5)} | ADX: ${adxFull['adx']!.toStringAsFixed(1)}...');
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 400));
     samplePrice();
@@ -2087,8 +2091,9 @@ class SignalEngine extends ChangeNotifier {
     // Stage 4: Institutional Volume & MFI
     final vwap = _calculateVwap();
     final mfi = _calculateMfi(14);
-    _analysisStageText =
-        '🏦 مراقبة تدفق سيولة الحوت والـ MFI | MFI: ${mfi.toStringAsFixed(1)} | VWAP: ${AppConstants.formatPrice(vwap)}...';
+    _analysisStageText = tr(
+        '🏦 مراقبة تدفق سيولة الحوت والـ MFI | MFI: ${mfi.toStringAsFixed(1)} | VWAP: ${AppConstants.formatPrice(vwap)}...',
+        '🏦 Watching whale liquidity flow & MFI | MFI: ${mfi.toStringAsFixed(1)} | VWAP: ${AppConstants.formatPrice(vwap)}...');
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 400));
     samplePrice();
@@ -2096,16 +2101,18 @@ class SignalEngine extends ChangeNotifier {
     // Stage 5: Money Flow & Volume Delta
     final cmf = _calculateCmf(20);
     final volDelta = _calculateVolumeDelta();
-    _analysisStageText =
-        '💰 حساب ضغط الشراء مقابل البيع | CMF: ${cmf.toStringAsFixed(3)} | Vol Delta: ${volDelta.toStringAsFixed(1)}%...';
+    _analysisStageText = tr(
+        '💰 حساب ضغط الشراء مقابل البيع | CMF: ${cmf.toStringAsFixed(3)} | Vol Delta: ${volDelta.toStringAsFixed(1)}%...',
+        '💰 Calculating buying vs selling pressure | CMF: ${cmf.toStringAsFixed(3)} | Vol Delta: ${volDelta.toStringAsFixed(1)}%...');
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 400));
     samplePrice();
 
     // Stage 6: Order Blocks & Liquidity Zones
     final liq = _calculateLiquidityZones();
-    _analysisStageText =
-        '🔍 تحديد مناطق الطلب والعرض والمستويات المؤسسية | LIQ Score: ${(liq['score'] as double).toStringAsFixed(0)}%...';
+    _analysisStageText = tr(
+        '🔍 تحديد مناطق الطلب والعرض والمستويات المؤسسية | LIQ Score: ${(liq['score'] as double).toStringAsFixed(0)}%...',
+        '🔍 Identifying demand & supply zones and institutional levels | LIQ Score: ${(liq['score'] as double).toStringAsFixed(0)}%...');
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 400));
     samplePrice();
@@ -2113,42 +2120,48 @@ class SignalEngine extends ChangeNotifier {
     // Stage 7: Candlestick Patterns & Divergences
     final pattern = _detectCandlePatterns();
     final divergence = _detectRsiDivergence();
-    _analysisStageText =
-        '🕯️ تحليل البرايس أكشن ونموذج الشموع | Pattern: ${pattern.replaceAll('_', ' ')} | Divergence: $divergence...';
+    _analysisStageText = tr(
+        '🕯️ تحليل البرايس أكشن ونموذج الشموع | Pattern: ${pattern.replaceAll('_', ' ')} | Divergence: $divergence...',
+        '🕯️ Analyzing price action & candlestick patterns | Pattern: ${pattern.replaceAll('_', ' ')} | Divergence: $divergence...');
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 400));
     samplePrice();
 
     // Stage 8: Correlation & DXY Index
-    _analysisStageText =
-        '⚙️ قياس قوة العملة مقابل مؤشر الدولار والعملات الأخرى (Correlation Index)...';
+    _analysisStageText = tr(
+        '⚙️ قياس قوة العملة مقابل مؤشر الدولار والعملات الأخرى (Correlation Index)...',
+        '⚙️ Measuring currency strength vs the dollar index and other currencies (Correlation Index)...');
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 400));
     samplePrice();
 
     // Stage 9: Multi-Timeframe Confluence (1m / 5m / 15m)
-    _analysisStageText =
-        '🔄 فحص محاذاة الاتجاه عبر الفريمات المتعددة لضمان دقة الدخول...';
+    _analysisStageText = tr(
+        '🔄 فحص محاذاة الاتجاه عبر الفريمات المتعددة لضمان دقة الدخول...',
+        '🔄 Checking trend alignment across multiple timeframes to ensure entry accuracy...');
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 400));
     samplePrice();
 
     // Stage 10: Market Noise Filter
-    _analysisStageText =
-        '🛡️ تصفية الضوضاء السعرية وكشف كسر الدعم والمقاومة الكاذب...';
+    _analysisStageText = tr(
+        '🛡️ تصفية الضوضاء السعرية وكشف كسر الدعم والمقاومة الكاذب...',
+        '🛡️ Filtering price noise and detecting false support/resistance breaks...');
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 400));
     samplePrice();
 
     // Stage 11: Safety Gates Assessment
-    _analysisStageText = '🔒 تطبيق مرشحات الأمان وفحص نسبة العائد للمخاطرة...';
+    _analysisStageText = tr('🔒 تطبيق مرشحات الأمان وفحص نسبة العائد للمخاطرة...',
+        '🔒 Applying safety filters and checking the risk/reward ratio...');
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 400));
     samplePrice();
 
     // Stage 12: Confluence Scoring
-    _analysisStageText =
-        '🏁 احتساب Confluence النهائي لـ 18 مؤشر فني وحسم اتجاه السوق...';
+    _analysisStageText = tr(
+        '🏁 احتساب Confluence النهائي لـ 18 مؤشر فني وحسم اتجاه السوق...',
+        '🏁 Computing the final confluence of 18 technical indicators and deciding market direction...');
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 400));
     samplePrice();
@@ -2168,8 +2181,9 @@ class SignalEngine extends ChangeNotifier {
         if (rem <= 0) break;
         if (rem != lastRem) {
           lastRem = rem;
-          _analysisStageText =
-              'بانتظار إغلاق الشمعة الحالية لفتح صفقة مع الشمعة القادمة: $rem ثانية...';
+          _analysisStageText = tr(
+              'بانتظار إغلاق الشمعة الحالية لفتح صفقة مع الشمعة القادمة: $rem ثانية...',
+              'Waiting for the current candle to close to open a trade with the next candle: ${rem}s...');
           notifyListeners();
           samplePrice();
         }
@@ -2237,7 +2251,7 @@ class SignalEngine extends ChangeNotifier {
         entryTime: DateTime.fromMillisecondsSinceEpoch(cStart * 1000),
         expiryTime: DateTime.fromMillisecondsSinceEpoch(expiry * 1000),
         status: 'ACTIVE',
-        marketCondition: 'تحليل مباشر',
+        marketCondition: tr('تحليل مباشر', 'Live analysis'),
         recommendation: isCall ? 'CALL ✅' : 'PUT ✅',
       );
       _secondsRemaining = (expiry - nowSec).clamp(1, selectedMinutes * cs + cs);
@@ -6683,8 +6697,8 @@ class SignalEngine extends ChangeNotifier {
     final bool rejected = _pyramidRejectReason.isNotEmpty;
     if (rejected || absScore < minScore) {
       _lastWaitNotice = rejected
-          ? 'لا توجد فرصة دخول الآن — لم تتحقق شروط الاستراتيجية'
-          : 'لا توجد فرصة دخول الآن — لم يتحقق الحد الأدنى للتوافق (min_score)';
+          ? tr('لا توجد فرصة دخول الآن — لم تتحقق شروط الاستراتيجية', 'No entry opportunity now — the strategy conditions were not met')
+          : tr('لا توجد فرصة دخول الآن — لم يتحقق الحد الأدنى للتوافق (min_score)', 'No entry opportunity now — the minimum confluence (min_score) was not reached');
       _activeSignal = null;
       _secondsRemaining = 0;
       evalJs("CandleChart.setGlobalEntryLine(null, null)");
@@ -6736,13 +6750,13 @@ class SignalEngine extends ChangeNotifier {
       marketCondition: _userRole == 'vip'
           ? '${_vipLastResult?.grade ?? "VIP"} | Score: ${_vipLastResult?.overallScore.toStringAsFixed(0) ?? "—"}/100 | ${_vipLastResult?.riskAssessment ?? ""}'
           : (isCall
-                ? 'اتجاه صاعد مستقر وقوي مدعوم بسيولة ممتازة ✅'
-                : 'اتجاه هابط حاد وضغط بيعي قوي مدعوم بسيولة ممتازة ✅'),
+                ? tr('اتجاه صاعد مستقر وقوي مدعوم بسيولة ممتازة ✅', 'Stable, strong uptrend backed by excellent liquidity ✅')
+                : tr('اتجاه هابط حاد وضغط بيعي قوي مدعوم بسيولة ممتازة ✅', 'Sharp downtrend with strong selling pressure backed by excellent liquidity ✅')),
       recommendation: _userRole == 'vip'
-          ? '${isCall ? "VIP CALL ✅" : "VIP PUT ✅"} | ${_vipLastResult?.historical?.summary ?? "تحليل مزدوج مؤكد"}'
+          ? '${isCall ? "VIP CALL ✅" : "VIP PUT ✅"} | ${_vipLastResult?.historical?.summary ?? tr("تحليل مزدوج مؤكد", "Confirmed dual analysis")}'
           : (isCall
-                ? 'دخول صفقة صعود (CALL) فوراً - فرصة دخول آمنة ونسبة نجاح عالية.'
-                : 'دخول صفقة هبوط (PUT) فوراً - فرصة دخول آمنة ونسبة نجاح عالية.'),
+                ? tr('دخول صفقة صعود (CALL) فوراً - فرصة دخول آمنة ونسبة نجاح عالية.', 'Enter a CALL trade now — a safe entry with a high success rate.')
+                : tr('دخول صفقة هبوط (PUT) فوراً - فرصة دخول آمنة ونسبة نجاح عالية.', 'Enter a PUT trade now — a safe entry with a high success rate.')),
     );
 
     _secondsRemaining = alignedDuration;
@@ -6794,29 +6808,29 @@ class SignalEngine extends ChangeNotifier {
         marketCondition: _userRole == 'vip'
             ? '${_vipLastResult?.grade ?? "VIP"} | Score: ${_vipLastResult?.overallScore.toStringAsFixed(0) ?? "—"}/100 | ${_vipLastResult?.riskAssessment ?? ""}'
             : (newDirection == 'CALL'
-                  ? 'تم تحديث الاتجاه إلى صعود قوي ✅'
-                  : 'تم تحديث الاتجاه إلى هبوط قوي ✅'),
+                  ? tr('تم تحديث الاتجاه إلى صعود قوي ✅', 'Direction updated to a strong uptrend ✅')
+                  : tr('تم تحديث الاتجاه إلى هبوط قوي ✅', 'Direction updated to a strong downtrend ✅')),
         recommendation: _userRole == 'vip'
-            ? '${newDirection == "CALL" ? "VIP CALL ✅" : "VIP PUT ✅"} | ${_vipLastResult?.historical?.summary ?? "تحليل مزدوج مؤكد"}'
+            ? '${newDirection == "CALL" ? "VIP CALL ✅" : "VIP PUT ✅"} | ${_vipLastResult?.historical?.summary ?? tr("تحليل مزدوج مؤكد", "Confirmed dual analysis")}'
             : (newDirection == 'CALL'
-                  ? 'تحديث التوصية: دخول صفقة صعود (CALL) مع الشمعة الحالية.'
-                  : 'تحديث التوصية: دخول صفقة هبوط (PUT) مع الشمعة الحالية.'),
+                  ? tr('تحديث التوصية: دخول صفقة صعود (CALL) مع الشمعة الحالية.', 'Updated recommendation: enter a CALL trade with the current candle.')
+                  : tr('تحديث التوصية: دخول صفقة هبوط (PUT) مع الشمعة الحالية.', 'Updated recommendation: enter a PUT trade with the current candle.')),
       );
 
-      String tfLabel = 'دقيقة واحدة';
+      String tfLabel = tr('دقيقة واحدة', '1 minute');
       if (_chartTimeframe == '5m') {
-        tfLabel = '5 دقائق';
+        tfLabel = tr('5 دقائق', '5 minutes');
       } else if (_chartTimeframe == '15m') {
-        tfLabel = '15 دقيقة';
+        tfLabel = tr('15 دقيقة', '15 minutes');
       } else if (_chartTimeframe == '30m') {
-        tfLabel = '30 دقيقة';
+        tfLabel = tr('30 دقيقة', '30 minutes');
       } else if (_chartTimeframe == '1h') {
-        tfLabel = 'ساعة واحدة';
+        tfLabel = tr('ساعة واحدة', '1 hour');
       }
 
       _signalChangeNotice = _userRole == 'vip'
-          ? 'تنبيه VIP: تم تصحيح مسار الإشارة وتحديث الاتجاه فوراً ($tfLabel)'
-          : 'تم تحديث اتجاه الإشارة مع الشمعة الحالية ($tfLabel)';
+          ? tr('تنبيه VIP: تم تصحيح مسار الإشارة وتحديث الاتجاه فوراً ($tfLabel)', 'VIP alert: the signal path was corrected and the direction updated instantly ($tfLabel)')
+          : tr('تم تحديث اتجاه الإشارة مع الشمعة الحالية ($tfLabel)', 'The signal direction was updated with the current candle ($tfLabel)');
 
       _playNewSignalSound();
       notifyListeners();
@@ -7128,12 +7142,12 @@ class SignalEngine extends ChangeNotifier {
   // ══════════════════════════════════════════════════════════════════════
   EngineResult _runMarketStructureEngine() {
     if (_candles.length < 20) {
-      return const EngineResult(
+      return EngineResult(
         passed: false,
         quality: 0,
         status: 'FAIL',
-        evidence: ['Insufficient candle data (<20)'],
-        summary: 'FAIL: بيانات غير كافية — رفض',
+        evidence: const ['Insufficient candle data (<20)'],
+        summary: tr('FAIL: بيانات غير كافية — رفض', 'FAIL: Insufficient data — rejected'),
       );
     }
     final adxD = _calculateAdxFull(14);
@@ -7150,21 +7164,21 @@ class SignalEngine extends ChangeNotifier {
         dirChanges++;
     }
     if (adx < 15 && dirChanges >= 4) {
-      return const EngineResult(
+      return EngineResult(
         passed: false,
         quality: 0,
         status: 'FAIL',
-        evidence: ['ADX < 15 + Erratic moves — Chaotic'],
-        summary: 'FAIL: سوق عشوائي فوضوي — رفض فوري',
+        evidence: const ['ADX < 15 + Erratic moves — Chaotic'],
+        summary: tr('FAIL: سوق عشوائي فوضوي — رفض فوري', 'FAIL: Random chaotic market — instant rejection'),
       );
     }
     if (adx < 15 && atr < avgR * 0.4) {
-      return const EngineResult(
+      return EngineResult(
         passed: false,
         quality: 0,
         status: 'FAIL',
-        evidence: ['ADX < 15 + Tight ATR — Sideways/Range'],
-        summary: 'FAIL: سوق عرضي مضغوط — رفض',
+        evidence: const ['ADX < 15 + Tight ATR — Sideways/Range'],
+        summary: tr('FAIL: سوق عرضي مضغوط — رفض', 'FAIL: Tight sideways market — rejected'),
       );
     }
 
@@ -7266,8 +7280,9 @@ class SignalEngine extends ChangeNotifier {
         quality: 0,
         status: 'FAIL',
         evidence: ['ADX ${adx.toStringAsFixed(0)} < 20'],
-        summary:
+        summary: tr(
             'FAIL: Weak Trend Regime (ADX ${adx.toStringAsFixed(0)}) — رفض',
+            'FAIL: Weak Trend Regime (ADX ${adx.toStringAsFixed(0)}) — rejected'),
       );
     }
     if (bbWp < 0.12 && atr < avgR * 0.45) {
@@ -7279,7 +7294,7 @@ class SignalEngine extends ChangeNotifier {
           'BB Width ${bbWp.toStringAsFixed(3)}% compressed',
           'ATR low',
         ],
-        summary: 'FAIL: Compression Regime — رفض',
+        summary: tr('FAIL: Compression Regime — رفض', 'FAIL: Compression Regime — rejected'),
       );
     }
 
@@ -7388,7 +7403,7 @@ class SignalEngine extends ChangeNotifier {
         quality: 20,
         status: 'FAIL',
         evidence: evid,
-        summary: 'FAIL: HTF Major Conflict (Bull:$bull Bear:$bear) — رفض',
+        summary: tr('FAIL: HTF Major Conflict (Bull:$bull Bear:$bear) — رفض', 'FAIL: HTF Major Conflict (Bull:$bull Bear:$bear) — rejected'),
       );
     }
     String dir = bull > bear
@@ -7465,7 +7480,7 @@ class SignalEngine extends ChangeNotifier {
         quality: 0,
         status: 'FAIL',
         evidence: [...evid, 'MTF Major Conflict: $bull Bull / $bear Bear'],
-        summary: 'FAIL: MTF Major Conflict — رفض',
+        summary: tr('FAIL: MTF Major Conflict — رفض', 'FAIL: MTF Major Conflict — rejected'),
       );
     }
     double avgQ = qs.reduce((a, b) => a + b) / qs.length;
@@ -7507,7 +7522,7 @@ class SignalEngine extends ChangeNotifier {
         quality: 0,
         status: 'FAIL',
         evidence: ['ADX ${adx.toStringAsFixed(0)} < 17 — Trend too weak'],
-        summary: 'FAIL: ADX ${adx.toStringAsFixed(0)} — Trend too weak — رفض',
+        summary: tr('FAIL: ADX ${adx.toStringAsFixed(0)} — Trend too weak — رفض', 'FAIL: ADX ${adx.toStringAsFixed(0)} — Trend too weak — rejected'),
       );
     }
 
@@ -7788,7 +7803,7 @@ class SignalEngine extends ChangeNotifier {
         quality: score.clamp(0, 100),
         status: 'FAIL',
         evidence: [...evid, ...weak.map((w) => '⚠ $w')],
-        summary: 'FAIL: No BOS + No OB + No FVG — Zero SMC evidence — رفض',
+        summary: tr('FAIL: No BOS + No OB + No FVG — Zero SMC evidence — رفض', 'FAIL: No BOS + No OB + No FVG — Zero SMC evidence — rejected'),
       );
     }
     double quality = score.clamp(0, 100);
@@ -7798,8 +7813,9 @@ class SignalEngine extends ChangeNotifier {
         quality: quality,
         status: 'FAIL',
         evidence: [...evid, ...weak.map((w) => '⚠ $w')],
-        summary:
+        summary: tr(
             'FAIL: SMC Quality ${quality.toStringAsFixed(0)} — Zero institutional evidence — رفض',
+            'FAIL: SMC Quality ${quality.toStringAsFixed(0)} — Zero institutional evidence — rejected'),
       );
     }
     return EngineResult(
@@ -8000,12 +8016,12 @@ class SignalEngine extends ChangeNotifier {
   // ── HISTORICAL BACKTESTING ENGINE ────────────────────────────────
   VipHistoricalResult _runHistoricalEngine(int direction) {
     if (_candles.length < 20) {
-      return const VipHistoricalResult(
+      return VipHistoricalResult(
         passed: false,
         sampleSize: 0,
         winRate: 0,
         verdict: 'FAIL',
-        summary: 'Historical: HISTORICAL DATA NOT AVAILABLE — بيانات غير كافية',
+        summary: tr('Historical: HISTORICAL DATA NOT AVAILABLE — بيانات غير كافية', 'Historical: HISTORICAL DATA NOT AVAILABLE — insufficient data'),
       );
     }
 

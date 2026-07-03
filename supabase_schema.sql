@@ -143,3 +143,26 @@ ALTER PUBLICATION supabase_realtime ADD TABLE otc_pairs;
 
 ALTER TABLE otc_pairs ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "allow all" ON otc_pairs FOR ALL USING (true) WITH CHECK (true);
+
+-- ══════════════════════════════════════════════════════
+-- Web Push notifications (Web Push Protocol + VAPID)
+-- Also provided as supabase/migrations/…_push_subscriptions.sql
+-- ══════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id           UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id      TEXT,                          -- account id (users.id)
+  endpoint     TEXT        NOT NULL UNIQUE,    -- unique per device/browser
+  subscription JSONB       NOT NULL,           -- full PushSubscription (endpoint + keys)
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS push_subscriptions_user_id_idx ON push_subscriptions (user_id);
+
+ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "allow all" ON push_subscriptions FOR ALL USING (true) WITH CHECK (true);
+
+-- Public VAPID key the client reads to subscribe (set after generating keys).
+INSERT INTO configs (id, data) VALUES
+  ('push', '{"vapidPublicKey": ""}'::jsonb)
+ON CONFLICT (id) DO NOTHING;

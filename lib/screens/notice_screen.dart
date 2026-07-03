@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../constants.dart';
+import '../services/language_service.dart';
 import '../utils/web_utils.dart';
 import '../widgets/particles.dart';
 import '../widgets/trading_background.dart';
@@ -42,7 +43,7 @@ class _NoticeScreenState extends State<NoticeScreen> {
           children: [
             const Icon(Icons.check_circle_outline, color: AppConstants.callGreen),
             const SizedBox(width: 10),
-            Text('تم نسخ البروموكود $code إلى الحافظة!',
+            Text(tr('تم نسخ البروموكود $code إلى الحافظة!', 'Promo code $code copied to clipboard!'),
                 style: GoogleFonts.outfit(color: AppConstants.textPrimary)),
           ],
         ),
@@ -104,7 +105,7 @@ class _NoticeScreenState extends State<NoticeScreen> {
                   ],
                 ),
                 child: Directionality(
-                  textDirection: TextDirection.rtl,
+                  textDirection: LanguageService.direction,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -139,7 +140,7 @@ class _NoticeScreenState extends State<NoticeScreen> {
 
                       // Title
                       Text(
-                        'تنويه هام وتفعيل العضوية',
+                        tr('تنويه هام وتفعيل العضوية', 'Important Notice & Membership Activation'),
                         textAlign: TextAlign.center,
                         style: GoogleFonts.outfit(
                           fontSize: 22,
@@ -150,7 +151,7 @@ class _NoticeScreenState extends State<NoticeScreen> {
                       const SizedBox(height: 10),
 
                       Text(
-                        'للحصول على إشارات التحليل الفني والذكاء الاصطناعي المجانية، يجب تسجيل حساب جديد من خلال روابط الشراكة أدناه لتوثيق عضويتك بالفيب (VIP Room).',
+                        tr('للحصول على إشارات التحليل الفني والذكاء الاصطناعي المجانية، يجب تسجيل حساب جديد من خلال روابط الشراكة أدناه لتوثيق عضويتك بالفيب (VIP Room).', 'To receive free technical-analysis and AI signals, you must register a new account through the partner links below to verify your VIP Room membership.'),
                         textAlign: TextAlign.center,
                         style: GoogleFonts.outfit(
                           fontSize: 13,
@@ -184,7 +185,7 @@ class _NoticeScreenState extends State<NoticeScreen> {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                '⚠️ تنبيه: الإشارات لن تعمل إلا إذا قمت بالتسجيل من خلال الروابط الموجودة هنا. أي حساب مسجل من خارج البوت لن يتم تفعيله.',
+                                tr('⚠️ تنبيه: الإشارات لن تعمل إلا إذا قمت بالتسجيل من خلال الروابط الموجودة هنا. أي حساب مسجل من خارج البوت لن يتم تفعيله.', '⚠️ Warning: Signals will only work if you register through the links here. Any account registered outside the bot will not be activated.'),
                                 style: GoogleFonts.outfit(
                                   fontSize: 11,
                                   color: AppConstants.putRed.withAlpha(220),
@@ -211,7 +212,7 @@ class _NoticeScreenState extends State<NoticeScreen> {
                               child: Padding(
                                 padding: const EdgeInsets.symmetric(vertical: 24),
                                 child: Text(
-                                  'جاري تحميل المنصات المتاحة...',
+                                  tr('جاري تحميل المنصات المتاحة...', 'Loading available platforms...'),
                                   style: GoogleFonts.outfit(color: AppConstants.textSecondary, fontSize: 13),
                                 ),
                               ),
@@ -237,7 +238,7 @@ class _NoticeScreenState extends State<NoticeScreen> {
                                   desc: d['desc'] as String? ?? '',
                                   logoUrl: logoUrl,
                                   onTap: () => _openBrokerSignUp(name, link, clickKey),
-                                  btnText: 'سجل حساب في $name 📈',
+                                  btnText: tr('سجل حساب في $name 📈', 'Register an account on $name 📈'),
                                   isRecommended: isRec,
                                   promoWidget: promoCode.isNotEmpty
                                       ? _buildPromoCodeSection(promoCode, bonusPct, minDep)
@@ -287,7 +288,7 @@ class _NoticeScreenState extends State<NoticeScreen> {
                           elevation: 8,
                         ),
                         child: Text(
-                          'سجلت حساباً بالفعل؟ انقلني لتسجيل الدخول ⟵',
+                          tr('سجلت حساباً بالفعل؟ انقلني لتسجيل الدخول ⟵', 'Already registered? Take me to login ⟵'),
                           style: GoogleFonts.outfit(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
@@ -327,8 +328,8 @@ class _NoticeScreenState extends State<NoticeScreen> {
               Expanded(
                 child: Text(
                   minDeposit > 0 && bonusPercent > 0
-                      ? 'أودع $minDeposit\$ حد أدنى واحصل على $bonusPercent% بونص!'
-                      : 'استخدم البروموكود للحصول على مكافأة!',
+                      ? tr('أودع $minDeposit\$ حد أدنى واحصل على $bonusPercent% بونص!', 'Deposit a minimum of $minDeposit\$ and get a $bonusPercent% bonus!')
+                      : tr('استخدم البروموكود للحصول على مكافأة!', 'Use the promo code to get a bonus!'),
                   style: GoogleFonts.outfit(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
@@ -356,7 +357,7 @@ class _NoticeScreenState extends State<NoticeScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'البروموكود:',
+                        tr('البروموكود:', 'Promo code:'),
                         style: GoogleFonts.outfit(
                           fontSize: 10,
                           color: AppConstants.textSecondary,
@@ -382,7 +383,7 @@ class _NoticeScreenState extends State<NoticeScreen> {
                   onPressed: () => _copyPromoCode(promoCode),
                   icon: const Icon(Icons.copy_rounded, size: 14),
                   label: Text(
-                    'نسخ',
+                    tr('نسخ', 'Copy'),
                     style: GoogleFonts.outfit(
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
@@ -482,7 +483,7 @@ class _NoticeScreenState extends State<NoticeScreen> {
                         children: [
                           const Icon(Icons.workspace_premium_rounded, color: AppConstants.callGreen, size: 12),
                           const SizedBox(width: 4),
-                          Text('الأفضل والمُرشحة',
+                          Text(tr('الأفضل والمُرشحة', 'Best & recommended'),
                               style: GoogleFonts.outfit(fontSize: 10, color: AppConstants.callGreen, fontWeight: FontWeight.bold)),
                         ],
                       )

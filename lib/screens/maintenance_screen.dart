@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../constants.dart';
+import '../services/language_service.dart';
 import '../widgets/particles.dart';
 import '../widgets/trading_background.dart';
 import 'notice_screen.dart';
@@ -19,7 +20,8 @@ class MaintenanceScreen extends StatefulWidget {
 class _MaintenanceScreenState extends State<MaintenanceScreen> {
   Timer? _countdownTimer;
   Duration _remaining = Duration.zero;
-  String _message = 'التطبيق متوقف مؤقتاً للصيانة، سنعود قريباً';
+  String _message = tr('التطبيق متوقف مؤقتاً للصيانة، سنعود قريباً',
+      'The app is temporarily down for maintenance. We\'ll be back soon.');
   StreamSubscription<List<Map<String, dynamic>>>? _sub;
 
   @override
@@ -117,7 +119,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
                     child: const Icon(Icons.construction_rounded, color: AppConstants.putRed, size: 44),
                   ),
                   const SizedBox(height: 28),
-                  Text('جاري الصيانة',
+                  Text(tr('جاري الصيانة', 'Under maintenance'),
                       style: GoogleFonts.outfit(
                           fontSize: 28, fontWeight: FontWeight.bold,
                           color: AppConstants.textPrimary)),
@@ -128,7 +130,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
                           fontSize: 14, color: AppConstants.textSecondary, height: 1.6)),
                   if (hasCountdown) ...[
                     const SizedBox(height: 28),
-                    Text('التطبيق سيعود خلال', style: GoogleFonts.outfit(fontSize: 12, color: AppConstants.textSecondary)),
+                    Text(tr('التطبيق سيعود خلال', 'The app will be back in'), style: GoogleFonts.outfit(fontSize: 12, color: AppConstants.textSecondary)),
                     const SizedBox(height: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -146,7 +148,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
                     ),
                   ],
                   const SizedBox(height: 40),
-                  Text('سيتم تحديث الصفحة تلقائياً عند انتهاء الصيانة',
+                  Text(tr('سيتم تحديث الصفحة تلقائياً عند انتهاء الصيانة', 'The page will refresh automatically when maintenance ends'),
                       style: GoogleFonts.outfit(fontSize: 11, color: AppConstants.textSecondary.withAlpha(140))),
                 ],
               ),

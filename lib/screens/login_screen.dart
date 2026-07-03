@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../utils/web_utils.dart';
 import '../constants.dart';
+import '../services/language_service.dart';
 import '../widgets/particles.dart';
 import '../widgets/trading_background.dart';
 import 'main_screen.dart';
@@ -106,7 +107,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 padding: const EdgeInsets.all(24),
                 child: Directionality(
-                  textDirection: TextDirection.rtl,
+                  textDirection: LanguageService.direction,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -138,7 +139,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        'مرحباً بك في Euro Trade! 🎯',
+                        tr('مرحباً بك في Euro Trade! 🎯', 'Welcome to Euro Trade! 🎯'),
                         textAlign: TextAlign.center,
                         style: GoogleFonts.outfit(
                           fontSize: 19,
@@ -148,7 +149,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'للوصول إلى المنصة يرجى متابعة قناتنا\nعلى يوتيوب وتليجرام للحصول على آخر التحديثات والإشارات.',
+                        tr('للوصول إلى المنصة يرجى متابعة قناتنا\nعلى يوتيوب وتليجرام للحصول على آخر التحديثات والإشارات.', 'To access the platform, please follow our\nYouTube and Telegram channels for the latest updates and signals.'),
                         textAlign: TextAlign.center,
                         style: GoogleFonts.outfit(
                           fontSize: 12,
@@ -161,7 +162,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       _SubscribeButton(
                         icon: Icons.play_circle_fill_rounded,
                         iconColor: Colors.red,
-                        label: 'اشترك في قناة يوتيوب',
+                        label: tr('اشترك في قناة يوتيوب', 'Subscribe to the YouTube channel'),
                         sublabel: '@euro_trader',
                         done: ytDone,
                         onTap: () {
@@ -176,7 +177,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       _SubscribeButton(
                         icon: Icons.send_rounded,
                         iconColor: const Color(0xFF29B6F6),
-                        label: 'انضم لقناة تليجرام',
+                        label: tr('انضم لقناة تليجرام', 'Join the Telegram channel'),
                         sublabel: '@euro_trd1',
                         done: tgDone,
                         onTap: () {
@@ -202,8 +203,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 6),
                       Text(
                         bothDone
-                            ? 'تم التحقق ✅ يمكنك الدخول الآن'
-                            : 'يرجى الضغط على الزرين أعلاه أولاً',
+                            ? tr('تم التحقق ✅ يمكنك الدخول الآن', 'Verified ✅ You can enter now')
+                            : tr('يرجى الضغط على الزرين أعلاه أولاً', 'Please tap both buttons above first'),
                         textAlign: TextAlign.center,
                         style: GoogleFonts.outfit(
                           fontSize: 11,
@@ -239,7 +240,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             elevation: bothDone ? 6 : 0,
                           ),
                           child: Text(
-                            'دخول المنصة 🚀',
+                            tr('دخول المنصة 🚀', 'Enter the platform 🚀'),
                             style: GoogleFonts.outfit(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
@@ -277,7 +278,7 @@ class _LoginScreenState extends State<LoginScreen> {
     showDialog(
       context: context,
       builder: (ctx) => Directionality(
-        textDirection: TextDirection.rtl,
+        textDirection: LanguageService.direction,
         child: AlertDialog(
           backgroundColor: AppConstants.cardBgColor,
           shape: RoundedRectangleBorder(
@@ -297,7 +298,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'كود البرومو غير صحيح',
+                  tr('كود البرومو غير صحيح', 'Invalid promo code'),
                   style: GoogleFonts.outfit(
                     color: AppConstants.textPrimary,
                     fontWeight: FontWeight.bold,
@@ -307,9 +308,14 @@ class _LoginScreenState extends State<LoginScreen> {
             ],
           ),
           content: Text(
-            'للدخول عبر منصة $_selectedBroker يجب إنشاء حساب جديد على هذه المنصة '
-            'باستخدام كود البرومو الخاص بنا، ثم إدخال الكود في خانة البرومو مع '
-            'معرّف الحساب.\n\nالكود اللي أدخلته غير مطابق — تأكد منه وحاول مرة أخرى.',
+            tr(
+              'للدخول عبر منصة $_selectedBroker يجب إنشاء حساب جديد على هذه المنصة '
+                  'باستخدام كود البرومو الخاص بنا، ثم إدخال الكود في خانة البرومو مع '
+                  'معرّف الحساب.\n\nالكود اللي أدخلته غير مطابق — تأكد منه وحاول مرة أخرى.',
+              'To sign in via $_selectedBroker you must create a new account on this platform '
+                  'using our promo code, then enter the code in the promo field along with '
+                  'your Account ID.\n\nThe code you entered does not match — double-check it and try again.',
+            ),
             style: GoogleFonts.outfit(
               color: AppConstants.textSecondary,
               height: 1.7,
@@ -324,7 +330,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 foregroundColor: Colors.black,
               ),
               child: Text(
-                'حسناً',
+                tr('حسناً', 'OK'),
                 style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
               ),
             ),
@@ -338,7 +344,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final accountId = _idController.text.trim();
     if (accountId.isEmpty) {
       setState(() {
-        _errorMessage = 'يرجى إدخال معرف حساب صحيح';
+        _errorMessage = tr('يرجى إدخال معرف حساب صحيح', 'Please enter a valid Account ID');
       });
       return;
     }
@@ -346,7 +352,7 @@ class _LoginScreenState extends State<LoginScreen> {
     // Simulate simple checks on ID length/characters
     if (accountId.length < 5) {
       setState(() {
-        _errorMessage = 'يجب أن يتكون معرف الحساب من 5 أرقام على الأقل';
+        _errorMessage = tr('يجب أن يتكون معرف الحساب من 5 أرقام على الأقل', 'The Account ID must be at least 5 digits');
       });
       return;
     }
@@ -354,7 +360,7 @@ class _LoginScreenState extends State<LoginScreen> {
     // Platform is MANDATORY — its name is shown across the app + tracked per user.
     if (_selectedBroker.trim().isEmpty) {
       setState(() {
-        _errorMessage = 'اختر منصة التداول أولاً (الخطوة 1)';
+        _errorMessage = tr('اختر منصة التداول أولاً (الخطوة 1)', 'Choose your trading platform first (Step 1)');
       });
       return;
     }
@@ -398,7 +404,7 @@ class _LoginScreenState extends State<LoginScreen> {
               storedDeviceId != '' &&
               storedDeviceId != deviceId) {
             deviceMismatchError =
-                'هذا الحساب VIP مرتبط بجهاز آخر. لا يمكن تسجيل الدخول من هذا الجهاز.';
+                tr('هذا الحساب VIP مرتبط بجهاز آخر. لا يمكن تسجيل الدخول من هذا الجهاز.', 'This VIP account is linked to another device. You cannot sign in from this device.');
             return;
           }
 
@@ -479,20 +485,20 @@ class _LoginScreenState extends State<LoginScreen> {
 
     final steps = [
       {
-        'text': 'جاري الاتصال بخوادم منصة $_selectedBroker الآمنة...',
+        'text': tr('جاري الاتصال بخوادم منصة $_selectedBroker الآمنة...', 'Connecting to $_selectedBroker secure servers...'),
         'progress': 0.15,
       },
       {
-        'text': 'جاري الاستعلام عن سجلات الإحالة النشطة للشركاء...',
+        'text': tr('جاري الاستعلام عن سجلات الإحالة النشطة للشركاء...', 'Querying active partner referral records...'),
         'progress': 0.40,
       },
       {
-        'text': 'جاري مطابقة معرف الحساب في شبكة VIP المعتمدة...',
+        'text': tr('جاري مطابقة معرف الحساب في شبكة VIP المعتمدة...', 'Matching the Account ID in the certified VIP network...'),
         'progress': 0.65,
       },
-      {'text': 'تفعيل عضوية غرفة VIP الخاصة بحسابك...', 'progress': 0.85},
+      {'text': tr('تفعيل عضوية غرفة VIP الخاصة بحسابك...', 'Activating your account\'s VIP Room membership...'), 'progress': 0.85},
       {
-        'text': 'تم تأكيد التفعيل بنجاح! جاري الانتقال لمنصة إشارات VIP...',
+        'text': tr('تم تأكيد التفعيل بنجاح! جاري الانتقال لمنصة إشارات VIP...', 'Activation confirmed successfully! Redirecting to the VIP signals platform...'),
         'progress': 1.0,
       },
     ];
@@ -645,7 +651,7 @@ class _LoginScreenState extends State<LoginScreen> {
         ],
       ),
       child: Directionality(
-        textDirection: TextDirection.rtl,
+        textDirection: LanguageService.direction,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -679,7 +685,7 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 children: [
                   Text(
-                    'تسجيل الدخول للـ VIP',
+                    tr('تسجيل الدخول للـ VIP', 'VIP Login'),
                     style: GoogleFonts.outfit(
                       fontSize: 26,
                       fontWeight: FontWeight.bold,
@@ -688,7 +694,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'أدخل معرف حساب التداول الخاص بك للتحقق وتفعيل الإشارات',
+                    tr('أدخل معرف حساب التداول الخاص بك للتحقق وتفعيل الإشارات', 'Enter your trading Account ID to verify and activate signals'),
                     textAlign: TextAlign.center,
                     style: GoogleFonts.outfit(
                       fontSize: 12,
@@ -703,7 +709,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
             // Step 1: Select Broker
             Text(
-              '1. اختر منصة التداول المسجّل بها',
+              tr('1. اختر منصة التداول المسجّل بها', '1. Choose the platform you registered on'),
               style: GoogleFonts.outfit(
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
@@ -722,7 +728,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 if (docs.isEmpty) {
                   return Center(
                     child: Text(
-                      'جاري تحميل المنصات...',
+                      tr('جاري تحميل المنصات...', 'Loading platforms...'),
                       style: GoogleFonts.outfit(
                         color: AppConstants.textSecondary,
                         fontSize: 12,
@@ -768,7 +774,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
             // Step 2: Enter account ID
             Text(
-              '2. أدخل معرف حسابك (Account ID)',
+              tr('2. أدخل معرف حسابك (Account ID)', '2. Enter your Account ID'),
               style: GoogleFonts.outfit(
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
@@ -782,7 +788,7 @@ class _LoginScreenState extends State<LoginScreen> {
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               style: GoogleFonts.outfit(color: Colors.white, fontSize: 16),
               decoration: InputDecoration(
-                hintText: 'مثال: 58392019',
+                hintText: tr('مثال: 58392019', 'Example: 58392019'),
                 hintStyle: GoogleFonts.outfit(
                   color: AppConstants.textSecondary.withAlpha(100),
                 ),
@@ -811,7 +817,7 @@ class _LoginScreenState extends State<LoginScreen> {
             if (_selectedBrokerPromo.trim().isNotEmpty) ...[
               const SizedBox(height: 25),
               Text(
-                '3. أدخل كود البرومو (إجباري لمنصة $_selectedBroker)',
+                tr('3. أدخل كود البرومو (إجباري لمنصة $_selectedBroker)', '3. Enter the promo code (required for $_selectedBroker)'),
                 style: GoogleFonts.outfit(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
@@ -824,7 +830,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 style: GoogleFonts.outfit(color: Colors.white, fontSize: 16),
                 textCapitalization: TextCapitalization.characters,
                 decoration: InputDecoration(
-                  hintText: 'أدخل كود البرومو الخاص بالمنصة',
+                  hintText: tr('أدخل كود البرومو الخاص بالمنصة', 'Enter the platform\'s promo code'),
                   hintStyle: GoogleFonts.outfit(
                     color: AppConstants.textSecondary.withAlpha(100),
                   ),
@@ -869,7 +875,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 child: Center(
                   child: Text(
-                    'التحقق وتنشيط الإشارات ⟵',
+                    tr('التحقق وتنشيط الإشارات ⟵', 'Verify & activate signals ⟵'),
                     style: GoogleFonts.outfit(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -900,7 +906,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 );
               },
               child: Text(
-                'الرجوع لتعليمات تفعيل العضوية والتسجيل',
+                tr('الرجوع لتعليمات تفعيل العضوية والتسجيل', 'Back to membership activation & registration instructions'),
                 style: GoogleFonts.outfit(
                   color: AppConstants.accentCyan,
                   fontSize: 13,
@@ -931,7 +937,7 @@ class _LoginScreenState extends State<LoginScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'تابعنا',
+            tr('تابعنا', 'Follow us'),
             style: GoogleFonts.outfit(
               fontSize: 11,
               fontWeight: FontWeight.w600,
@@ -1137,7 +1143,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           const SizedBox(height: 40),
           Text(
-            'جاري الاتصال والتحقق',
+            tr('جاري الاتصال والتحقق', 'Connecting & verifying'),
             style: GoogleFonts.outfit(
               fontSize: 20,
               fontWeight: FontWeight.bold,
@@ -1171,7 +1177,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           const SizedBox(height: 15),
           Text(
-            'تمت المزامنة بنسبة ${(_verificationProgress * 100).toInt()}%',
+            tr('تمت المزامنة بنسبة ${(_verificationProgress * 100).toInt()}%', 'Synced ${(_verificationProgress * 100).toInt()}%'),
             style: GoogleFonts.outfit(
               fontSize: 11,
               color: AppConstants.accentCyan,
@@ -1219,7 +1225,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             padding: const EdgeInsets.all(26),
             child: Directionality(
-              textDirection: TextDirection.rtl,
+              textDirection: LanguageService.direction,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -1251,7 +1257,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'مبروك! أنت الآن VIP 👑',
+                    tr('مبروك! أنت الآن VIP 👑', 'Congratulations! You are now VIP 👑'),
                     textAlign: TextAlign.center,
                     style: GoogleFonts.outfit(
                       fontSize: 20,
@@ -1261,7 +1267,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'تم تفعيل عضويتك بنجاح!\nاستمتع بإشارات VIP الحصرية وتحليلات البروفيشنال.',
+                    tr('تم تفعيل عضويتك بنجاح!\nاستمتع بإشارات VIP الحصرية وتحليلات البروفيشنال.', 'Your membership was activated successfully!\nEnjoy exclusive VIP signals and professional analysis.'),
                     textAlign: TextAlign.center,
                     style: GoogleFonts.outfit(
                       fontSize: 12,
@@ -1281,13 +1287,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
-                        _countdownBlock(days.toString(), 'يوم', Colors.amber),
+                        _countdownBlock(days.toString(), tr('يوم', 'days'), Colors.amber),
                         Container(
                           width: 1,
                           height: 36,
                           color: Colors.amber.withAlpha(40),
                         ),
-                        _countdownBlock(hours.toString(), 'ساعة', Colors.amber),
+                        _countdownBlock(hours.toString(), tr('ساعة', 'hours'), Colors.amber),
                         Container(
                           width: 1,
                           height: 36,
@@ -1296,7 +1302,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         Column(
                           children: [
                             Text(
-                              'ينتهي في',
+                              tr('ينتهي في', 'Expires on'),
                               style: GoogleFonts.outfit(
                                 fontSize: 9,
                                 color: Colors.amber.withAlpha(160),
@@ -1318,7 +1324,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 14),
                   Text(
-                    '💬 للتجديد تواصل مع المطور عبر تليجرام',
+                    tr('💬 للتجديد تواصل مع المطور عبر تليجرام', '💬 To renew, contact the developer on Telegram'),
                     textAlign: TextAlign.center,
                     style: GoogleFonts.outfit(
                       fontSize: 12,
@@ -1333,7 +1339,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       onPressed: () => openBrowserTab(_telegramUrl),
                       icon: const Icon(Icons.send_rounded, size: 16),
                       label: Text(
-                        '@euro_trd — تواصل الآن',
+                        tr('@euro_trd — تواصل الآن', '@euro_trd — Contact now'),
                         style: GoogleFonts.outfit(
                           fontSize: 13,
                           fontWeight: FontWeight.bold,
@@ -1353,7 +1359,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   TextButton(
                     onPressed: () => Navigator.of(context).pop(),
                     child: Text(
-                      'في وقت لاحق',
+                      tr('في وقت لاحق', 'Later'),
                       style: GoogleFonts.outfit(
                         fontSize: 12,
                         color: AppConstants.textSecondary,
@@ -1466,7 +1472,7 @@ class _SubscribeButton extends StatelessWidget {
               ),
             if (done)
               Text(
-                'تم ✓',
+                tr('تم ✓', 'Done ✓'),
                 style: GoogleFonts.outfit(
                   fontSize: 10,
                   color: AppConstants.callGreen,

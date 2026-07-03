@@ -4,11 +4,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../constants.dart';
+import '../services/language_service.dart';
 import '../widgets/particles.dart';
 import '../widgets/trading_background.dart';
 import 'main_screen.dart';
 import 'notice_screen.dart';
 import 'maintenance_screen.dart';
+import 'language_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -92,10 +94,19 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     }
 
     if (!mounted) return;
+
+    final Widget destination =
+        (isVerified && accountId != null) ? const MainScreen() : const NoticeScreen();
+
+    // First launch: show the language-selection screen once, then continue to
+    // the resolved destination. On later launches go straight through.
+    final Widget firstScreen = LanguageService.hasChosen
+        ? destination
+        : LanguageScreen(next: destination);
+
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
-        pageBuilder: (context, animation, _) =>
-            (isVerified && accountId != null) ? const MainScreen() : const NoticeScreen(),
+        pageBuilder: (context, animation, _) => firstScreen,
         transitionsBuilder: (_, anim, secondary, child) =>
             FadeTransition(opacity: anim, child: child),
         transitionDuration: const Duration(milliseconds: 800),
@@ -126,12 +137,12 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
         title: Row(children: [
           const Icon(Icons.block_rounded, color: Color(0xFFEF4444), size: 22),
           const SizedBox(width: 10),
-          Text('تم حظر حسابك', style: GoogleFonts.outfit(color: const Color(0xFFF9FAFB), fontWeight: FontWeight.bold)),
+          Text(tr('تم حظر حسابك', 'Your account is banned'), style: GoogleFonts.outfit(color: const Color(0xFFF9FAFB), fontWeight: FontWeight.bold)),
         ]),
         content: Text(
           reason.isNotEmpty
-              ? 'تم حظر حسابك من قِبَل الإدارة.\nالسبب: $reason'
-              : 'تم حظر حسابك من قِبَل الإدارة.\nللمزيد من المعلومات تواصل مع الدعم.',
+              ? tr('تم حظر حسابك من قِبَل الإدارة.\nالسبب: $reason', 'Your account has been banned by the administration.\nReason: $reason')
+              : tr('تم حظر حسابك من قِبَل الإدارة.\nللمزيد من المعلومات تواصل مع الدعم.', 'Your account has been banned by the administration.\nContact support for more information.'),
           style: GoogleFonts.outfit(color: const Color(0xFF9CA3AF), height: 1.6),
         ),
         actions: [
@@ -149,7 +160,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444), foregroundColor: Colors.white),
-            child: Text('موافق', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+            child: Text(tr('موافق', 'OK'), style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
           ),
         ],
       ),

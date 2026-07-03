@@ -7,6 +7,7 @@ import 'dart:ui_web' as ui;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../constants.dart';
+import '../services/language_service.dart';
 
 class TradingViewChart extends StatefulWidget {
   final String  symbol;
@@ -308,7 +309,7 @@ class _TradingViewChartState extends State<TradingViewChart> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('دخول',
+                Text(tr('دخول', 'Entry'),
                     style: GoogleFonts.outfit(
                         fontSize: 10, color: AppConstants.textSecondary)),
                 Text(AppConstants.formatPrice(_entryPrice),
@@ -322,7 +323,7 @@ class _TradingViewChartState extends State<TradingViewChart> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text('الوقت المتبقي',
+                Text(tr('الوقت المتبقي', 'Time left'),
                     style: GoogleFonts.outfit(
                         fontSize: 10, color: AppConstants.textSecondary)),
                 Text(timeStr,
@@ -366,7 +367,7 @@ class _TradingViewChartState extends State<TradingViewChart> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('السعر الحالي',
+                    Text(tr('السعر الحالي', 'Current price'),
                         style: GoogleFonts.outfit(
                             fontSize: 9, color: AppConstants.textSecondary)),
                     Text(AppConstants.formatPrice(_currentPrice),
@@ -390,11 +391,11 @@ class _TradingViewChartState extends State<TradingViewChart> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text('النتيجة الآن',
+                    Text(tr('النتيجة الآن', 'Result now'),
                         style: GoogleFonts.outfit(
                             fontSize: 9, color: AppConstants.textSecondary)),
                     Text(
-                      isWinning ? 'رابح ✅' : 'خاسر ❌',
+                      isWinning ? tr('رابح ✅', 'Winning ✅') : tr('خاسر ❌', 'Losing ❌'),
                       style: GoogleFonts.outfit(
                           fontSize: 13,
                           fontWeight: FontWeight.bold,

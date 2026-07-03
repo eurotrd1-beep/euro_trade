@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'supabase_config.dart';
 import 'constants.dart';
+import 'services/language_service.dart';
 import 'screens/splash_screen.dart';
 
 void main() async {
@@ -11,6 +13,7 @@ void main() async {
   } catch (e) {
     debugPrint('Supabase init failed: $e');
   }
+  await LanguageService.load();
   await _loadAppTheme();
   runApp(const EuroTradeApp());
 }
@@ -38,25 +41,39 @@ class EuroTradeApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Euro Trade - Premium VIP Signals',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: AppConstants.spaceBackground,
-        primaryColor: AppConstants.accentCyan,
-        colorScheme: ColorScheme.dark(
-          primary: AppConstants.accentCyan,
-          secondary: AppConstants.accentBlue,
-          surface: AppConstants.cardBgColor,
-        ),
-        dividerTheme: const DividerThemeData(
-          color: AppConstants.borderGlow,
-          thickness: 1.0,
-        ),
-        useMaterial3: true,
-      ),
-      home: const SplashScreen(),
+    // Rebuild the whole app (and flip text direction) whenever the language
+    // changes, so every inline tr() call re-evaluates.
+    return ValueListenableBuilder<AppLanguage?>(
+      valueListenable: LanguageService.language,
+      builder: (context, lang, child) {
+        return MaterialApp(
+          title: 'Euro Trade - Premium VIP Signals',
+          debugShowCheckedModeBanner: false,
+          locale: LanguageService.locale,
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: const [Locale('ar'), Locale('en')],
+          theme: ThemeData(
+            brightness: Brightness.dark,
+            scaffoldBackgroundColor: AppConstants.spaceBackground,
+            primaryColor: AppConstants.accentCyan,
+            colorScheme: ColorScheme.dark(
+              primary: AppConstants.accentCyan,
+              secondary: AppConstants.accentBlue,
+              surface: AppConstants.cardBgColor,
+            ),
+            dividerTheme: const DividerThemeData(
+              color: AppConstants.borderGlow,
+              thickness: 1.0,
+            ),
+            useMaterial3: true,
+          ),
+          home: const SplashScreen(),
+        );
+      },
     );
   }
 }
