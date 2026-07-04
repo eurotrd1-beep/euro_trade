@@ -437,11 +437,13 @@ window.CandleChart = (function () {
         /* State 1: connection dropped mid-flight. */
         self._drawMessage('تحقق من اتصالك بالإنترنت', '#F0C040');
       } else if (elapsed() < 55000) {
-        /* State 2: Render free dyno cold start (up to ~50s). */
-        self._drawMessage('جاري تجهيز السيرفر...', '#F0C040');
+        /* State 2: Render free dyno cold start (up to ~50s). Yields to a known
+           market-closed state (keeps the closed chart) — market-closed wins over
+           a transient "server warming up" during an admin server switch. */
+        self._connMessage('جاري تجهيز السيرفر...', '#F0C040');
       } else {
         /* State 3: server still unreachable after the cold-start window. */
-        self._drawMessage('السيرفر غير متاح حالياً', '#FF5555');
+        self._connMessage('السيرفر غير متاح حالياً', '#FF5555');
       }
     }
 
@@ -467,7 +469,7 @@ window.CandleChart = (function () {
          a candles array. Treat as a data error. */
       if (!d || !d.candles || Object.prototype.toString.call(d.candles) !== '[object Array]') {
         if (elapsed() >= 55000) {
-          self._drawMessage('خطأ في تحميل البيانات', '#FF5555');
+          self._connMessage('خطأ في تحميل البيانات', '#FF5555');
         } else {
           showConnectFailure();
         }
@@ -548,6 +550,16 @@ window.CandleChart = (function () {
     };
 
     xhr.send();
+  };
+
+  /* A server connection/status message that YIELDS to a known market-closed
+     state: if we already have candles AND the market is flagged closed, keep the
+     (closed) chart on screen instead of covering it with a "connecting" banner.
+     Market-closed always wins over transient server messages — matters most
+     during an admin server switch that coincides with a closed market. */
+  Chart.prototype._connMessage = function(text, color) {
+    if (this._marketClosedNote && this.candles.length) { this._draw(); return; }
+    this._drawMessage(text, color);
   };
 
   /* Self-healing retry scheduler: always reschedules, never gives up, and is a
