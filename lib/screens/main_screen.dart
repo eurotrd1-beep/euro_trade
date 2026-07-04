@@ -341,6 +341,19 @@ class _MainScreenState extends State<MainScreen> {
     if (sym.isEmpty) return;
 
     final info = _activePairInfo();
+
+    // Startup guard: the pairs list is empty until the Supabase stream arrives,
+    // so _activePairInfo() returns {} and source would wrongly default to 'tv'
+    // → on a weekend the TV time-check reads CLOSED and pops the dialog on the
+    // default OTC pair. Until we actually know the pair, treat as OPEN (24/7 for
+    // the default OTC pair); the next poll re-decides once the info is loaded.
+    if (info.isEmpty) {
+      _otcUnhealthy = false;
+      _nextOpenLabel = '';
+      if (mounted) _applyMarketStatus(true);
+      return;
+    }
+
     final category = _normCat(info['category'] as String?);
     final source = info['source'] as String? ?? 'tv';
 

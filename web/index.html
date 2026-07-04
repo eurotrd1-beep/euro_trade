@@ -53,6 +53,19 @@
   </style>
 </head>
 <body>
+  <script>
+    // Auto-refresh when a new deploy's service worker takes control, so code
+    // updates (chart.js, main.dart.js…) apply automatically — no manual cache
+    // clearing. Flutter's SW skipWaiting()s on install, so this fires promptly.
+    if ('serviceWorker' in navigator) {
+      var _swReloaded = false;
+      navigator.serviceWorker.addEventListener('controllerchange', function () {
+        if (_swReloaded) return;
+        _swReloaded = true;
+        window.location.reload();
+      });
+    }
+  </script>
   <script src="passkeys_stub.js"></script>
   <script src="chart.js?v=2"></script>
   <script src="push/push_client.js?v=4"></script>
