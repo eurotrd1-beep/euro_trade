@@ -5,4 +5,3 @@ bool isSupported() => false;
 Future<String> requestPermission() async => 'denied';
 Future<String?> subscribe(String vapidPublicKey) async => null;
 String appUrl() => '';
-String lastError() => 'not_web';

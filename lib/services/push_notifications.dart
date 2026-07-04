@@ -56,45 +56,15 @@ class PushNotifications {
   /// Safe to call repeatedly; does nothing if unsupported, permission isn't
   /// granted, or the admin hasn't configured a VAPID public key yet.
   static Future<void> registerForUser(String userId) async {
-    // Temporary diagnostic: records exactly where the subscribe flow stops in
-    // configs('push_debug') so issues can be diagnosed without device console.
-    final dbg = <String, dynamic>{
-      'userId': userId,
-      'supported': isSupported,
-    };
+    if (!isSupported || userId.isEmpty || userId == '----') return;
     try {
-      if (!isSupported) {
-        dbg['stop'] = 'unsupported';
-        await _writeDebug(dbg);
-        return;
-      }
-      if (userId.isEmpty || userId == '----') {
-        dbg['stop'] = 'no_user';
-        await _writeDebug(dbg);
-        return;
-      }
       final key = await _getVapidPublicKey();
-      dbg['vapidLen'] = key.length;
-      if (key.isEmpty) {
-        dbg['stop'] = 'no_vapid';
-        await _writeDebug(dbg);
-        return;
-      }
+      if (key.isEmpty) return;
       final subJson = await pushweb.subscribe(key);
-      dbg['subLen'] = subJson?.length ?? 0;
-      dbg['jsError'] = pushweb.lastError();
-      if (subJson == null || subJson.isEmpty) {
-        dbg['stop'] = 'subscribe_null';
-        await _writeDebug(dbg);
-        return;
-      }
+      if (subJson == null || subJson.isEmpty) return;
       final sub = jsonDecode(subJson) as Map<String, dynamic>;
       final endpoint = sub['endpoint'] as String?;
-      if (endpoint == null || endpoint.isEmpty) {
-        dbg['stop'] = 'no_endpoint';
-        await _writeDebug(dbg);
-        return;
-      }
+      if (endpoint == null || endpoint.isEmpty) return;
       await Supabase.instance.client.from('push_subscriptions').upsert(
         {
           'user_id': userId,
@@ -103,22 +73,6 @@ class PushNotifications {
         },
         onConflict: 'endpoint',
       );
-      dbg['stop'] = 'ok';
-      await _writeDebug(dbg);
-    } catch (e) {
-      dbg['stop'] = 'exception';
-      dbg['error'] = e.toString();
-      try {
-        await _writeDebug(dbg);
-      } catch (_) {}
-    }
-  }
-
-  static Future<void> _writeDebug(Map<String, dynamic> d) async {
-    try {
-      await Supabase.instance.client
-          .from('configs')
-          .upsert({'id': 'push_debug', 'data': d});
     } catch (_) {}
   }
 
