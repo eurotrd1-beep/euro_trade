@@ -11,6 +11,7 @@ import '../constants.dart';
 import '../services/signal_engine.dart';
 import '../services/language_service.dart';
 import '../services/push_notifications.dart';
+import '../services/server_config.dart';
 import '../widgets/particles.dart';
 import '../widgets/trading_background.dart';
 import '../widgets/tradingview_chart.dart';
@@ -162,7 +163,9 @@ class _MainScreenState extends State<MainScreen> {
   bool _updateChecked = false;
 
   // --- Server-driven market status (from proxy `marketOpen`) ---
-  static const String _proxyBase = 'https://euro-trade-proxy-1.onrender.com';
+  // Dynamic: sourced from Supabase via ServerConfig so the admin can switch the
+  // TradingView proxy server live (no rebuild). See _onProxyUrlChanged.
+  String get _proxyBase => ServerConfig.tvServerUrl.value;
   Timer? _marketStatusTimer;
   Timer? _realCandlesTimer;
   Timer? _accountCheckTimer;
@@ -205,6 +208,11 @@ class _MainScreenState extends State<MainScreen> {
     _loadUserData();
     _startMaintenanceListener();
 
+    // Apply the current TradingView proxy URL to the chart, and react live when
+    // the admin switches servers (Supabase realtime → ServerConfig).
+    setChartProxy(ServerConfig.tvServerUrl.value);
+    ServerConfig.tvServerUrl.addListener(_onProxyUrlChanged);
+
     _selectedCategory = 'currencies';
     // Do NOT default to a hardcoded TradingView pair (e.g. EUR/USD). The real
     // pair list comes from the admin `pairs` table via _startPairsListener; until
@@ -223,6 +231,14 @@ class _MainScreenState extends State<MainScreen> {
       const Duration(seconds: 3),
       (_) => _syncEngineCandles(),
     );
+  }
+
+  // Admin switched the TradingView proxy server: point the live chart at it
+  // (chart.js reconnects tv-mode charts itself) and re-check market status so
+  // the new server's `marketOpen` is picked up immediately.
+  void _onProxyUrlChanged() {
+    setChartProxy(ServerConfig.tvServerUrl.value);
+    _pollMarketStatus();
   }
 
   // Loads the real OHLC candle series for the active pair+timeframe from the
@@ -2428,6 +2444,7 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   void dispose() {
+    ServerConfig.tvServerUrl.removeListener(_onProxyUrlChanged);
     _roleListener?.cancel();
     _maintenanceListener?.cancel();
     _stdStrategyListener?.cancel();

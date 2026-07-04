@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'supabase_config.dart';
 import 'constants.dart';
 import 'services/language_service.dart';
+import 'services/server_config.dart';
 import 'screens/splash_screen.dart';
 
 void main() async {
@@ -14,6 +15,8 @@ void main() async {
     debugPrint('Supabase init failed: $e');
   }
   await LanguageService.load();
+  await ServerConfig.load();
+  ServerConfig.startRealtime();
   await _loadAppTheme();
   runApp(const EuroTradeApp());
 }

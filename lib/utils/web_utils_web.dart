@@ -21,3 +21,12 @@ void setUserBroker(String broker) {
     js.context.callMethod('setUserBroker', [broker]);
   } catch (_) {}
 }
+
+/// Point the live candle chart (window.CandleChart) at a new TradingView proxy
+/// base URL. Applied to subsequent candle fetches / websocket connections.
+void setChartProxy(String url) {
+  try {
+    final cc = js.context['CandleChart'];
+    if (cc != null) cc.callMethod('setProxy', [url]);
+  } catch (_) {}
+}

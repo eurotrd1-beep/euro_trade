@@ -1495,6 +1495,27 @@ window.CandleChart = (function () {
         inst._draw();
       });
     },
+    /* Point TV data at a new proxy base URL (admin server switch). Reconnects
+       any live tv-mode chart so the switch takes effect within seconds — no
+       reload. OTC charts are unaffected (their data comes from Supabase). */
+    setProxy: function(url) {
+      if (!url || typeof url !== 'string') return;
+      var clean = url.trim().replace(/\/+$/, '');
+      if (!clean || clean === PROXY) return;
+      PROXY = clean;
+      Object.keys(instances).forEach(function(id) {
+        var inst = instances[id];
+        if (!inst || inst.mode !== 'tv') return;
+        try { if (inst._ws) inst._ws.close(); } catch (_) {}
+        inst._ws = null;
+        clearTimeout(inst._retryTimer);
+        clearTimeout(inst._wsTimer);
+        if (inst._tvTimer) { clearInterval(inst._tvTimer); inst._tvTimer = null; }
+        inst._loadStartedAt = 0;    // restart the status/timing window
+        inst._resolvedSym = null;
+        inst._fetchTVCandles(0, [inst.symbol]);   // refetch against the new server
+      });
+    },
   };
 })();
 
