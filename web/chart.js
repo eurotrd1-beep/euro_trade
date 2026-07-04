@@ -1051,7 +1051,9 @@ window.CandleChart = (function () {
        width, clamped to a readable thickness. step == candleW so body N ends
        exactly where body N+1 begins. */
     var total   = this.candles.length;
-    var MIN_SLOT = 6, MAX_SLOT = 15;
+    // WIDE candles so each one is clearly visible + breathes (not thin/cramped),
+    // while still tiling edge-to-edge with ZERO gap (contiguous, no empty column).
+    var MIN_SLOT = 12, MAX_SLOT = 24;
     var maxFit = Math.max(1, Math.floor(cw / MIN_SLOT));
     var showN  = Math.max(1, Math.min(total || 1, maxFit));
     var slot   = clamp(cw / showN, MIN_SLOT, MAX_SLOT);
