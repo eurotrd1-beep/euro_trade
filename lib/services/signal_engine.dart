@@ -636,15 +636,11 @@ class SignalEngine extends ChangeNotifier {
   bool get isGuaranteedWin => _isGuaranteedWin;
   bool get isMarketClosed => _marketClosed;
   // Weekend check independent of analysis — used by UI without needing to run analysis first
-  bool get isWeekendClosed {
-    // OTC (Pocket Option) pairs trade 24/7 — weekend/forex-hours never apply, so
-    // they must never read "market closed" (e.g. the VIP LIVE ROOM) on a weekend.
-    if (_activePair.contains('(OTC)')) return false;
-    final now = DateTime.now();
-    final isWeekend =
-        now.weekday == DateTime.saturday || now.weekday == DateTime.sunday;
-    return _marketClosed || (_isForexPairType() && isWeekend);
-  }
+  // Single source of truth for the live room / social feed. `_marketClosed` is
+  // computed per-system by main_screen._pollMarketStatus:
+  //   • Pocket Option (OTC) pairs → closed ONLY when the N/A flag (po) is set.
+  //   • TradingView pairs        → closed ONLY per the time schedule (crypto 24/7).
+  bool get isWeekendClosed => _marketClosed;
 
   void updateGuaranteedWin(bool value) {
     _isGuaranteedWin = value;

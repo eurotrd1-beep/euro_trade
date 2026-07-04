@@ -1045,18 +1045,19 @@ window.CandleChart = (function () {
     var cw = cr - cl, ch = cb - ct;
 
     /* ── Candle sizing ──────────────────────────────────────────────
-       Size candles to FILL the plot width with a constant 1px gap (broker-
-       style: bodies nearly touch, never sparse). The slot (candle+gap) is
-       chosen so the recent candles span the width, clamped to a readable
-       thickness so we never get hair-thin or over-fat candles. */
+       Candles TILE the plot width edge-to-edge with ZERO gap — a continuous
+       series like the trading platform, no empty columns / gaps between candles
+       ever. The slot width is chosen so the most-recent candles span the full
+       width, clamped to a readable thickness. step == candleW so body N ends
+       exactly where body N+1 begins. */
     var total   = this.candles.length;
-    var GAP = 1, MIN_SLOT = 7, MAX_SLOT = 16;
+    var MIN_SLOT = 6, MAX_SLOT = 15;
     var maxFit = Math.max(1, Math.floor(cw / MIN_SLOT));
     var showN  = Math.max(1, Math.min(total || 1, maxFit));
     var slot   = clamp(cw / showN, MIN_SLOT, MAX_SLOT);
-    this.gap     = GAP;
-    this.candleW = Math.max(2, Math.round(slot) - GAP);
-    var step = this.candleW + this.gap;
+    this.gap     = 0;                       // no gap → contiguous candles
+    this.candleW = Math.max(2, Math.round(slot));
+    var step = this.candleW;                // step == candle width → tiles seamlessly
 
     /* Visible candles */
     var maxVis  = Math.max(1, Math.floor(cw / step));

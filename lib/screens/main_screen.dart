@@ -1,8 +1,6 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -162,10 +160,6 @@ class _MainScreenState extends State<MainScreen> {
   String _brokerLogoUrl = '';
   bool _updateChecked = false;
 
-  // --- Server-driven market status (from proxy `marketOpen`) ---
-  // Dynamic: sourced from Supabase via ServerConfig so the admin can switch the
-  // TradingView proxy server live (no rebuild). See _onProxyUrlChanged.
-  String get _proxyBase => ServerConfig.tvServerUrl.value;
   Timer? _marketStatusTimer;
   Timer? _realCandlesTimer;
   Timer? _accountCheckTimer;
@@ -176,11 +170,6 @@ class _MainScreenState extends State<MainScreen> {
   bool _marketClosedDialogShown = false;
   bool _marketClosedDialogOpen = false;
   String _nextOpenLabel = ''; // "يفتح الاثنين الساعة 12:00" for the closed dialog
-  // Price-staleness (3-min rule): a real market whose price hasn't moved for 3
-  // minutes is treated as closed (news/holiday/maintenance). OTC is exempt.
-  double? _lastPx;
-  DateTime? _lastPxAt;
-  String _lastPxSym = '';
 
   // --- VIP expiry handling ---
   Timer? _vipExpiryTimer;
@@ -346,23 +335,6 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  // 3-minute price-freeze detector for REAL markets: if the price hasn't moved
-  // for 180s the market is treated as closed (holiday / news halt / maintenance).
-  bool _pxStale(String sym, double? px) {
-    if (sym != _lastPxSym) {
-      _lastPxSym = sym;
-      _lastPx = null;
-      _lastPxAt = null;
-    }
-    final now = DateTime.now();
-    if (px != null && px > 0) {
-      if (_lastPx == null || (px - _lastPx!).abs() > (_lastPx!.abs() * 1e-9)) {
-        _lastPx = px;
-        _lastPxAt = now;
-      }
-    }
-    return _lastPxAt != null && now.difference(_lastPxAt!).inSeconds >= 180;
-  }
 
   Future<void> _pollMarketStatus() async {
     final sym = _bareSymbol();
@@ -370,43 +342,14 @@ class _MainScreenState extends State<MainScreen> {
 
     final info = _activePairInfo();
     final category = _normCat(info['category'] as String?);
-    final isOtc = info['isOtc'] == true;
     final source = info['source'] as String? ?? 'tv';
 
-    // ── OTC assets AND crypto: ALWAYS open (24/7). Never closed, never a close
-    // dialog — exempt from the time-rules AND the price-freeze rule (a frozen
-    // crypto/OTC price is a data hiccup, not a closed market). Health for the
-    // signal-button gate still comes from fresh price data (PO source only). ──
-    if (isOtc || category == 'crypto') {
-      if (source == 'po') {
-        try {
-          final row = await Supabase.instance.client
-              .from('configs')
-              .select('data')
-              .eq('id', 'otc_prices')
-              .maybeSingle()
-              .timeout(const Duration(seconds: 8));
-          final prices = (row?['data'] as Map<String, dynamic>?) ?? {};
-          final entry = _otcEntry(prices, sym);
-          final st = entry?['st'] as String? ?? '';
-          final t = (entry?['t'] as num?)?.toInt() ?? 0;
-          final nowSec = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
-          final fresh = entry != null && (nowSec - t) < 20;
-          _otcUnhealthy = !(fresh && (st == 'live' || st == 'closed'));
-        } catch (_) {}
-      } else {
-        _otcUnhealthy = false; // TV crypto (e.g. BINANCE) — proxy-driven
-      }
-      _nextOpenLabel = '';
-      if (mounted) _applyMarketStatus(true);
-      return;
-    }
-
-    // ── Real markets from Pocket Option: use PO's OWN tradeable flag (`po`) —
-    // an EXACT match with the platform. Real forex/stocks read closed during
-    // their off-hours/rollover even while PO keeps streaming the price; the OTC
-    // variant stays open. `no` carries PO's next-open unix timestamp. ──
+    // ═══ SYSTEM 1 — Pocket Option scraper (source == 'po', incl. OTC variants).
+    // Market-closed depends ONLY on PO's own N/A flag (`po`) — no time rules:
+    //   po === false → N/A → market CLOSED (chart shows closed + live room closes)
+    //   otherwise    → fully live (last 150 candles) + room open. ═══
     if (source == 'po') {
+      bool open = true;
       try {
         final row = await Supabase.instance.client
             .from('configs')
@@ -419,55 +362,29 @@ class _MainScreenState extends State<MainScreen> {
         final t = (entry?['t'] as num?)?.toInt() ?? 0;
         final nowSec = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
         _otcUnhealthy = !(entry != null && (nowSec - t) < 20);
-        final poFlag = entry?['po'];
-        bool open;
-        if (poFlag is bool) {
-          open = poFlag;
-          final no = (entry?['no'] as num?)?.toInt() ?? 0;
-          _nextOpenLabel = (!open && no > 1000000000)
-              ? MarketHours.nextOpenLabel(
-                  DateTime.fromMillisecondsSinceEpoch(no * 1000, isUtc: true))
-              : (!open
-                  ? MarketHours.nextOpenLabel(
-                      MarketHours.statusFor(category, false).nextOpenUtc)
-                  : '');
-        } else {
-          // No flag yet → fall back to schedule OR live price.
-          final mkt = MarketHours.statusFor(category, false);
-          final priceOpen = entry?['o'] == true &&
-              !_pxStale(sym, (entry?['p'] as num?)?.toDouble());
-          open = mkt.open || priceOpen;
-          _nextOpenLabel =
-              !open ? MarketHours.nextOpenLabel(mkt.nextOpenUtc) : '';
-        }
-        if (!mounted) return;
-        _applyMarketStatus(open);
+        // ONLY the N/A flag closes the market. Missing flag/data ⇒ open.
+        open = entry?['po'] != false;
+        final no = (entry?['no'] as num?)?.toInt() ?? 0;
+        _nextOpenLabel = (!open && no > 1000000000)
+            ? MarketHours.nextOpenLabel(
+                DateTime.fromMillisecondsSinceEpoch(no * 1000, isUtc: true))
+            : '';
       } catch (_) {
-        return;
+        return; // couldn't read prices → keep previous state (never false-close)
       }
+      if (!mounted) return;
+      _applyMarketStatus(open);
       return;
     }
 
-    // ── Real markets from TradingView: schedule OR live proxy price. ──
+    // ═══ SYSTEM 2 — TradingView scraper (source == 'tv'). Market-closed depends
+    // ONLY on the TIME schedule, for every category: crypto is 24/7 open; forex,
+    // metals, commodities, indices & stocks follow their trading hours. ═══
+    _otcUnhealthy = false;
     final mkt = MarketHours.statusFor(category, false);
-    double? px;
-    bool priceLive = true;
-    try {
-      final resp = await http
-          .get(Uri.parse('$_proxyBase/api/tv/tick?symbol=$sym'))
-          .timeout(const Duration(seconds: 8));
-      if (resp.statusCode != 200) return;
-      final data = jsonDecode(resp.body) as Map<String, dynamic>;
-      priceLive =
-          data.containsKey('marketOpen') ? data['marketOpen'] == true : true;
-      px = (data['price'] as num?)?.toDouble();
-    } catch (_) {
-      return;
-    }
-    final open = mkt.open || (priceLive && !_pxStale(sym, px));
-    _nextOpenLabel = !open ? MarketHours.nextOpenLabel(mkt.nextOpenUtc) : '';
+    _nextOpenLabel = mkt.open ? '' : MarketHours.nextOpenLabel(mkt.nextOpenUtc);
     if (!mounted) return;
-    _applyMarketStatus(open);
+    _applyMarketStatus(mkt.open);
   }
 
   void _applyMarketStatus(bool open) {
