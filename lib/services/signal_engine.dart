@@ -637,6 +637,9 @@ class SignalEngine extends ChangeNotifier {
   bool get isMarketClosed => _marketClosed;
   // Weekend check independent of analysis — used by UI without needing to run analysis first
   bool get isWeekendClosed {
+    // OTC (Pocket Option) pairs trade 24/7 — weekend/forex-hours never apply, so
+    // they must never read "market closed" (e.g. the VIP LIVE ROOM) on a weekend.
+    if (_activePair.contains('(OTC)')) return false;
     final now = DateTime.now();
     final isWeekend =
         now.weekday == DateTime.saturday || now.weekday == DateTime.sunday;

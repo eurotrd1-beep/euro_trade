@@ -310,8 +310,8 @@ window.CandleChart = (function () {
     this.mode       = mode || 'sim';   // 'sim' | 'tv'
     this.candles    = [];
     this.scrollRight = 0;
-    this.candleW    = 10;
-    this.gap        = 2;
+    this.candleW    = 9;   // fallback; _draw sizes candles to fill the width
+    this.gap        = 1;
     this.mouse      = null;
     this.dragging   = false;
     this.dragX      = 0;
@@ -1043,11 +1043,23 @@ window.CandleChart = (function () {
 
     var cl = LM, cr = W - RM, ct = TM, cb = H - BM;
     var cw = cr - cl, ch = cb - ct;
+
+    /* ── Candle sizing ──────────────────────────────────────────────
+       Size candles to FILL the plot width with a constant 1px gap (broker-
+       style: bodies nearly touch, never sparse). The slot (candle+gap) is
+       chosen so the recent candles span the width, clamped to a readable
+       thickness so we never get hair-thin or over-fat candles. */
+    var total   = this.candles.length;
+    var GAP = 1, MIN_SLOT = 7, MAX_SLOT = 16;
+    var maxFit = Math.max(1, Math.floor(cw / MIN_SLOT));
+    var showN  = Math.max(1, Math.min(total || 1, maxFit));
+    var slot   = clamp(cw / showN, MIN_SLOT, MAX_SLOT);
+    this.gap     = GAP;
+    this.candleW = Math.max(2, Math.round(slot) - GAP);
     var step = this.candleW + this.gap;
 
     /* Visible candles */
     var maxVis  = Math.max(1, Math.floor(cw / step));
-    var total   = this.candles.length;
     var endIdx  = total - clamp(this.scrollRight, 0, total - 1);
     var startIdx = Math.max(0, endIdx - maxVis);
     var vis = this.candles.slice(startIdx, endIdx);
