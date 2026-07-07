@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:math';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -264,14 +266,14 @@ class _MainScreenState extends State<MainScreen> {
     final sym = _activeChartSymbol;
     if (sym.isEmpty) return;
     final iv = _signalEngine.chartTimeframe;
-    final key = '${sym}_$iv';
     try {
-      final row = await Supabase.instance.client
-          .from('candles')
-          .select('data')
-          .eq('key', key)
-          .maybeSingle();
-      final data = row?['data'] as List?;
+      final proxyUrl = ServerConfig.tvServerUrl.value.replaceAll(RegExp(r'/$'), '');
+      final res = await http.get(
+        Uri.parse('$proxyUrl/api/otc/candles?symbol=$sym&interval=$iv'),
+      ).timeout(const Duration(seconds: 8));
+      if (res.statusCode != 200) return;
+      final body = jsonDecode(res.body) as Map<String, dynamic>;
+      final data = body['candles'] as List?;
       if (data == null || data.isEmpty) return; // keep current buffer
       final candles = <Candle>[];
       for (final e in data) {
@@ -387,12 +389,13 @@ class _MainScreenState extends State<MainScreen> {
     if (source == 'po') {
       bool open = true;
       try {
-        final row = await Supabase.instance.client
-            .from('configs')
-            .select('data')
-            .eq('id', 'otc_prices')
-            .maybeSingle()
-            .timeout(const Duration(seconds: 8));
+        final proxyUrl = ServerConfig.tvServerUrl.value.replaceAll(RegExp(r'/$'), '');
+        final res = await http.get(
+          Uri.parse('$proxyUrl/api/otc/status'),
+        ).timeout(const Duration(seconds: 8));
+        if (res.statusCode != 200) return;
+        final rows = jsonDecode(res.body) as List;
+        final row = rows.firstWhere((r) => r['id'] == 'otc_prices', orElse: () => null);
         final prices = (row?['data'] as Map<String, dynamic>?) ?? {};
         final entry = _otcEntry(prices, sym);
         final t = (entry?['t'] as num?)?.toInt() ?? 0;

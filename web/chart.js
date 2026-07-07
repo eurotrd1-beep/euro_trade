@@ -32,13 +32,7 @@ window.CandleChart = (function () {
   /* ── Proxy base URL ─────────────────────────────────────────── */
   var PROXY = 'https://euro-trade-proxy-1.onrender.com';
 
-  /* ── Supabase (OTC data: candles table + configs/otc_prices) ──
-     OTC pairs aren't on TradingView, so their candles/price are read straight
-     from Supabase (written there by the independent OTC scraper). The anon key
-     is already shipped in the compiled web app, so embedding it here is the same
-     public exposure. */
-  var SUPABASE_URL = 'https://dlzqdmqkvlvwnjhqxqym.supabase.co';
-  var SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRsenFkbXFrdmx2d25qaHF4cXltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2ODk3OTQsImV4cCI6MjA5ODI2NTc5NH0.Gchfry1V4vDnwSKk-uF9r7C10PfhXUkt2E4EpWGbdAg';
+  /* ── OTC data flows through the proxy server (no direct Supabase calls). ── */
 
   /* ── Sliding window: max candles kept in memory ─────────────── */
   var MAX_CANDLES = 50;
@@ -389,7 +383,7 @@ window.CandleChart = (function () {
   Chart.prototype._init = function() {
     var self = this;
     if (this.mode === 'otc') {
-      this._resize();          // loading screen until Supabase data arrives
+      this._resize();          // loading screen until proxy data arrives
       this._fetchOtcCandles();
       this._startOtcStream();
     } else if (this.mode === 'tv') {
@@ -614,8 +608,12 @@ window.CandleChart = (function () {
       self._ws = ws;
 
       ws.onopen = function() {
-        var live   = self._resolvedSym || self.symbol;
-        ws.send(JSON.stringify({ sub: toTVSym(live) }));
+        if (self.mode === 'otc') {
+          ws.send(JSON.stringify({ sub: toOtcSym(self.symbol) }));
+        } else {
+          var live = self._resolvedSym || self.symbol;
+          ws.send(JSON.stringify({ sub: toTVSym(live) }));
+        }
       };
 
       ws.onmessage = function(e) {
@@ -671,13 +669,12 @@ window.CandleChart = (function () {
     connect();
   };
 
-  /* ── OTC data mode (Pocket Option via Supabase) ──────────────────
-     OTC pairs aren't on TradingView. Their candles live in the Supabase
-     `candles` table and their per-second price + scraper status live in
-     configs/otc_prices + configs/otc_status (written by the OTC scraper).
-     Each chart instance polls Supabase independently over plain REST — so
-     multiple open tabs never conflict (no shared/limited socket). All candle
-     timing is UTC-epoch based, identical on every device. */
+  /* ── OTC data mode (Pocket Option via proxy server) ─────────────────
+     OTC pairs aren't on TradingView. Their candles + per-second price + scraper
+     status flow through the proxy server's /api/otc/* endpoints (backed by the
+     OTC scraper's in-memory store, with Supabase as persistence-only fallback).
+     Live ticks arrive over the WebSocket. All candle timing is UTC-epoch based,
+     identical on every device. */
 
   /* OTC symbol = PO's exact asset symbol (e.g. "EURUSD_otc", "#AAPL_otc").
      Do NOT upper-case — PO uses lowercase "_otc", and candle keys must match
@@ -707,9 +704,7 @@ window.CandleChart = (function () {
      Hard/no-data states take over the whole canvas. */
   var OTC_OVERLAY_KINDS = { repairing: 1, repairing_long: 1, reconnecting: 1, relogin: 1, resolving: 1 };
 
-  Chart.prototype._sbHeaders = function() {
-    return { apikey: SUPABASE_ANON, Authorization: 'Bearer ' + SUPABASE_ANON };
-  };
+  /* _sbHeaders removed — OTC data routed through proxy, no direct Supabase. */
 
   Chart.prototype._otcMsg = function(kind) {
     this._otcProblem = kind;
@@ -726,26 +721,22 @@ window.CandleChart = (function () {
     }
   };
 
-  /* Candle history from the Supabase `candles` table (key = SYMBOL_interval). */
+  /* Candle history from the proxy /api/otc/candles endpoint. */
   Chart.prototype._fetchOtcCandles = function() {
     var self = this;
     function load() {
       if (self._destroyed) return;
-      /* One request: the last (≤150) candles live in a single JSON `data` array
-         (the scraper keeps them oldest→newest, FIFO-capped at 150) — so there's
-         nothing to sort/reverse client-side, just fetch and paint. */
-      var key = toOtcSym(self.symbol) + '_' + self.interval;
-      var url = SUPABASE_URL + '/rest/v1/candles?key=eq.' +
-                encodeURIComponent(key) + '&select=data';
-      fetch(url, { headers: self._sbHeaders() })
+      var url = PROXY + '/api/otc/candles?symbol=' +
+                encodeURIComponent(toOtcSym(self.symbol)) + '&interval=' + self.interval;
+      fetch(url)
         .then(function(r) { if (!r.ok) throw 0; return r.json(); })
-        .then(function(rows) {
+        .then(function(d) {
           if (self._destroyed) return;
-          var arr = (rows && rows[0] && rows[0].data) || [];
+          var arr = (d && d.candles) || [];
           arr = cleanAndSortCandles(arr);
           if (!arr.length) return;
           if (!self._otcHistLoaded) {
-            /* FIRST successful load → BATCH RENDER: adopt all 150 and paint them
+            /* FIRST successful load → BATCH RENDER: adopt all 50 and paint them
                in one shot, right now, regardless of any status message the poll
                may have raised. Full chart on screen in < 1s, like the platform. */
             self._otcHistLoaded = true;
@@ -754,7 +745,10 @@ window.CandleChart = (function () {
             self._otcOverlay = null;
             // Don't paint over the "market closed" takeover — the price poll owns
             // that state. Adopt the candles now; they'll show when it reopens.
-            if (!self._poClosed) self._draw();
+            if (!self._poClosed) {
+              self._draw();
+              self._startTVTick();
+            }
             return;
           }
           /* Periodic top-up: adopt stored history only when it's at/ahead of our
@@ -781,10 +775,9 @@ window.CandleChart = (function () {
       if (self._otcPolling) return; // Prevent request queue piling
       /* STATE 17 — the user's own device is offline. */
       if (navigator.onLine === false) { self._otcMsg('offline'); return; }
-      var url = SUPABASE_URL +
-        '/rest/v1/configs?id=in.(otc_status,otc_prices)&select=id,data';
+      var url = PROXY + '/api/otc/status';
       self._otcPolling = true;
-      fetch(url, { headers: self._sbHeaders() })
+      fetch(url)
         .then(function(r) { if (!r.ok) throw 0; return r.json(); })
         .then(function(rows) {
           if (self._destroyed) return;
@@ -800,7 +793,7 @@ window.CandleChart = (function () {
         .finally(function() { self._otcPolling = false; });
     }
     poll();
-    this._otcPriceTimer = setInterval(poll, 1500);   // 1.5s refresh with request lock
+    this._otcPriceTimer = setInterval(poll, 8000);   // 8s status refresh (WebSocket delivers ticks)
   };
 
   Chart.prototype._onOtcData = function(status, prices) {
