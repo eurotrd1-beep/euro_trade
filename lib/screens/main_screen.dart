@@ -2591,7 +2591,71 @@ class _MainScreenState extends State<MainScreen> {
         return true;
       }).toList();
 
+  /// One-shot REST load of pairs so the UI is never empty while waiting for
+  /// the Realtime stream (which can be slow or blocked on the free tier).
+  Future<void> _loadPairsOnce() async {
+    try {
+      final data = await Supabase.instance.client
+          .from('pairs')
+          .select()
+          .timeout(const Duration(seconds: 8));
+      if (!mounted || data == null || (data as List).isEmpty) return;
+      // Only apply if the stream hasn't already delivered data.
+      if (AppConstants.currencyPairs.isNotEmpty) return;
+
+      final pairs = (data as List<dynamic>)
+          .map(
+            (d) => <String, dynamic>{
+              'id': d['id'],
+              'symbol': d['symbol'] as String? ?? '',
+              'chartSymbol': d['chart_symbol'] as String? ?? '',
+              'category': _normCat(d['category'] as String?),
+              'type': d['type'] as String? ?? '',
+              'source': (d['source'] as String? ?? 'tv'),
+              'isOtc': d['is_otc'] == true,
+              'enabled': d['enabled'] != false,
+              'order': d['order'] as int? ?? 0,
+            },
+          )
+          .where(
+            (p) =>
+                (p['symbol'] as String).isNotEmpty &&
+                p['enabled'] == true,
+          )
+          .toList()
+        ..sort(
+          (a, b) => (a['order'] as int).compareTo(b['order'] as int),
+        );
+
+      if (pairs.isEmpty || !mounted) return;
+
+      setState(() {
+        AppConstants.currencyPairs = pairs;
+
+        final vis = _visiblePairs;
+        if (vis.isNotEmpty && !_categoryHasPairs(_selectedCategory)) {
+          _selectedCategory = _normCat(vis.first['category'] as String?);
+        }
+        if (vis.isNotEmpty) {
+          final inCat = vis
+              .where(
+                (p) =>
+                    _normCat(p['category'] as String?) == _selectedCategory,
+              )
+              .toList();
+          final pick = inCat.isNotEmpty ? inCat.first : vis.first;
+          _activeChartSymbol = pick['chartSymbol'] as String? ?? '';
+          final s = pick['symbol'] as String? ?? '';
+          if (s.isNotEmpty) _signalEngine.selectPair(s);
+        }
+      });
+    } catch (_) {}
+  }
+
   void _startPairsListener() {
+    // ── Immediate one-shot REST load so the UI never waits for Realtime ──
+    _loadPairsOnce();
+
     try {
       _pairsListener?.cancel();
       _pairsListener = Supabase.instance.client
