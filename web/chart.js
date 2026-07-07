@@ -1106,15 +1106,16 @@ window.CandleChart = (function () {
        width, clamped to a readable thickness. step == candleW so body N ends
        exactly where body N+1 begins. */
     var total   = this.candles.length;
-    // WIDE candles so each one is clearly visible + breathes (not thin/cramped),
-    // while still tiling edge-to-edge with ZERO gap (contiguous, no empty column).
-    var MIN_SLOT = 12, MAX_SLOT = 24;
+    // Platform-style candles: thin bodies with a small gap between them (like the
+    // Pocket Option chart), just a touch thicker than that reference. `slot` is the
+    // per-candle column; the body fills ~76% of it so a small gap separates each.
+    var MIN_SLOT = 8, MAX_SLOT = 13;
     var maxFit = Math.max(1, Math.floor(cw / MIN_SLOT));
     var showN  = Math.max(1, Math.min(total || 1, maxFit));
     var slot   = clamp(cw / showN, MIN_SLOT, MAX_SLOT);
-    this.gap     = 0;                       // no gap → contiguous candles
-    this.candleW = Math.max(2, Math.round(slot));
-    var step = this.candleW;                // step == candle width → tiles seamlessly
+    var step   = Math.max(3, Math.round(slot));            // candle-to-candle spacing
+    this.candleW = Math.max(2, Math.round(step * 0.76));   // body width (< step → gap)
+    this.gap     = step - this.candleW;                    // spacing between neighbours
 
     /* Visible candles */
     var maxVis  = Math.max(1, Math.floor(cw / step));
