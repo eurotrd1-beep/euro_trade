@@ -266,9 +266,12 @@ window.CandleChart = (function () {
   /* Clean, sort, and deduplicate candles chronologically */
   function cleanAndSortCandles(arr) {
     if (!Array.isArray(arr) || !arr.length) return [];
+    // Reject candles stamped in the future (bad feed / clock skew) — a future
+    // candle otherwise becomes a permanent `last` that blocks all live updates.
+    var futureCut = Math.floor(Date.now() / 1000) + 120;
     var valid = [];
     for (var i = 0; i < arr.length; i++) {
-      if (validCandle(arr[i])) valid.push(arr[i]);
+      if (validCandle(arr[i]) && arr[i].t <= futureCut) valid.push(arr[i]);
     }
     valid.sort(function (a, b) { return a.t - b.t; });
     var unique = [];
@@ -901,6 +904,14 @@ window.CandleChart = (function () {
     var cs    = candleSec(this.interval);
     var now   = Math.floor(Date.now() / 1000);   // UTC epoch
     var cTime = Math.floor(now / cs) * cs;
+    /* SELF-HEAL: drop any trailing candle whose timestamp is in the FUTURE
+       relative to real now. A one-off device-clock jump (laptop wake / NTP
+       resync) can stamp a candle minutes/hours ahead; that future `last` then
+       permanently froze the price (cTime < last.t hit the `else return` below,
+       and the history top-up refused to overwrite a "newer" local candle). */
+    while (this.candles.length && this.candles[this.candles.length - 1].t > cTime) {
+      this.candles.pop();
+    }
     if (!this.candles.length) {
       this.candles.push({ t: cTime, o: price, h: price, l: price, c: price });
       this._animTarget = price;
