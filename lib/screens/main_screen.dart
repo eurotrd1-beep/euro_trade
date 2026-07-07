@@ -3938,7 +3938,7 @@ class _MainScreenState extends State<MainScreen> {
                       Text(
                         _signalEngine.formattedMonitoringCountdown,
                         style: GoogleFonts.robotoMono(
-                          fontSize: 22,
+                          fontSize: 18,
                           fontWeight: FontWeight.w900,
                           color: c,
                         ),
@@ -3947,7 +3947,42 @@ class _MainScreenState extends State<MainScreen> {
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
+              // Signals fired count
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: AppConstants.callGreen.withAlpha(15),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: AppConstants.callGreen.withAlpha(60),
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        tr('الصفقات الصادرة', 'Signals fired'),
+                        style: GoogleFonts.outfit(
+                          fontSize: 9.5,
+                          color: AppConstants.textSecondary,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${_signalEngine.monitoringSignalsFired}',
+                        style: GoogleFonts.robotoMono(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          color: AppConstants.callGreen,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
               // Total monitoring elapsed (count-up)
               Expanded(
                 child: Container(
@@ -3973,7 +4008,7 @@ class _MainScreenState extends State<MainScreen> {
                       Text(
                         _signalEngine.formattedMonitoringElapsed,
                         style: GoogleFonts.robotoMono(
-                          fontSize: 20,
+                          fontSize: 18,
                           fontWeight: FontWeight.w900,
                           color: AppConstants.accentCyan,
                         ),
