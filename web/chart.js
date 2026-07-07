@@ -255,6 +255,25 @@ window.CandleChart = (function () {
     return b && isFinite(b.t) && isFinite(b.o) && isFinite(b.h) && isFinite(b.l) && isFinite(b.c);
   }
 
+  /* Clean, sort, and deduplicate candles chronologically */
+  function cleanAndSortCandles(arr) {
+    if (!Array.isArray(arr) || !arr.length) return [];
+    var valid = [];
+    for (var i = 0; i < arr.length; i++) {
+      if (validCandle(arr[i])) valid.push(arr[i]);
+    }
+    valid.sort(function (a, b) { return a.t - b.t; });
+    var unique = [];
+    for (var j = 0; j < valid.length; j++) {
+      if (unique.length === 0 || unique[unique.length - 1].t !== valid[j].t) {
+        unique.push(valid[j]);
+      } else {
+        unique[unique.length - 1] = valid[j];
+      }
+    }
+    return unique;
+  }
+
   /* ── Guaranteed-win price bias ───────────────────────────────────
      Works as a persistent price OFFSET (self._gwinBias) that is eased in and
      out gradually — it never snaps, so the candle stream is always continuous
@@ -477,11 +496,8 @@ window.CandleChart = (function () {
         return;
       }
 
-      /* Valid JSON with a candles array. Filter out incomplete candles. */
-      var good = [];
-      for (var ci = 0; ci < d.candles.length; ci++) {
-        if (validCandle(d.candles[ci])) good.push(d.candles[ci]);
-      }
+      /* Valid JSON with a candles array. Sort and deduplicate chronologically. */
+      var good = cleanAndSortCandles(d.candles);
       var marketOpen = (d.marketOpen === undefined) ? true : !!d.marketOpen;
 
       if (good.length) {
@@ -726,7 +742,8 @@ window.CandleChart = (function () {
         .then(function(rows) {
           if (self._destroyed) return;
           var arr = (rows && rows[0] && rows[0].data) || [];
-          if (!Array.isArray(arr) || !arr.length) return;
+          arr = cleanAndSortCandles(arr);
+          if (!arr.length) return;
           if (!self._otcHistLoaded) {
             /* FIRST successful load → BATCH RENDER: adopt all 150 and paint them
                in one shot, right now, regardless of any status message the poll
