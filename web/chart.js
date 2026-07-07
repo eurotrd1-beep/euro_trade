@@ -41,7 +41,7 @@ window.CandleChart = (function () {
   var SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRsenFkbXFrdmx2d25qaHF4cXltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2ODk3OTQsImV4cCI6MjA5ODI2NTc5NH0.Gchfry1V4vDnwSKk-uF9r7C10PfhXUkt2E4EpWGbdAg';
 
   /* ── Sliding window: max candles kept in memory ─────────────── */
-  var MAX_CANDLES = 150;
+  var MAX_CANDLES = 50;
 
   /* ── Asset profiles (realistic base prices + volatility) ────── */
   var ASSETS = {
