@@ -183,6 +183,17 @@ class _MainScreenState extends State<MainScreen> {
   String _brokerLogoUrl = '';
   bool _updateChecked = false;
 
+  // Cached Supabase stream for the social-links footer. MUST be created once and
+  // reused — building it inline in build() spawned a brand-new realtime
+  // subscription + REST snapshot fetch on EVERY rebuild (60/s while the chart
+  // animates), hammering the `configs` table and helping choke the database.
+  Stream<List<Map<String, dynamic>>>? _socialStream;
+  Stream<List<Map<String, dynamic>>> get _socialCfgStream =>
+      _socialStream ??= Supabase.instance.client
+          .from('configs')
+          .stream(primaryKey: ['id'])
+          .eq('id', 'social');
+
   Timer? _marketStatusTimer;
   Timer? _realCandlesTimer;
   Timer? _accountCheckTimer;
@@ -5505,10 +5516,7 @@ class _MainScreenState extends State<MainScreen> {
   // WIDGET: Social media follow cards
   Widget _buildSocialCards() {
     return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: Supabase.instance.client
-          .from('configs')
-          .stream(primaryKey: ['id'])
-          .eq('id', 'social'),
+      stream: _socialCfgStream,
       builder: (context, snap) {
         final rows = snap.data ?? [];
         final data = rows.isNotEmpty
