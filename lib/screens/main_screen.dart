@@ -32,10 +32,24 @@ class MarketStatus {
 ///   • Commodities             → forex hours minus a 1h daily break (21:00 UTC)
 class MarketHours {
   static const _arDays = [
-    '', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد'
+    '',
+    'الاثنين',
+    'الثلاثاء',
+    'الأربعاء',
+    'الخميس',
+    'الجمعة',
+    'السبت',
+    'الأحد',
   ];
   static const _enDays = [
-    '', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
+    '',
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
   ];
 
   static MarketStatus statusFor(String category, bool isOtc) {
@@ -74,7 +88,10 @@ class MarketHours {
     final fx = _forex(now);
     if (!fx.open) return fx;
     if (now.hour == 21) {
-      return MarketStatus(false, DateTime.utc(now.year, now.month, now.day, 22));
+      return MarketStatus(
+        false,
+        DateTime.utc(now.year, now.month, now.day, 22),
+      );
     }
     return const MarketStatus(true);
   }
@@ -107,7 +124,8 @@ class MarketHours {
     var day = DateTime.utc(now.year, now.month, now.day);
     do {
       day = day.add(const Duration(days: 1));
-    } while (day.weekday == DateTime.saturday || day.weekday == DateTime.sunday);
+    } while (day.weekday == DateTime.saturday ||
+        day.weekday == DateTime.sunday);
     return DateTime.utc(day.year, day.month, day.day, 13, 30);
   }
 
@@ -117,8 +135,10 @@ class MarketHours {
     final l = nextOpenUtc.toLocal();
     final hh = l.hour.toString().padLeft(2, '0');
     final mm = l.minute.toString().padLeft(2, '0');
-    return tr('يفتح ${_arDays[l.weekday]} الساعة $hh:$mm',
-        'Opens ${_enDays[l.weekday]} at $hh:$mm');
+    return tr(
+      'يفتح ${_arDays[l.weekday]} الساعة $hh:$mm',
+      'Opens ${_enDays[l.weekday]} at $hh:$mm',
+    );
   }
 }
 
@@ -154,8 +174,9 @@ class _MainScreenState extends State<MainScreen> {
   StreamSubscription<List<Map<String, dynamic>>>? _displaySourceListener;
   String _chartMode = 'sim';
   // Admin System Settings (configs, live): price source + which source shows.
-  String? _priceSystemRaw;        // 'simulator' | 'scraping' (null = fall back to chart_settings)
-  String _displaySource = 'all';  // 'tv' | 'po' | 'all'
+  String?
+  _priceSystemRaw; // 'simulator' | 'scraping' (null = fall back to chart_settings)
+  String _displaySource = 'all'; // 'tv' | 'po' | 'all'
   String _activeChartSymbol = '';
   String _brokerLogoUrl = '';
   bool _updateChecked = false;
@@ -169,7 +190,8 @@ class _MainScreenState extends State<MainScreen> {
   bool _otcUnhealthy = false;
   bool _marketClosedDialogShown = false;
   bool _marketClosedDialogOpen = false;
-  String _nextOpenLabel = ''; // "يفتح الاثنين الساعة 12:00" for the closed dialog
+  String _nextOpenLabel =
+      ''; // "يفتح الاثنين الساعة 12:00" for the closed dialog
 
   // --- VIP expiry handling ---
   Timer? _vipExpiryTimer;
@@ -262,14 +284,16 @@ class _MainScreenState extends State<MainScreen> {
         if (o == null || h == null || l == null || c == null || t == null) {
           continue;
         }
-        candles.add(Candle(
-          open: o,
-          high: h,
-          low: l,
-          close: c,
-          time: DateTime.fromMillisecondsSinceEpoch(t * 1000),
-          volume: 1000.0,
-        ));
+        candles.add(
+          Candle(
+            open: o,
+            high: h,
+            low: l,
+            close: c,
+            time: DateTime.fromMillisecondsSinceEpoch(t * 1000),
+            volume: 1000.0,
+          ),
+        );
       }
       if (candles.isNotEmpty && mounted) _signalEngine.setRealCandles(candles);
     } catch (_) {}
@@ -335,7 +359,6 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-
   Future<void> _pollMarketStatus() async {
     final sym = _bareSymbol();
     if (sym.isEmpty) return;
@@ -380,7 +403,8 @@ class _MainScreenState extends State<MainScreen> {
         final no = (entry?['no'] as num?)?.toInt() ?? 0;
         _nextOpenLabel = (!open && no > 1000000000)
             ? MarketHours.nextOpenLabel(
-                DateTime.fromMillisecondsSinceEpoch(no * 1000, isUtc: true))
+                DateTime.fromMillisecondsSinceEpoch(no * 1000, isUtc: true),
+              )
             : '';
       } catch (_) {
         return; // couldn't read prices → keep previous state (never false-close)
@@ -515,7 +539,8 @@ class _MainScreenState extends State<MainScreen> {
                 try {
                   await Supabase.instance.client
                       .from('users')
-                      .update({'device_id': _deviceId}).eq('id', accountId);
+                      .update({'device_id': _deviceId})
+                      .eq('id', accountId);
                 } catch (_) {}
               } else if (storedDevice != _deviceId) {
                 // Another device owns this VIP account → kick this one out.
@@ -526,7 +551,8 @@ class _MainScreenState extends State<MainScreen> {
 
             final vipExpiryStr = data['vip_expiry'] as String?;
             DateTime? newExpiry;
-            if (vipExpiryStr != null) newExpiry = DateTime.tryParse(vipExpiryStr);
+            if (vipExpiryStr != null)
+              newExpiry = DateTime.tryParse(vipExpiryStr);
 
             final guaranteedWin = data['guaranteed_win'] as bool? ?? false;
             _signalEngine.updateGuaranteedWin(guaranteedWin);
@@ -637,13 +663,16 @@ class _MainScreenState extends State<MainScreen> {
             final isActive = d['isActive'] as bool? ?? false;
             if (!isActive) return;
             final endsAtStr = d['endsAt'] as String?;
-            final endsAt = endsAtStr != null ? DateTime.tryParse(endsAtStr) : null;
+            final endsAt = endsAtStr != null
+                ? DateTime.tryParse(endsAtStr)
+                : null;
             if (endsAt != null && endsAt.isBefore(DateTime.now())) return;
             _roleListener?.cancel();
             _maintenanceListener?.cancel();
             Navigator.of(context).pushReplacement(
               PageRouteBuilder(
-                pageBuilder: (context, animation, _) => const MaintenanceScreen(),
+                pageBuilder: (context, animation, _) =>
+                    const MaintenanceScreen(),
                 transitionsBuilder: (_, anim, secondary, child) =>
                     FadeTransition(opacity: anim, child: child),
                 transitionDuration: const Duration(milliseconds: 600),
@@ -776,7 +805,10 @@ class _MainScreenState extends State<MainScreen> {
                     ),
                   ),
                   child: Text(
-                    tr('⚠️ هذا التحديث إجباري ولا يمكن تخطيه', '⚠️ This update is mandatory and cannot be skipped'),
+                    tr(
+                      '⚠️ هذا التحديث إجباري ولا يمكن تخطيه',
+                      '⚠️ This update is mandatory and cannot be skipped',
+                    ),
                     style: GoogleFonts.outfit(
                       color: AppConstants.putRed,
                       fontSize: 11,
@@ -866,8 +898,14 @@ class _MainScreenState extends State<MainScreen> {
           ),
           content: Text(
             reason.isNotEmpty
-                ? tr('تم حظر حسابك من قِبَل الإدارة.\nالسبب: $reason', 'Your account has been banned by the administration.\nReason: $reason')
-                : tr('تم حظر حسابك من قِبَل الإدارة.\nللمزيد من المعلومات تواصل مع الدعم.', 'Your account has been banned by the administration.\nContact support for more information.'),
+                ? tr(
+                    'تم حظر حسابك من قِبَل الإدارة.\nالسبب: $reason',
+                    'Your account has been banned by the administration.\nReason: $reason',
+                  )
+                : tr(
+                    'تم حظر حسابك من قِبَل الإدارة.\nللمزيد من المعلومات تواصل مع الدعم.',
+                    'Your account has been banned by the administration.\nContact support for more information.',
+                  ),
             style: GoogleFonts.outfit(
               color: AppConstants.textSecondary,
               height: 1.6,
@@ -966,7 +1004,10 @@ class _MainScreenState extends State<MainScreen> {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  tr('تم فتح الحساب على جهاز آخر', 'Account opened on another device'),
+                  tr(
+                    'تم فتح الحساب على جهاز آخر',
+                    'Account opened on another device',
+                  ),
                   style: GoogleFonts.outfit(
                     color: AppConstants.textPrimary,
                     fontWeight: FontWeight.bold,
@@ -1042,7 +1083,10 @@ class _MainScreenState extends State<MainScreen> {
             ],
           ),
           content: Text(
-            tr('تم حذف حسابك من قِبَل الإدارة.\nيرجى تسجيل الدخول مرة أخرى أو التواصل مع الدعم.', 'Your account has been deleted by the administration.\nPlease sign in again or contact support.'),
+            tr(
+              'تم حذف حسابك من قِبَل الإدارة.\nيرجى تسجيل الدخول مرة أخرى أو التواصل مع الدعم.',
+              'Your account has been deleted by the administration.\nPlease sign in again or contact support.',
+            ),
             style: GoogleFonts.outfit(
               color: AppConstants.textSecondary,
               height: 1.6,
@@ -1176,7 +1220,10 @@ class _MainScreenState extends State<MainScreen> {
                 ),
                 const SizedBox(width: 10),
                 Text(
-                  tr('انتهت عضويتك VIP ⚠️', 'Your VIP membership has expired ⚠️'),
+                  tr(
+                    'انتهت عضويتك VIP ⚠️',
+                    'Your VIP membership has expired ⚠️',
+                  ),
                   style: GoogleFonts.outfit(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
@@ -1186,7 +1233,10 @@ class _MainScreenState extends State<MainScreen> {
               ],
             ),
             content: Text(
-              tr('تم تحويل حسابك إلى Standard. يمكنك الترقية مجدداً في أي وقت.', 'Your account has been switched to Standard. You can upgrade again anytime.'),
+              tr(
+                'تم تحويل حسابك إلى Standard. يمكنك الترقية مجدداً في أي وقت.',
+                'Your account has been switched to Standard. You can upgrade again anytime.',
+              ),
               style: GoogleFonts.outfit(
                 fontSize: 14,
                 color: AppConstants.textSecondary,
@@ -1258,7 +1308,10 @@ class _MainScreenState extends State<MainScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  tr('عضويتك VIP ستنتهي خلال أقل من 24 ساعة.', 'Your VIP membership will expire in less than 24 hours.'),
+                  tr(
+                    'عضويتك VIP ستنتهي خلال أقل من 24 ساعة.',
+                    'Your VIP membership will expire in less than 24 hours.',
+                  ),
                   style: GoogleFonts.outfit(
                     fontSize: 14,
                     color: AppConstants.textSecondary,
@@ -1385,7 +1438,10 @@ class _MainScreenState extends State<MainScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    tr('السعر ثابت أو السوق خارج أوقات التداول الرسمية.\nانتظر حتى يُفتح السوق ثم أعد المحاولة.', 'The price is flat or the market is outside official trading hours.\nWait until the market opens, then try again.'),
+                    tr(
+                      'السعر ثابت أو السوق خارج أوقات التداول الرسمية.\nانتظر حتى يُفتح السوق ثم أعد المحاولة.',
+                      'The price is flat or the market is outside official trading hours.\nWait until the market opens, then try again.',
+                    ),
                     textAlign: TextAlign.center,
                     style: GoogleFonts.outfit(
                       fontSize: 13,
@@ -1396,12 +1452,19 @@ class _MainScreenState extends State<MainScreen> {
                   if (_nextOpenLabel.isNotEmpty) ...[
                     const SizedBox(height: 12),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
-                        color: AppConstants.warningOrange.withValues(alpha: 0.12),
+                        color: AppConstants.warningOrange.withValues(
+                          alpha: 0.12,
+                        ),
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
-                          color: AppConstants.warningOrange.withValues(alpha: 0.4),
+                          color: AppConstants.warningOrange.withValues(
+                            alpha: 0.4,
+                          ),
                         ),
                       ),
                       child: Text(
@@ -1417,7 +1480,10 @@ class _MainScreenState extends State<MainScreen> {
                   ],
                   const SizedBox(height: 6),
                   Text(
-                    tr('💡 جرب أزواج OTC — متاحة 24/7 حتى في عطلات نهاية الأسبوع', '💡 Try OTC pairs — available 24/7 even on weekends'),
+                    tr(
+                      '💡 جرب أزواج OTC — متاحة 24/7 حتى في عطلات نهاية الأسبوع',
+                      '💡 Try OTC pairs — available 24/7 even on weekends',
+                    ),
                     textAlign: TextAlign.center,
                     style: GoogleFonts.outfit(
                       fontSize: 12,
@@ -1590,7 +1656,9 @@ class _MainScreenState extends State<MainScreen> {
                     child: Text(
                       isTie
                           ? tr('➖  تعادل', '➖  Tie')
-                          : (isWin ? tr('✅  صفقة ناجحة', '✅  Winning trade') : tr('❌  صفقة خاسرة', '❌  Losing trade')),
+                          : (isWin
+                                ? tr('✅  صفقة ناجحة', '✅  Winning trade')
+                                : tr('❌  صفقة خاسرة', '❌  Losing trade')),
                       textAlign: TextAlign.center,
                       style: GoogleFonts.outfit(
                         fontSize: 18,
@@ -1634,7 +1702,9 @@ class _MainScreenState extends State<MainScreen> {
                         ),
                         _buildDialogStatRow(
                           tr('الاتجاه', 'Direction'),
-                          isCall ? tr('صعود  🟢', 'Up  🟢') : tr('هبوط  🔴', 'Down  🔴'),
+                          isCall
+                              ? tr('صعود  🟢', 'Up  🟢')
+                              : tr('هبوط  🔴', 'Down  🔴'),
                         ),
                         const Divider(
                           color: AppConstants.borderGlow,
@@ -1658,7 +1728,10 @@ class _MainScreenState extends State<MainScreen> {
                         ),
                         _buildDialogStatRow(
                           tr('المدة', 'Duration'),
-                          tr('${signal.durationMinutes} دقيقة', '${signal.durationMinutes} min'),
+                          tr(
+                            '${signal.durationMinutes} دقيقة',
+                            '${signal.durationMinutes} min',
+                          ),
                         ),
                       ],
                     ),
@@ -1682,7 +1755,10 @@ class _MainScreenState extends State<MainScreen> {
                       elevation: 8,
                     ),
                     child: Text(
-                      tr('متابعة الصفقة التالية 🚀', 'Continue to next trade 🚀'),
+                      tr(
+                        'متابعة الصفقة التالية 🚀',
+                        'Continue to next trade 🚀',
+                      ),
                       style: GoogleFonts.outfit(
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
@@ -1856,7 +1932,9 @@ class _MainScreenState extends State<MainScreen> {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        exitOnTop ? tr('سعر الخروج', 'Exit price') : tr('سعر الدخول', 'Entry price'),
+                        exitOnTop
+                            ? tr('سعر الخروج', 'Exit price')
+                            : tr('سعر الدخول', 'Entry price'),
                         style: GoogleFonts.outfit(
                           fontSize: 9,
                           color: exitOnTop
@@ -1866,7 +1944,9 @@ class _MainScreenState extends State<MainScreen> {
                       ),
                       const Spacer(),
                       Text(
-                        exitOnTop ? tr('سعر الدخول', 'Entry price') : tr('سعر الخروج', 'Exit price'),
+                        exitOnTop
+                            ? tr('سعر الدخول', 'Entry price')
+                            : tr('سعر الخروج', 'Exit price'),
                         style: GoogleFonts.outfit(
                           fontSize: 9,
                           color: exitOnTop
@@ -1952,7 +2032,10 @@ class _MainScreenState extends State<MainScreen> {
   void _showPromoDialog(Map<String, dynamic> d) {
     // Analytics: count this impression (how many users the ad was shown to).
     Supabase.instance.client
-        .rpc('increment_click', params: {'row_id': 'promo', 'field_name': 'views'})
+        .rpc(
+          'increment_click',
+          params: {'row_id': 'promo', 'field_name': 'views'},
+        )
         .catchError((_) {});
     final title = (d['title'] as String? ?? '').trim();
     final message = (d['message'] as String? ?? '').trim();
@@ -1962,8 +2045,10 @@ class _MainScreenState extends State<MainScreen> {
         ? (d['ctaText'] as String).trim()
         : tr('تواصل معايا', 'Contact me');
     final version = d['version'] as int? ?? 0;
-    final autoCloseSeconds = (d['autoCloseSeconds'] as int? ?? 0)
-        .clamp(0, 3600);
+    final autoCloseSeconds = (d['autoCloseSeconds'] as int? ?? 0).clamp(
+      0,
+      3600,
+    );
     final endsAtStr = d['endsAt'] as String?;
     final endsAtUtc = (endsAtStr != null && endsAtStr.isNotEmpty)
         ? DateTime.tryParse(endsAtStr)?.toUtc()
@@ -1989,7 +2074,11 @@ class _MainScreenState extends State<MainScreen> {
       final m = diff.inMinutes % 60;
       final s = diff.inSeconds % 60;
       String two(int v) => v.toString().padLeft(2, '0');
-      if (d > 0) return tr('$d يوم ${two(h)}:${two(m)}:${two(s)}', '${d}d ${two(h)}:${two(m)}:${two(s)}');
+      if (d > 0)
+        return tr(
+          '$d يوم ${two(h)}:${two(m)}:${two(s)}',
+          '${d}d ${two(h)}:${two(m)}:${two(s)}',
+        );
       return '${two(h)}:${two(m)}:${two(s)}';
     }
 
@@ -2036,8 +2125,9 @@ class _MainScreenState extends State<MainScreen> {
               Navigator.of(dialogCtx, rootNavigator: true).pop();
             }
 
-            final offerRemaining =
-                endsAtUtc?.difference(DateTime.now().toUtc());
+            final offerRemaining = endsAtUtc?.difference(
+              DateTime.now().toUtc(),
+            );
 
             return Directionality(
               textDirection: LanguageService.direction,
@@ -2113,7 +2203,9 @@ class _MainScreenState extends State<MainScreen> {
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Text(
-                                    title.isNotEmpty ? title : tr('عرض خاص', 'Special offer'),
+                                    title.isNotEmpty
+                                        ? title
+                                        : tr('عرض خاص', 'Special offer'),
                                     style: GoogleFonts.outfit(
                                       fontSize: 19,
                                       fontWeight: FontWeight.w800,
@@ -2152,8 +2244,9 @@ class _MainScreenState extends State<MainScreen> {
                                         decoration: BoxDecoration(
                                           color: AppConstants.accentCyan
                                               .withAlpha(20),
-                                          borderRadius:
-                                              BorderRadius.circular(12),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
                                           border: Border.all(
                                             color: AppConstants.accentCyan
                                                 .withAlpha(90),
@@ -2221,8 +2314,8 @@ class _MainScreenState extends State<MainScreen> {
                                             style: GoogleFonts.outfit(
                                               fontSize: 13,
                                               fontWeight: FontWeight.w800,
-                                              color: AppConstants
-                                                  .spaceBackground,
+                                              color:
+                                                  AppConstants.spaceBackground,
                                             ),
                                           ),
                                         ],
@@ -2242,12 +2335,14 @@ class _MainScreenState extends State<MainScreen> {
                                   vertical: 10,
                                 ),
                                 decoration: BoxDecoration(
-                                  color:
-                                      AppConstants.warningOrange.withAlpha(20),
+                                  color: AppConstants.warningOrange.withAlpha(
+                                    20,
+                                  ),
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
-                                    color: AppConstants.warningOrange
-                                        .withAlpha(80),
+                                    color: AppConstants.warningOrange.withAlpha(
+                                      80,
+                                    ),
                                   ),
                                 ),
                                 child: Row(
@@ -2260,7 +2355,10 @@ class _MainScreenState extends State<MainScreen> {
                                     ),
                                     const SizedBox(width: 8),
                                     Text(
-                                      tr('ينتهي خلال ${fmtCountdown(offerRemaining ?? Duration.zero)}', 'Ends in ${fmtCountdown(offerRemaining ?? Duration.zero)}'),
+                                      tr(
+                                        'ينتهي خلال ${fmtCountdown(offerRemaining ?? Duration.zero)}',
+                                        'Ends in ${fmtCountdown(offerRemaining ?? Duration.zero)}',
+                                      ),
                                       style: GoogleFonts.outfit(
                                         fontSize: 14,
                                         fontWeight: FontWeight.w700,
@@ -2281,19 +2379,21 @@ class _MainScreenState extends State<MainScreen> {
                               child: ElevatedButton.icon(
                                 onPressed: () {
                                   // Analytics: count this CTA / link click.
-                                  Supabase.instance.client.rpc(
-                                    'increment_click',
-                                    params: {'row_id': 'promo', 'field_name': 'cta'},
-                                  ).catchError((_) {});
+                                  Supabase.instance.client
+                                      .rpc(
+                                        'increment_click',
+                                        params: {
+                                          'row_id': 'promo',
+                                          'field_name': 'cta',
+                                        },
+                                      )
+                                      .catchError((_) {});
                                   final url = _telegramContact.isNotEmpty
                                       ? _telegramContact
                                       : 'https://t.me/euro_trd1';
                                   openBrowserTab(url);
                                 },
-                                icon: const Icon(
-                                  Icons.send_rounded,
-                                  size: 18,
-                                ),
+                                icon: const Icon(Icons.send_rounded, size: 18),
                                 label: Text(
                                   ctaText,
                                   style: GoogleFonts.outfit(
@@ -2311,8 +2411,9 @@ class _MainScreenState extends State<MainScreen> {
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   elevation: 8,
-                                  shadowColor:
-                                      const Color(0xFF229ED9).withAlpha(150),
+                                  shadowColor: const Color(
+                                    0xFF229ED9,
+                                  ).withAlpha(150),
                                 ),
                               ),
                             ),
@@ -2341,8 +2442,9 @@ class _MainScreenState extends State<MainScreen> {
                                 alignment: Alignment.center,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: AppConstants.spaceBackground
-                                      .withAlpha(160),
+                                  color: AppConstants.spaceBackground.withAlpha(
+                                    160,
+                                  ),
                                   border: Border.all(
                                     color: AppConstants.borderGlow,
                                   ),
@@ -2406,7 +2508,10 @@ class _MainScreenState extends State<MainScreen> {
             final data = rows.first['data'] as Map<String, dynamic>? ?? {};
             final mode = data['mode'] as String? ?? 'sim';
             final resolved = mode == 'tv' ? 'tv' : 'sim';
-            if (resolved != _chartMode) setState(() { _chartMode = resolved; });
+            if (resolved != _chartMode)
+              setState(() {
+                _chartMode = resolved;
+              });
           });
     } catch (_) {}
   }
@@ -2433,7 +2538,8 @@ class _MainScreenState extends State<MainScreen> {
           .eq('id', 'display_source')
           .listen((rows) {
             if (!mounted) return;
-            final v = (rows.isNotEmpty
+            final v =
+                (rows.isNotEmpty
                     ? ((rows.first['data'] as Map?)?['value'] as String?)
                     : null) ??
                 'all';
@@ -2441,8 +2547,9 @@ class _MainScreenState extends State<MainScreen> {
               setState(() => _displaySource = v);
               // The active pair may no longer be allowed under the new source →
               // re-pick the first visible pair in the selected category.
-              final stillVisible = _visiblePairs
-                  .any((p) => p['symbol'] == _signalEngine.activePair);
+              final stillVisible = _visiblePairs.any(
+                (p) => p['symbol'] == _signalEngine.activePair,
+              );
               if (!stillVisible) {
                 _selectFirstVisibleInCategory(_selectedCategory);
               }
@@ -2496,30 +2603,39 @@ class _MainScreenState extends State<MainScreen> {
             // Capture the active pair + whether it was a Pocket Option pair
             // BEFORE we swap in the new list (to detect "removed while open").
             final oldActive = _signalEngine.activePair;
-            final wasPo = AppConstants.currencyPairs.any((p) =>
-                p['symbol'] == oldActive &&
-                (p['source'] as String? ?? 'tv') == 'po');
+            final wasPo = AppConstants.currencyPairs.any(
+              (p) =>
+                  p['symbol'] == oldActive &&
+                  (p['source'] as String? ?? 'tv') == 'po',
+            );
 
             // Only ENABLED pairs reach the app; both sources, 5-category taxonomy.
-            final pairs = rows
-                .map((d) => <String, dynamic>{
-                      'id': d['id'],
-                      'symbol': d['symbol'] as String? ?? '',
-                      'chartSymbol': d['chart_symbol'] as String? ?? '',
-                      'category': _normCat(d['category'] as String?),
-                      'type': d['type'] as String? ?? '',
-                      'source': (d['source'] as String? ?? 'tv'),
-                      'isOtc': d['is_otc'] == true,
-                      'enabled': d['enabled'] != false,
-                      'order': d['order'] as int? ?? 0,
-                    })
-                .where((p) =>
-                    (p['symbol'] as String).isNotEmpty && p['enabled'] == true)
-                .toList()
-              ..sort((a, b) => (a['order'] as int).compareTo(b['order'] as int));
+            final pairs =
+                rows
+                    .map(
+                      (d) => <String, dynamic>{
+                        'id': d['id'],
+                        'symbol': d['symbol'] as String? ?? '',
+                        'chartSymbol': d['chart_symbol'] as String? ?? '',
+                        'category': _normCat(d['category'] as String?),
+                        'type': d['type'] as String? ?? '',
+                        'source': (d['source'] as String? ?? 'tv'),
+                        'isOtc': d['is_otc'] == true,
+                        'enabled': d['enabled'] != false,
+                        'order': d['order'] as int? ?? 0,
+                      },
+                    )
+                    .where(
+                      (p) =>
+                          (p['symbol'] as String).isNotEmpty &&
+                          p['enabled'] == true,
+                    )
+                    .toList()
+                  ..sort(
+                    (a, b) => (a['order'] as int).compareTo(b['order'] as int),
+                  );
 
-            final activeExists =
-                pairs.any((p) => p['symbol'] == oldActive);
+            final activeExists = pairs.any((p) => p['symbol'] == oldActive);
 
             setState(() {
               AppConstants.currencyPairs = pairs;
@@ -2536,8 +2652,11 @@ class _MainScreenState extends State<MainScreen> {
               final activeVisible = vis.any((p) => p['symbol'] == oldActive);
               if (!activeVisible && vis.isNotEmpty) {
                 final inCat = vis
-                    .where((p) =>
-                        _normCat(p['category'] as String?) == _selectedCategory)
+                    .where(
+                      (p) =>
+                          _normCat(p['category'] as String?) ==
+                          _selectedCategory,
+                    )
                     .toList();
                 final pick = inCat.isNotEmpty ? inCat.first : vis.first;
                 _activeChartSymbol = pick['chartSymbol'] as String? ?? '';
@@ -2558,7 +2677,10 @@ class _MainScreenState extends State<MainScreen> {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(
-                    tr('هذا الزوج لم يعد متاحًا، يرجى اختيار زوج آخر', 'This pair is no longer available, please choose another pair'),
+                    tr(
+                      'هذا الزوج لم يعد متاحًا، يرجى اختيار زوج آخر',
+                      'This pair is no longer available, please choose another pair',
+                    ),
                     style: GoogleFonts.outfit(),
                     textAlign: TextAlign.right,
                   ),
@@ -2617,7 +2739,8 @@ class _MainScreenState extends State<MainScreen> {
           .listen((rows) {
             if (rows.isEmpty || !mounted) return;
             final data = rows.first['data'] as Map<String, dynamic>? ?? {};
-            if (data.isNotEmpty) _signalEngine.updateMonitoringVipStrategy(data);
+            if (data.isNotEmpty)
+              _signalEngine.updateMonitoringVipStrategy(data);
           });
     } catch (_) {}
   }
@@ -2837,8 +2960,14 @@ class _MainScreenState extends State<MainScreen> {
                   Flexible(
                     child: Text(
                       isVip
-                          ? tr('منصة التداول: $_userBroker VIP', 'Trading platform: $_userBroker VIP')
-                          : tr('منصة التداول: $_userBroker', 'Trading platform: $_userBroker'),
+                          ? tr(
+                              'منصة التداول: $_userBroker VIP',
+                              'Trading platform: $_userBroker VIP',
+                            )
+                          : tr(
+                              'منصة التداول: $_userBroker',
+                              'Trading platform: $_userBroker',
+                            ),
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.outfit(
                         fontSize: 11,
@@ -2892,7 +3021,9 @@ class _MainScreenState extends State<MainScreen> {
     } else {
       return InkWell(
         onTap: () => openBrowserTab(
-          _telegramContact.isNotEmpty ? _telegramContact : 'https://t.me/euro_trd1',
+          _telegramContact.isNotEmpty
+              ? _telegramContact
+              : 'https://t.me/euro_trd1',
         ),
         borderRadius: BorderRadius.circular(10),
         child: Container(
@@ -2984,9 +3115,9 @@ class _MainScreenState extends State<MainScreen> {
       children: [
         IconButton(
           onPressed: () {
-            Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => const LanguageScreen(),
-            ));
+            Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const LanguageScreen()));
           },
           icon: Icon(
             Icons.language_rounded,
@@ -3120,32 +3251,35 @@ class _MainScreenState extends State<MainScreen> {
                       color: AppConstants.accentCyan,
                       size: 22,
                     ),
-                    Builder(builder: (_) {
-                      final ap = _effectiveActivePairData();
-                      final sym = (ap['symbol'] as String? ??
-                              _signalEngine.activePair)
-                          .replaceAll(' (OTC)', '');
-                      final isPo = (ap['source'] as String? ?? 'tv') == 'po';
-                      return Row(
-                        children: [
-                          Text(
-                            sym,
-                            style: GoogleFonts.outfit(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                              letterSpacing: 0.5,
+                    Builder(
+                      builder: (_) {
+                        final ap = _effectiveActivePairData();
+                        final sym =
+                            (ap['symbol'] as String? ??
+                                    _signalEngine.activePair)
+                                .replaceAll(' (OTC)', '');
+                        final isPo = (ap['source'] as String? ?? 'tv') == 'po';
+                        return Row(
+                          children: [
+                            Text(
+                              sym,
+                              style: GoogleFonts.outfit(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                                letterSpacing: 0.5,
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 10),
-                          // Source badge: 📺 TradingView / 🎯 Pocket Option
-                          Text(
-                            isPo ? '🎯' : '📺',
-                            style: const TextStyle(fontSize: 16),
-                          ),
-                        ],
-                      );
-                    }),
+                            const SizedBox(width: 10),
+                            // Source badge: 📺 TradingView / 🎯 Pocket Option
+                            Text(
+                              isPo ? '🎯' : '📺',
+                              style: const TextStyle(fontSize: 16),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -3167,8 +3301,7 @@ class _MainScreenState extends State<MainScreen> {
     }
 
     final screenWidth = MediaQuery.of(context).size.width;
-    final dialogWidth =
-        screenWidth * 0.92 < 420 ? screenWidth * 0.92 : 420.0;
+    final dialogWidth = screenWidth * 0.92 < 420 ? screenWidth * 0.92 : 420.0;
 
     showDialog(
       context: context,
@@ -3178,8 +3311,11 @@ class _MainScreenState extends State<MainScreen> {
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setModalState) {
             final sourcePairs = _visiblePairs
-                .where((pair) =>
-                    _normCat(pair['category'] as String?) == _selectedCategory)
+                .where(
+                  (pair) =>
+                      _normCat(pair['category'] as String?) ==
+                      _selectedCategory,
+                )
                 .toList();
 
             final filteredPairs = sourcePairs.where((pair) {
@@ -3247,7 +3383,10 @@ class _MainScreenState extends State<MainScreen> {
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    tr('اختر الأصل للتداول', 'Choose an asset to trade'),
+                                    tr(
+                                      'اختر الأصل للتداول',
+                                      'Choose an asset to trade',
+                                    ),
                                     style: GoogleFonts.outfit(
                                       fontSize: 12,
                                       color: AppConstants.textSecondary,
@@ -3269,150 +3408,170 @@ class _MainScreenState extends State<MainScreen> {
 
                       // Search input field
                       Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: AppConstants.spaceBackground,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppConstants.borderGlow),
-                      ),
-                      child: TextField(
-                        style: GoogleFonts.outfit(color: Colors.white),
-                        textAlign: TextAlign.right,
-                        decoration: InputDecoration(
-                          hintText: tr('البحث عن أصول (مثال: USD)...', 'Search assets (e.g. USD)...'),
-                          hintStyle: GoogleFonts.outfit(
-                            color: AppConstants.textSecondary,
-                            fontSize: 13,
-                          ),
-                          prefixIcon: Icon(
-                            Icons.search_rounded,
-                            color: AppConstants.accentCyan,
-                          ),
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
                         ),
-                        onChanged: (val) {
-                          setModalState(() {
-                            _searchQuery = val;
-                          });
-                        },
-                      ),
-                    ),
-                  ),
-
-                  // List of pairs
-                  Expanded(
-                    child: filteredPairs.isEmpty
-                        ? Center(
-                            child: Text(
-                              tr('لا توجد أصول تطابق البحث', 'No assets match your search'),
-                              textAlign: TextAlign.center,
-                              style: GoogleFonts.outfit(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: AppConstants.spaceBackground,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppConstants.borderGlow),
+                          ),
+                          child: TextField(
+                            style: GoogleFonts.outfit(color: Colors.white),
+                            textAlign: TextAlign.right,
+                            decoration: InputDecoration(
+                              hintText: tr(
+                                'البحث عن أصول (مثال: USD)...',
+                                'Search assets (e.g. USD)...',
+                              ),
+                              hintStyle: GoogleFonts.outfit(
                                 color: AppConstants.textSecondary,
-                                height: 1.5,
+                                fontSize: 13,
+                              ),
+                              prefixIcon: Icon(
+                                Icons.search_rounded,
+                                color: AppConstants.accentCyan,
+                              ),
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
                               ),
                             ),
-                          )
-                        : ListView.builder(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
-                            ),
-                            itemCount: filteredPairs.length,
-                            itemBuilder: (context, index) {
-                              final pair = filteredPairs[index];
-                              final isSelected =
-                                  _signalEngine.activePair == pair['symbol'];
+                            onChanged: (val) {
+                              setModalState(() {
+                                _searchQuery = val;
+                              });
+                            },
+                          ),
+                        ),
+                      ),
 
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 8),
-                                child: InkWell(
-                                  onTap: () {
-                                    _signalEngine.selectPair(pair['symbol']);
-                                    final cs =
-                                        pair['chartSymbol'] as String? ?? '';
-                                    if (cs.isNotEmpty)
-                                      setState(() => _activeChartSymbol = cs);
-                                    _syncEngineCandles();
-                                    Navigator.pop(context);
-                                    // Re-evaluate market status for the new pair right away.
-                                    _pollMarketStatus();
-                                  },
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                      vertical: 14,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: isSelected
-                                          ? AppConstants.accentBlue.withAlpha(
-                                              25,
-                                            )
-                                          : AppConstants.spaceBackground
-                                                .withAlpha(120),
+                      // List of pairs
+                      Expanded(
+                        child: filteredPairs.isEmpty
+                            ? Center(
+                                child: Text(
+                                  tr(
+                                    'لا توجد أصول تطابق البحث',
+                                    'No assets match your search',
+                                  ),
+                                  textAlign: TextAlign.center,
+                                  style: GoogleFonts.outfit(
+                                    color: AppConstants.textSecondary,
+                                    height: 1.5,
+                                  ),
+                                ),
+                              )
+                            : ListView.builder(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 8,
+                                ),
+                                itemCount: filteredPairs.length,
+                                itemBuilder: (context, index) {
+                                  final pair = filteredPairs[index];
+                                  final isSelected =
+                                      _signalEngine.activePair ==
+                                      pair['symbol'];
+
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 8),
+                                    child: InkWell(
+                                      onTap: () {
+                                        _signalEngine.selectPair(
+                                          pair['symbol'],
+                                        );
+                                        final cs =
+                                            pair['chartSymbol'] as String? ??
+                                            '';
+                                        if (cs.isNotEmpty) {
+                                          setState(
+                                            () => _activeChartSymbol = cs,
+                                          );
+                                        }
+                                        _syncEngineCandles();
+                                        Navigator.pop(context);
+                                        // Re-evaluate market status for the new pair right away.
+                                        _pollMarketStatus();
+                                      },
                                       borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: isSelected
-                                            ? AppConstants.accentBlue
-                                            : AppConstants.borderGlow,
-                                        width: 1,
-                                      ),
-                                    ),
-                                    child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.end,
-                                      children: [
-                                        // Source badge + symbol (no payout %)
-                                        Row(
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 14,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: isSelected
+                                              ? AppConstants.accentBlue
+                                                    .withAlpha(25)
+                                              : AppConstants.spaceBackground
+                                                    .withAlpha(120),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          border: Border.all(
+                                            color: isSelected
+                                                ? AppConstants.accentBlue
+                                                : AppConstants.borderGlow,
+                                            width: 1,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.end,
                                           children: [
-                                            // Source: 📺 TradingView / 🎯 Pocket Option
-                                            Text(
-                                              (pair['source'] as String? ?? 'tv') ==
-                                                      'po'
-                                                  ? '🎯'
-                                                  : '📺',
-                                              style: const TextStyle(fontSize: 14),
-                                            ),
-                                            if (pair['isOtc'] == true) ...[
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                'OTC',
-                                                style: GoogleFonts.outfit(
-                                                  fontSize: 9,
-                                                  fontWeight: FontWeight.w700,
-                                                  color: AppConstants.accentCyan,
+                                            // Source badge + symbol (no payout %)
+                                            Row(
+                                              children: [
+                                                // Source: 📺 TradingView / 🎯 Pocket Option
+                                                Text(
+                                                  (pair['source'] as String? ??
+                                                              'tv') ==
+                                                          'po'
+                                                      ? '🎯'
+                                                      : '📺',
+                                                  style: const TextStyle(
+                                                    fontSize: 14,
+                                                  ),
                                                 ),
-                                              ),
-                                            ],
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              (pair['symbol'] as String)
-                                                  .replaceAll(' (OTC)', ''),
-                                              style: GoogleFonts.outfit(
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.bold,
-                                                color: isSelected
-                                                    ? Colors.white
-                                                    : AppConstants.textPrimary,
-                                              ),
+                                                if (pair['isOtc'] == true) ...[
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    'OTC',
+                                                    style: GoogleFonts.outfit(
+                                                      fontSize: 9,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                      color: AppConstants
+                                                          .accentCyan,
+                                                    ),
+                                                  ),
+                                                ],
+                                                const SizedBox(width: 8),
+                                                Text(
+                                                  (pair['symbol'] as String)
+                                                      .replaceAll(' (OTC)', ''),
+                                                  style: GoogleFonts.outfit(
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: isSelected
+                                                        ? Colors.white
+                                                        : AppConstants
+                                                              .textPrimary,
+                                                  ),
+                                                ),
+                                              ],
                                             ),
                                           ],
                                         ),
-                                      ],
+                                      ),
                                     ),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
+                                  );
+                                },
+                              ),
                       ),
                     ],
                   ),
@@ -3439,8 +3598,9 @@ class _MainScreenState extends State<MainScreen> {
   void _selectFirstVisibleInCategory(String cat) {
     final vis = _visiblePairs;
     if (vis.isEmpty) return;
-    final inCat =
-        vis.where((p) => _normCat(p['category'] as String?) == cat).toList();
+    final inCat = vis
+        .where((p) => _normCat(p['category'] as String?) == cat)
+        .toList();
     final pick = inCat.isNotEmpty ? inCat.first : vis.first;
     final sym = pick['symbol'] as String? ?? '';
     final cs = pick['chartSymbol'] as String? ?? '';
@@ -3507,7 +3667,7 @@ class _MainScreenState extends State<MainScreen> {
                       color: AppConstants.accentCyan.withAlpha(30),
                       blurRadius: 10,
                       spreadRadius: 1,
-                    )
+                    ),
                   ]
                 : [],
           ),
@@ -3588,10 +3748,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   // Small circular "?" help button placed next to a signal button.
-  Widget _buildHelpButton({
-    required Color color,
-    required VoidCallback onTap,
-  }) {
+  Widget _buildHelpButton({required Color color, required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -3611,7 +3768,12 @@ class _MainScreenState extends State<MainScreen> {
     if (!_marketOpen || _signalEngine.isMarketClosed) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(tr('السوق مغلق حالياً — لا يمكن بدء المراقبة', 'The market is currently closed — monitoring can\'t start')),
+          content: Text(
+            tr(
+              'السوق مغلق حالياً — لا يمكن بدء المراقبة',
+              'The market is currently closed — monitoring can\'t start',
+            ),
+          ),
           backgroundColor: AppConstants.putRed,
         ),
       );
@@ -3620,7 +3782,12 @@ class _MainScreenState extends State<MainScreen> {
     if (_isActiveOtc() && _otcUnhealthy) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(tr('جارٍ إعادة الاتصال بمصدر السعر... حاول بعد لحظات', 'Reconnecting to the price source... try again in a moment')),
+          content: Text(
+            tr(
+              'جارٍ إعادة الاتصال بمصدر السعر... حاول بعد لحظات',
+              'Reconnecting to the price source... try again in a moment',
+            ),
+          ),
           backgroundColor: AppConstants.warningOrange,
         ),
       );
@@ -3708,7 +3875,10 @@ class _MainScreenState extends State<MainScreen> {
                   const Text('🔔', style: TextStyle(fontSize: 13)),
                   const SizedBox(width: 6),
                   Text(
-                    tr('إشارات صدرت حتى الآن: ${_signalEngine.monitoringSignalsFired}', 'Signals fired so far: ${_signalEngine.monitoringSignalsFired}'),
+                    tr(
+                      'إشارات صدرت حتى الآن: ${_signalEngine.monitoringSignalsFired}',
+                      'Signals fired so far: ${_signalEngine.monitoringSignalsFired}',
+                    ),
                     style: GoogleFonts.outfit(
                       fontSize: 11.5,
                       fontWeight: FontWeight.w800,
@@ -3722,8 +3892,14 @@ class _MainScreenState extends State<MainScreen> {
           const SizedBox(height: 6),
           Text(
             _signalEngine.monitoringLastCheckFailed
-                ? tr('لم تتوافق شروط الدخول، جاري انتظار الشمعة التالية...', 'Entry conditions weren\'t met, waiting for the next candle...')
-                : tr('يراقب النظام السوق وينتظر أفضل لحظة دخول على بداية الشمعة القادمة.', 'The system is watching the market and waiting for the best entry at the start of the next candle.'),
+                ? tr(
+                    'لم تتوافق شروط الدخول، جاري انتظار الشمعة التالية...',
+                    'Entry conditions weren\'t met, waiting for the next candle...',
+                  )
+                : tr(
+                    'يراقب النظام السوق وينتظر أفضل لحظة دخول على بداية الشمعة القادمة.',
+                    'The system is watching the market and waiting for the best entry at the start of the next candle.',
+                  ),
             textAlign: TextAlign.center,
             style: GoogleFonts.outfit(
               fontSize: 11.5,
@@ -3779,7 +3955,9 @@ class _MainScreenState extends State<MainScreen> {
                   decoration: BoxDecoration(
                     color: AppConstants.accentCyan.withAlpha(15),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppConstants.accentCyan.withAlpha(60)),
+                    border: Border.all(
+                      color: AppConstants.accentCyan.withAlpha(60),
+                    ),
                   ),
                   child: Column(
                     children: [
@@ -3869,6 +4047,39 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
+  String _getFriendlyWaitNotice(String rawNotice) {
+    if (rawNotice.contains('الفارق بين الاتجاهين') || rawNotice.contains('insufficient_score_gap')) {
+      return tr(
+        'الإشارات الحالية غير حاسمة (تعارض بين المؤشرات)، ننتظر توافقًا أوضح.',
+        'The current signals are inconclusive (conflict between indicators), waiting for a clearer agreement.',
+      );
+    }
+    if (rawNotice.contains('فشل فلتر') || 
+        rawNotice.contains('المرحلة الثالثة (الفلاتر)') || 
+        rawNotice.contains('low_volatility_filter_blocked')) {
+      return tr(
+        'السوق هادئ/متذبذب حاليًا، الحركة غير كافية لإصدار إشارة موثوقة الآن.',
+        'The market is currently quiet/volatile, movement is insufficient to issue a reliable signal now.',
+      );
+    }
+    if (rawNotice.contains('المرحلة الأولى (الأساس)')) {
+      return tr(
+        'السوق هادئ/متذبذب حاليًا، الحركة غير كافية لإصدار إشارة موثوقة الآن.',
+        'The market is currently quiet/volatile, movement is insufficient to issue a reliable signal now.',
+      );
+    }
+    if (rawNotice.contains('المرحلة الثانية (التأكيد)')) {
+      return tr(
+        'الإشارات الحالية غير حاسمة (تعارض بين المؤشرات)، ننتظر توافقًا أوضح.',
+        'The current signals are inconclusive (conflict between indicators), waiting for a clearer agreement.',
+      );
+    }
+    return tr(
+      'لا توجد إشارة موثوقة في الوقت الحالي، يرجى المحاولة بعد قليل.',
+      'No reliable signal at the moment, please try again shortly.',
+    );
+  }
+
   void _showInstantSignalHelp() {
     _showUsageHelpDialog(
       icon: Icons.bolt_rounded,
@@ -3876,7 +4087,10 @@ class _MainScreenState extends State<MainScreen> {
       title: tr('زر الإشارة الفورية', 'Instant signal button'),
       lines: [
         tr('اضغط الزر في أي وقت.', 'Tap the button anytime.'),
-        tr('النظام يحلل السوق فوراً وبعد ثوانٍ قليلة تظهر لك الإشارة.', 'The system analyzes the market instantly and shows you a signal within a few seconds.'),
+        tr(
+          'النظام يحلل السوق فوراً وبعد ثوانٍ قليلة تظهر لك الإشارة.',
+          'The system analyzes the market instantly and shows you a signal within a few seconds.',
+        ),
         '',
         tr('⚡ سريع وفوري', '⚡ Fast and instant'),
         tr('⏱️ النتيجة في أقل من 5 ثوانٍ', '⏱️ Result in under 5 seconds'),
@@ -3891,16 +4105,34 @@ class _MainScreenState extends State<MainScreen> {
       title: tr('زر المراقبة الذكية', 'Smart monitoring button'),
       lines: [
         tr('اضغط الزر وسيبه يشتغل.', 'Tap the button and let it run.'),
-        tr('النظام يراقب السوق باستمرار وينتظر أفضل لحظة للدخول.', 'The system continuously watches the market and waits for the best moment to enter.'),
+        tr(
+          'النظام يراقب السوق باستمرار وينتظر أفضل لحظة للدخول.',
+          'The system continuously watches the market and waits for the best moment to enter.',
+        ),
         '',
-        tr('⏳ ممكن ياخد وقت (دقائق أو أكثر حسب السوق)', '⏳ It may take a while (minutes or more depending on the market)'),
+        tr(
+          '⏳ ممكن ياخد وقت (دقائق أو أكثر حسب السوق)',
+          '⏳ It may take a while (minutes or more depending on the market)',
+        ),
         '',
         tr('لما اللحظة تيجي:', 'When the moment comes:'),
-        tr('🔔 هتسمع صوت تنبيه فوراً', '🔔 You\'ll hear an alert sound immediately'),
-        tr('📊 هتلاقي الإشارة واضحة قدامك', '📊 The signal will appear clearly in front of you'),
-        tr('⏱️ وعداد الصفقة هيبدأ تلقائياً', '⏱️ And the trade timer will start automatically'),
+        tr(
+          '🔔 هتسمع صوت تنبيه فوراً',
+          '🔔 You\'ll hear an alert sound immediately',
+        ),
+        tr(
+          '📊 هتلاقي الإشارة واضحة قدامك',
+          '📊 The signal will appear clearly in front of you',
+        ),
+        tr(
+          '⏱️ وعداد الصفقة هيبدأ تلقائياً',
+          '⏱️ And the trade timer will start automatically',
+        ),
         '',
-        tr('💡 نصيحة: فعّل الصوت على جهازك عشان ما تفوتك الإشارة.', '💡 Tip: turn on sound on your device so you don\'t miss the signal.'),
+        tr(
+          '💡 نصيحة: فعّل الصوت على جهازك عشان ما تفوتك الإشارة.',
+          '💡 Tip: turn on sound on your device so you don\'t miss the signal.',
+        ),
       ],
     );
   }
@@ -3951,7 +4183,8 @@ class _MainScreenState extends State<MainScreen> {
                         color: l.isEmpty ? Colors.transparent : Colors.white70,
                         fontSize: 13.5,
                         height: 1.5,
-                        fontWeight: l.startsWith('⚡') ||
+                        fontWeight:
+                            l.startsWith('⚡') ||
                                 l.startsWith('🔔') ||
                                 l.startsWith('📊') ||
                                 l.startsWith('⏱️') ||
@@ -4014,7 +4247,10 @@ class _MainScreenState extends State<MainScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              tr('اختر زوجاً من القائمة عند توفره', 'Choose a pair from the list once available'),
+              tr(
+                'اختر زوجاً من القائمة عند توفره',
+                'Choose a pair from the list once available',
+              ),
               textAlign: TextAlign.center,
               style: GoogleFonts.outfit(
                 fontSize: 12.5,
@@ -4252,7 +4488,10 @@ class _MainScreenState extends State<MainScreen> {
             ),
             const Divider(color: AppConstants.borderGlow, height: 16),
             Text(
-              tr('اضغط أدناه لبدء تحليل شامل للزوج ${_signalEngine.activePair.replaceAll(' (OTC)', '')} بفريم ${_signalEngine.chartTimeframe} واستخراج الصفقة ذات الاحتمالية الأكبر.', 'Tap below to start a full analysis of ${_signalEngine.activePair.replaceAll(' (OTC)', '')} on the ${_signalEngine.chartTimeframe} timeframe and extract the highest-probability trade.'),
+              tr(
+                'اضغط أدناه لبدء تحليل شامل للزوج ${_signalEngine.activePair.replaceAll(' (OTC)', '')} بفريم ${_signalEngine.chartTimeframe} واستخراج الصفقة ذات الاحتمالية الأكبر.',
+                'Tap below to start a full analysis of ${_signalEngine.activePair.replaceAll(' (OTC)', '')} on the ${_signalEngine.chartTimeframe} timeframe and extract the highest-probability trade.',
+              ),
               textAlign: TextAlign.center,
               style: GoogleFonts.outfit(
                 fontSize: 11,
@@ -4265,20 +4504,33 @@ class _MainScreenState extends State<MainScreen> {
             if (_signalEngine.lastWaitNotice.isNotEmpty) ...[
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: AppConstants.warningOrange.withAlpha(20),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppConstants.warningOrange.withAlpha(90)),
+                  border: Border.all(
+                    color: AppConstants.warningOrange.withAlpha(90),
+                  ),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.hourglass_empty_rounded,
-                        color: AppConstants.warningOrange, size: 18),
+                    const Icon(
+                      Icons.hourglass_empty_rounded,
+                      color: AppConstants.warningOrange,
+                      size: 18,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        _signalEngine.lastWaitNotice,
+                        (() {
+                          final proReason = _signalEngine.lastProResult?['reason_blocked'] as String?;
+                          return (proReason != null && proReason.isNotEmpty)
+                              ? _getFriendlyWaitNotice(proReason)
+                              : _getFriendlyWaitNotice(_signalEngine.lastWaitNotice);
+                        })(),
                         style: GoogleFonts.outfit(
                           fontSize: 11.5,
                           color: AppConstants.warningOrange,
@@ -4300,7 +4552,10 @@ class _MainScreenState extends State<MainScreen> {
                 Expanded(
                   child: _buildRequestButton(
                     enabled: true,
-                    text: tr('استخراج الإشارة الفورية ⚡', 'Extract instant signal ⚡'),
+                    text: tr(
+                      'استخراج الإشارة الفورية ⚡',
+                      'Extract instant signal ⚡',
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -4343,7 +4598,10 @@ class _MainScreenState extends State<MainScreen> {
       if (_signalEngine.isMonitoring && _signalEngine.lastSignalStrength > 0) {
         return Padding(
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-          child: _buildStrengthBar(_signalEngine.lastSignalStrength, accentColor),
+          child: _buildStrengthBar(
+            _signalEngine.lastSignalStrength,
+            accentColor,
+          ),
         );
       }
       return const SizedBox.shrink();
@@ -4397,7 +4655,9 @@ class _MainScreenState extends State<MainScreen> {
                     Text(
                       isWait
                           ? tr('انتظار (WAIT)', 'WAIT')
-                          : (isCall ? tr('صعود (CALL)', 'Up (CALL)') : tr('هبوط (PUT)', 'Down (PUT)')),
+                          : (isCall
+                                ? tr('صعود (CALL)', 'Up (CALL)')
+                                : tr('هبوط (PUT)', 'Down (PUT)')),
                       style: GoogleFonts.outfit(
                         fontSize: 11,
                         fontWeight: FontWeight.w900,
@@ -4458,7 +4718,10 @@ class _MainScreenState extends State<MainScreen> {
               child: Text(
                 _signalEngine.signalChangeNotice.isNotEmpty
                     ? _signalEngine.signalChangeNotice
-                    : tr('ملاحظة: بدأت هذه الصفقة مع بداية الشمعة الحالية', 'Note: this trade started at the beginning of the current candle'),
+                    : tr(
+                        'ملاحظة: بدأت هذه الصفقة مع بداية الشمعة الحالية',
+                        'Note: this trade started at the beginning of the current candle',
+                      ),
                 textAlign: TextAlign.center,
                 style: GoogleFonts.outfit(
                   fontSize: 10,
@@ -4531,8 +4794,14 @@ class _MainScreenState extends State<MainScreen> {
                     const SizedBox(width: 6),
                     Text(
                       isWait
-                          ? tr('حالة السوق: تذبذب وحالة غير آمنة ⚠️', 'Market state: choppy and unsafe ⚠️')
-                          : tr('حالة السوق: دخول آمن ومستقر ✅', 'Market state: safe and stable entry ✅'),
+                          ? tr(
+                              'حالة السوق: تذبذب وحالة غير آمنة ⚠️',
+                              'Market state: choppy and unsafe ⚠️',
+                            )
+                          : tr(
+                              'حالة السوق: دخول آمن ومستقر ✅',
+                              'Market state: safe and stable entry ✅',
+                            ),
                       style: GoogleFonts.outfit(
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
@@ -4552,7 +4821,10 @@ class _MainScreenState extends State<MainScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  tr('التوصية: ${signal.recommendation}', 'Recommendation: ${signal.recommendation}'),
+                  tr(
+                    'التوصية: ${signal.recommendation}',
+                    'Recommendation: ${signal.recommendation}',
+                  ),
                   style: GoogleFonts.outfit(
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
@@ -4599,7 +4871,10 @@ class _MainScreenState extends State<MainScreen> {
               ),
             ),
             Text(
-              tr('$_selectedMinutes ${_selectedMinutes >= 5 ? "دقائق" : (_selectedMinutes == 1 ? "دقيقة واحدة" : "دقيقتين")}', '$_selectedMinutes ${_selectedMinutes == 1 ? "minute" : "minutes"}'),
+              tr(
+                '$_selectedMinutes ${_selectedMinutes >= 5 ? "دقائق" : (_selectedMinutes == 1 ? "دقيقة واحدة" : "دقيقتين")}',
+                '$_selectedMinutes ${_selectedMinutes == 1 ? "minute" : "minutes"}',
+              ),
               style: GoogleFonts.outfit(
                 fontSize: 11.5,
                 color: AppConstants.accentCyan,
@@ -4684,7 +4959,10 @@ class _MainScreenState extends State<MainScreen> {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
-                          tr('السوق مغلق الان حاول في وقت لاحق', 'The market is closed now, try again later'),
+                          tr(
+                            'السوق مغلق الان حاول في وقت لاحق',
+                            'The market is closed now, try again later',
+                          ),
                           textAlign: TextAlign.center,
                           style: GoogleFonts.outfit(
                             fontWeight: FontWeight.bold,
@@ -4703,7 +4981,10 @@ class _MainScreenState extends State<MainScreen> {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
-                          tr('النظام بيستعيد الاتصال بمصدر البيانات، استنى لحظات', 'The system is reconnecting to the data source, please wait a moment'),
+                          tr(
+                            'النظام بيستعيد الاتصال بمصدر البيانات، استنى لحظات',
+                            'The system is reconnecting to the data source, please wait a moment',
+                          ),
                           textAlign: TextAlign.center,
                           style: GoogleFonts.outfit(
                             fontWeight: FontWeight.bold,
@@ -5135,8 +5416,11 @@ class _MainScreenState extends State<MainScreen> {
         final data = rows.isNotEmpty
             ? rows.first['data'] as Map<String, dynamic>? ?? {}
             : <String, dynamic>{};
-        final ytUrl = data['youtubeUrl']  as String? ?? 'https://www.youtube.com/@euro_trader';
-        final tgUrl = data['telegramUrl'] as String? ?? 'https://t.me/euro_trd1';
+        final ytUrl =
+            data['youtubeUrl'] as String? ??
+            'https://www.youtube.com/@euro_trader';
+        final tgUrl =
+            data['telegramUrl'] as String? ?? 'https://t.me/euro_trd1';
 
         return Directionality(
           textDirection: LanguageService.direction,
@@ -5285,7 +5569,10 @@ class _MainScreenState extends State<MainScreen> {
               ),
               const SizedBox(height: 4),
               Text(
-                tr('الغرفة ستعود للعمل مع فتح الأسواق', 'The room will resume when the markets open'),
+                tr(
+                  'الغرفة ستعود للعمل مع فتح الأسواق',
+                  'The room will resume when the markets open',
+                ),
                 textAlign: TextAlign.center,
                 style: GoogleFonts.outfit(
                   fontSize: 10,
@@ -5358,7 +5645,10 @@ class _MainScreenState extends State<MainScreen> {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            tr('في انتظار أولى الصفقات...', 'Waiting for the first trades...'),
+                            tr(
+                              'في انتظار أولى الصفقات...',
+                              'Waiting for the first trades...',
+                            ),
                             style: GoogleFonts.outfit(
                               color: AppConstants.textSecondary,
                               fontSize: 11,
@@ -5532,7 +5822,10 @@ class _MainScreenState extends State<MainScreen> {
                   ),
                   const SizedBox(width: 10),
                   Text(
-                    tr('إحصائيات وسجل صفقات الـ VIP', 'VIP stats & trade history'),
+                    tr(
+                      'إحصائيات وسجل صفقات الـ VIP',
+                      'VIP stats & trade history',
+                    ),
                     style: GoogleFonts.outfit(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -5550,7 +5843,10 @@ class _MainScreenState extends State<MainScreen> {
                   const SizedBox(width: 8),
                   _buildFilterTab(tr('صفقات الأمس', 'Yesterday'), 'yesterday'),
                   const SizedBox(width: 8),
-                  _buildFilterTab(tr('فترة مخصصة 🗓️', 'Custom range 🗓️'), 'custom'),
+                  _buildFilterTab(
+                    tr('فترة مخصصة 🗓️', 'Custom range 🗓️'),
+                    'custom',
+                  ),
                 ],
               ),
 
@@ -5649,8 +5945,14 @@ class _MainScreenState extends State<MainScreen> {
                           const SizedBox(height: 4),
                           Text(
                             tiesCount > 0
-                                ? tr('$winsCount رابحة / $lossesCount خاسرة / $tiesCount تعادل', '$winsCount won / $lossesCount lost / $tiesCount tie')
-                                : tr('$winsCount رابحة / $lossesCount خاسرة', '$winsCount won / $lossesCount lost'),
+                                ? tr(
+                                    '$winsCount رابحة / $lossesCount خاسرة / $tiesCount تعادل',
+                                    '$winsCount won / $lossesCount lost / $tiesCount tie',
+                                  )
+                                : tr(
+                                    '$winsCount رابحة / $lossesCount خاسرة',
+                                    '$winsCount won / $lossesCount lost',
+                                  ),
                             style: GoogleFonts.outfit(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
@@ -5658,7 +5960,10 @@ class _MainScreenState extends State<MainScreen> {
                             ),
                           ),
                           Text(
-                            tr('($totalCount صفقات إجمالية)', '($totalCount trades total)'),
+                            tr(
+                              '($totalCount صفقات إجمالية)',
+                              '($totalCount trades total)',
+                            ),
                             style: GoogleFonts.outfit(
                               fontSize: 9,
                               color: AppConstants.textSecondary,
@@ -5685,7 +5990,10 @@ class _MainScreenState extends State<MainScreen> {
                       ),
                       child: Center(
                         child: Text(
-                          tr('لا توجد صفقات مسجلة في هذه الفترة.', 'No trades recorded in this period.'),
+                          tr(
+                            'لا توجد صفقات مسجلة في هذه الفترة.',
+                            'No trades recorded in this period.',
+                          ),
                           style: GoogleFonts.outfit(
                             color: AppConstants.textSecondary,
                             fontSize: 13,
@@ -5749,7 +6057,9 @@ class _MainScreenState extends State<MainScreen> {
                                   child: Text(
                                     isTie
                                         ? tr('➖ تعادل', '➖ Tie')
-                                        : (isWin ? tr('✓ كسب', '✓ Win') : tr('✗ خسارة', '✗ Loss')),
+                                        : (isWin
+                                              ? tr('✓ كسب', '✓ Win')
+                                              : tr('✗ خسارة', '✗ Loss')),
                                     style: GoogleFonts.outfit(
                                       fontSize: 10,
                                       color: outcomeColor,
@@ -5812,9 +6122,9 @@ class _MainScreenState extends State<MainScreen> {
                                               return Container(
                                                 padding:
                                                     const EdgeInsets.symmetric(
-                                                  horizontal: 5,
-                                                  vertical: 1,
-                                                ),
+                                                      horizontal: 5,
+                                                      vertical: 1,
+                                                    ),
                                                 decoration: BoxDecoration(
                                                   color: oColor.withAlpha(28),
                                                   borderRadius:
@@ -5824,7 +6134,15 @@ class _MainScreenState extends State<MainScreen> {
                                                   ),
                                                 ),
                                                 child: Text(
-                                                  isMon ? tr('🎯 مراقبة', '🎯 Monitor') : tr('⚡ فوري', '⚡ Instant'),
+                                                  isMon
+                                                      ? tr(
+                                                          '🎯 مراقبة',
+                                                          '🎯 Monitor',
+                                                        )
+                                                      : tr(
+                                                          '⚡ فوري',
+                                                          '⚡ Instant',
+                                                        ),
                                                   style: GoogleFonts.outfit(
                                                     fontSize: 9,
                                                     fontWeight: FontWeight.bold,
@@ -5838,7 +6156,10 @@ class _MainScreenState extends State<MainScreen> {
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
-                                        tr('دخول: ${AppConstants.formatPrice(sig.entryPrice)} | إغلاق: ${AppConstants.formatPrice(sig.exitPrice ?? sig.currentPrice)}', 'Entry: ${AppConstants.formatPrice(sig.entryPrice)} | Close: ${AppConstants.formatPrice(sig.exitPrice ?? sig.currentPrice)}'),
+                                        tr(
+                                          'دخول: ${AppConstants.formatPrice(sig.entryPrice)} | إغلاق: ${AppConstants.formatPrice(sig.exitPrice ?? sig.currentPrice)}',
+                                          'Entry: ${AppConstants.formatPrice(sig.entryPrice)} | Close: ${AppConstants.formatPrice(sig.exitPrice ?? sig.currentPrice)}',
+                                        ),
                                         style: GoogleFonts.outfit(
                                           fontSize: 10,
                                           color: AppConstants.textSecondary,

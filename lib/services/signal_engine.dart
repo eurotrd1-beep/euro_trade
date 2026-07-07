@@ -136,6 +136,7 @@ class StrategyRule {
   // "filter"   → hard gate: if fails → no signal regardless of score
   // ""         → untagged: participates in normal scoring (default)
   final String role;
+  final String type; // Category / School of analysis (Trend, Oscillator, etc.)
 
   // optional params
   final int period;
@@ -155,6 +156,7 @@ class StrategyRule {
     required this.score,
     this.enabled = true,
     this.role = '',
+    this.type = '',
     this.period = 14,
     this.fast = 9,
     this.slow = 21,
@@ -173,6 +175,7 @@ class StrategyRule {
     score: (j['score'] as num).toDouble(),
     enabled: j['enabled'] as bool? ?? true,
     role: j['role'] as String? ?? '',
+    type: j['type'] as String? ?? j['category'] as String? ?? '',
     period: (j['period'] as num?)?.toInt() ?? 14,
     fast: (j['fast'] as num?)?.toInt() ?? 9,
     slow: (j['slow'] as num?)?.toInt() ?? 21,
@@ -214,7 +217,10 @@ class PyramidConfig {
     requireAllFilters: j['require_all_filters'] as bool? ?? true,
     waitMessage:
         j['wait_message'] as String? ??
-        tr('الهرم لم يكتمل — انتظار الشمعة القادمة', 'Pyramid not complete — waiting for the next candle'),
+        tr(
+          'الهرم لم يكتمل — انتظار الشمعة القادمة',
+          'Pyramid not complete — waiting for the next candle',
+        ),
   );
 }
 
@@ -549,6 +555,10 @@ class SignalEngine extends ChangeNotifier {
   DynamicStrategy? _stdDynamic;
   DynamicStrategy? _vipDynamic;
 
+  // Last evaluated PRO result (for external query and UI feedback)
+  Map<String, dynamic>? _lastProResult;
+  Map<String, dynamic>? get lastProResult => _lastProResult;
+
   // Per-role MONITORING strategies (independent JSON from the signal strategies).
   // Same format + same engine — only the trigger differs (wait for a new candle).
   DynamicStrategy? _monStdDynamic;
@@ -576,7 +586,8 @@ class SignalEngine extends ChangeNotifier {
   DateTime? _monStartTime; // when the current monitoring session began
   bool _monLastCheckFailed = false; // last new candle didn't meet conditions
   int _monChecksDone = 0; // how many candles have been evaluated
-  int _monSignalsFired = 0; // signals fired since monitoring started (missed-alert)
+  int _monSignalsFired =
+      0; // signals fired since monitoring started (missed-alert)
 
   bool get isMonitoring => _monitoring;
   String get monitoringPhase => _monPhase;
@@ -629,7 +640,7 @@ class SignalEngine extends ChangeNotifier {
 
   void updateUserData(String role, DateTime? expiry) {
     _userRole = role;
-    _vipExpiry = expiry?.toUtc();   // VIP expiry is absolute UTC
+    _vipExpiry = expiry?.toUtc(); // VIP expiry is absolute UTC
     notifyListeners();
   }
 
@@ -680,14 +691,16 @@ class SignalEngine extends ChangeNotifier {
   }
 
   void updateMonitoringStandardStrategy(Map<String, dynamic> json) {
-    _monStdDynamic =
-        json.containsKey('rules') ? DynamicStrategy.fromJson(json) : null;
+    _monStdDynamic = json.containsKey('rules')
+        ? DynamicStrategy.fromJson(json)
+        : null;
     notifyListeners();
   }
 
   void updateMonitoringVipStrategy(Map<String, dynamic> json) {
-    _monVipDynamic =
-        json.containsKey('rules') ? DynamicStrategy.fromJson(json) : null;
+    _monVipDynamic = json.containsKey('rules')
+        ? DynamicStrategy.fromJson(json)
+        : null;
     notifyListeners();
   }
 
@@ -806,13 +819,14 @@ class SignalEngine extends ChangeNotifier {
     final bool isCall = netScore >= 0;
     final double absScore = netScore.abs();
 
-    final double maxScore = dyn?.effectiveMaxScore ?? (absScore > 0 ? absScore : 1.0);
+    final double maxScore =
+        dyn?.effectiveMaxScore ?? (absScore > 0 ? absScore : 1.0);
     _lastSignalStrength = (absScore / maxScore * 100).clamp(0.0, 100.0);
 
     final double confBase = dyn?.confidenceBase ?? 92.5;
     final double confMax = dyn?.confidenceMax ?? 98.9;
-    double confidence =
-        (confBase + (absScore / 45.0) * (confMax - confBase)).clamp(confBase, confMax);
+    double confidence = (confBase + (absScore / 45.0) * (confMax - confBase))
+        .clamp(confBase, confMax);
 
     final int nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     final int cs = timeframeSeconds;
@@ -835,11 +849,23 @@ class SignalEngine extends ChangeNotifier {
       expiryTime: alignedExpiry,
       status: 'ACTIVE',
       marketCondition: isCall
-          ? tr('🎯 مراقبة ذكية — لحظة دخول صعود مؤكدة ✅', '🎯 Smart monitoring — confirmed CALL entry moment ✅')
-          : tr('🎯 مراقبة ذكية — لحظة دخول هبوط مؤكدة ✅', '🎯 Smart monitoring — confirmed PUT entry moment ✅'),
+          ? tr(
+              '🎯 مراقبة ذكية — لحظة دخول صعود مؤكدة ✅',
+              '🎯 Smart monitoring — confirmed CALL entry moment ✅',
+            )
+          : tr(
+              '🎯 مراقبة ذكية — لحظة دخول هبوط مؤكدة ✅',
+              '🎯 Smart monitoring — confirmed PUT entry moment ✅',
+            ),
       recommendation: isCall
-          ? tr('دخول صفقة صعود (CALL) على بداية الشمعة — أفضل لحظة دخول.', 'Enter a CALL trade at the candle open — the best entry moment.')
-          : tr('دخول صفقة هبوط (PUT) على بداية الشمعة — أفضل لحظة دخول.', 'Enter a PUT trade at the candle open — the best entry moment.'),
+          ? tr(
+              'دخول صفقة صعود (CALL) على بداية الشمعة — أفضل لحظة دخول.',
+              'Enter a CALL trade at the candle open — the best entry moment.',
+            )
+          : tr(
+              'دخول صفقة هبوط (PUT) على بداية الشمعة — أفضل لحظة دخول.',
+              'Enter a PUT trade at the candle open — the best entry moment.',
+            ),
       origin: 'monitoring',
     );
 
@@ -1661,121 +1687,365 @@ class SignalEngine extends ChangeNotifier {
   //  Base rules (role:"" or untagged):
   //    Add additional weight to the final score (non-blocking).
   // ─────────────────────────────────────────────────────────────────────────────
-  double _evaluateRulesPyramid(
+  String getCategoryForIndicator(StrategyRule r) {
+    if (r.type.isNotEmpty) return r.type;
+    
+    final ind = r.indicator.toLowerCase();
+    
+    // 1. فئة الاتجاه (Trend / Direction)
+    if (ind == 'ichimoku' ||
+        ind == 'supertrend' ||
+        ind.contains('vortex') ||
+        ind.contains('aroon') ||
+        ind == 'alligator' ||
+        ind == 'parabolic_sar' ||
+        ind == 'sar' ||
+        ind == 'sma' ||
+        ind == 'ema' ||
+        ind == 'wma' ||
+        ind == 'hma' ||
+        ind == 'hull_ma' ||
+        ind == 'dema' ||
+        ind == 'tema' ||
+        ind == 'alma' ||
+        ind == 'lsma' ||
+        ind == 'kama' ||
+        ind == 't3' ||
+        ind == 'linear_regression' ||
+        ind == 'dow_theory' ||
+        ind == 'trend_following' ||
+        ind == 'kalman' ||
+        ind == 'mtf' ||
+        ind == 'multi_timeframe_alignment') {
+      return 'Trend';
+    }
+    
+    // 2. فئة المستويات السعرية (Price Levels / Support-Resistance)
+    if (ind == 'pivot_point' ||
+        ind == 'pivot' ||
+        ind == 'cpr' ||
+        ind == 'pdh' ||
+        ind == 'pdl' ||
+        ind == 'pdh_pdl' ||
+        ind == 'sr_support' ||
+        ind == 'sr_resistance' ||
+        ind == 'orb' ||
+        ind == 'opening_range_breakout' ||
+        ind == 'opening_range' ||
+        ind == 'vwap' ||
+        ind == 'anchored_vwap' ||
+        ind == 'vwap_bands' ||
+        ind == 'price_vs_vwap' ||
+        ind == 'keltner_channels' ||
+        ind == 'donchian_channels' ||
+        ind.contains('bollinger') ||
+        ind.startsWith('bb_') ||
+        ind == 'support_resistance') {
+      return 'Price Levels';
+    }
+    
+    // 3. فئة الإحصاء المتقدم (Advanced Statistics / Mathematical)
+    if (ind == 'z_score' ||
+        ind == 'zscore' ||
+        ind == 'hurst_exponent' ||
+        ind == 'entropy_analysis' ||
+        ind == 'regime_detection' ||
+        ind == 'market_regime_classification' ||
+        ind == 'volatility_regime_analysis' ||
+        ind == 'anomaly_detection' ||
+        ind == 'spectral_analysis' ||
+        ind == 'monte_carlo_risk_simulation' ||
+        ind == 'wavelet_decomposition' ||
+        ind == 'kelly_criterion' ||
+        ind == 'choppiness' ||
+        ind == 'choppiness_index') {
+      return 'Advanced Statistics';
+    }
+    
+    // 4. فئة الأنماط النادرة (Rare Patterns / Technical Formations)
+    if (ind == 'three_bar_reversal' ||
+        ind == 'island_reversal' ||
+        ind == 'exhaustion_gap' ||
+        ind == 'breakout' ||
+        ind == 'candle_pattern' ||
+        ind == 'candles' ||
+        ind == 'wyckoff' ||
+        ind == 'wyckoff_phase' ||
+        ind == 'wyckoff_spring' ||
+        ind == 'wyckoff_upthrust' ||
+        ind == 'elliott_wave' ||
+        ind == 'order_block' ||
+        ind == 'fair_value_gap' ||
+        ind == 'breaker_block' ||
+        ind == 'rejection_block' ||
+        ind == 'mitigation_block' ||
+        ind == 'inverse_fvg' ||
+        ind == 'imbalance' ||
+        ind == 'bpr' ||
+        ind == 'liquidity_sweep' ||
+        ind == 'equal_highs' ||
+        ind == 'equal_lows' ||
+        ind == 'eqh' ||
+        ind == 'eql' ||
+        ind == 'gartley' ||
+        ind == 'bat' ||
+        ind == 'alternate_bat' ||
+        ind == 'butterfly' ||
+        ind == 'crab' ||
+        ind == 'deep_crab' ||
+        ind == 'shark' ||
+        ind == 'cypher' ||
+        ind == 'ab_cd' ||
+        ind == 'three_drives' ||
+        ind == '5_0' ||
+        ind.startsWith('harmonic')) {
+      return 'Rare Patterns';
+    }
+    
+    // Fallback standard Oscillators
+    if (ind == 'rsi' ||
+        ind == 'macd_histogram' ||
+        ind == 'macd_line' ||
+        ind == 'macd_signal' ||
+        ind.startsWith('stoch') ||
+        ind == 'cci' ||
+        ind == 'mfi' ||
+        ind == 'cmf' ||
+        ind == 'williams_r' ||
+        ind == 'roc') {
+      return 'Oscillators';
+    }
+    
+    return 'Other';
+  }
+
+  /// الدالة الموحدة لتقييم الاستراتيجية بالكامل متضمنة مضاعف إجماع الفئات
+  Map<String, dynamic> evaluateStrategyPro(DynamicStrategy strategy) {
+    final cache = <String, dynamic>{};
+    return evaluateStrategyProWithCache(strategy, cache);
+  }
+
+  Map<String, dynamic> evaluateStrategyProWithCache(
     DynamicStrategy strategy,
     Map<String, dynamic> cache,
   ) {
-    final pyr = strategy.pyramid!;
     final rules = strategy.rules.where((r) => r.enabled).toList();
-
     final primary = rules.where((r) => r.role == 'primary').toList();
     final confirm = rules.where((r) => r.role == 'confirm').toList();
     final filters = rules.where((r) => r.role == 'filter').toList();
-    final base = rules
-        .where(
-          (r) =>
-              r.role != 'primary' && r.role != 'confirm' && r.role != 'filter',
-        )
-        .toList();
 
-    // ── Stage 1: Primary direction ───────────────────────────────────────────
-    double priCall = 0, priPut = 0;
-    if (primary.isNotEmpty) {
-      for (final r in primary) {
-        try {
-          final raw = _computeIndicator(r, cache);
-          if (!_checkCondition(r, raw)) continue;
-          if (r.signal == 'CALL') {
-            priCall += r.score;
-          } else if (r.signal == 'PUT') {
-            priPut += r.score;
-          } else if (r.signal == 'dominant' || r.signal == 'confirm') {
-            if (priCall >= priPut) {
-              priCall += r.score;
-            } else {
-              priPut += r.score;
-            }
-          }
-        } catch (_) {
-          continue;
-        }
-      }
+    // ── [1] و [2]: تقييم قواعد primary وتحديد الفئات المتفقة لكل اتجاه ──
+    double rawCall = 0.0;
+    double rawPut = 0.0;
+    final Set<String> categoriesCall = {};
+    final Set<String> categoriesPut = {};
 
-      final primaryScore = max(priCall, priPut);
-      if (primaryScore < pyr.minPrimaryScore) {
-        _pyramidRejectReason =
-            'المرحلة الأولى (الأساس): النتيجة ${primaryScore.toStringAsFixed(1)} < الحد الأدنى ${pyr.minPrimaryScore}';
-        return 0.0; // pyramid not satisfied → triggers WAIT
-      }
-    }
-
-    final isPrimaryCall = priCall >= priPut;
-    final primaryDir = isPrimaryCall ? 'CALL' : 'PUT';
-
-    // ── Stage 2: Confirmation ratio ─────────────────────────────────────────
-    if (confirm.isNotEmpty && pyr.confirmationRatio > 0) {
-      int agreed = 0, total = 0;
-      for (final r in confirm) {
-        try {
-          final raw = _computeIndicator(r, cache);
-          total++;
-          if (!_checkCondition(r, raw)) continue;
-          final sigDir = (r.signal == 'dominant' || r.signal == 'confirm')
-              ? primaryDir
-              : r.signal;
-          if (sigDir == primaryDir) agreed++;
-        } catch (_) {
-          total++;
-          continue;
-        }
-      }
-      final ratio = total > 0 ? agreed / total : 0.0;
-      if (ratio < pyr.confirmationRatio) {
-        _pyramidRejectReason =
-            'المرحلة الثانية (التأكيد): $agreed/$total = ${(ratio * 100).round()}% < الحد الأدنى ${(pyr.confirmationRatio * 100).round()}%';
-        return 0.0;
-      }
-    }
-
-    // ── Stage 3: Hard filters ────────────────────────────────────────────────
-    if (pyr.requireAllFilters) {
-      for (final r in filters) {
-        try {
-          final raw = _computeIndicator(r, cache);
-          if (!_checkCondition(r, raw)) {
-            _pyramidRejectReason =
-                'المرحلة الثالثة (الفلاتر): فشل فلتر "${r.indicator}"';
-            return 0.0;
-          }
-        } catch (_) {
-          continue;
-        }
-      }
-    }
-
-    // ── Pyramid passed ✓ — compute final weighted score ──────────────────────
-    _pyramidRejectReason = '';
-    double callScore = priCall, putScore = priPut;
-    for (final r in base) {
+    for (final r in primary) {
       try {
         final raw = _computeIndicator(r, cache);
         if (!_checkCondition(r, raw)) continue;
+
+        final String cat = r.type.isNotEmpty ? r.type : getCategoryForIndicator(r);
+
         if (r.signal == 'CALL') {
-          callScore += r.score;
+          rawCall += r.score;
+          if (cat.isNotEmpty) categoriesCall.add(cat);
         } else if (r.signal == 'PUT') {
-          putScore += r.score;
+          rawPut += r.score;
+          if (cat.isNotEmpty) categoriesPut.add(cat);
         } else if (r.signal == 'dominant' || r.signal == 'confirm') {
-          if (callScore >= putScore) {
-            callScore += r.score;
+          if (rawCall >= rawPut) {
+            rawCall += r.score;
+            if (cat.isNotEmpty) categoriesCall.add(cat);
           } else {
-            putScore += r.score;
+            rawPut += r.score;
+            if (cat.isNotEmpty) categoriesPut.add(cat);
           }
         }
       } catch (_) {
         continue;
       }
     }
-    return callScore - putScore;
+
+    // ── [3] تطبيق مضاعف الإجماع بين الفئات على مجموع النقاط ──
+    double getMultiplier(int count) {
+      if (count <= 1) return 1.0;
+      if (count == 2) return 1.15;
+      if (count == 3) return 1.3;
+      return 1.5; // 4 فئات متفقة أو أكثر
+    }
+
+    final double multCall = getMultiplier(categoriesCall.length);
+    final double multPut = getMultiplier(categoriesPut.length);
+
+    final double multipliedCall = rawCall * multCall;
+    final double multipliedPut = rawPut * multPut;
+
+    // تحديد الاتجاه الغالب بناءً على النقاط المضاعفة
+    final bool isPrimaryCall = multipliedCall >= multipliedPut;
+    final String primaryDir = isPrimaryCall ? 'CALL' : 'PUT';
+    final double winningPrimaryScore = isPrimaryCall ? multipliedCall : multipliedPut;
+
+    // ── [4] بوابة الفلتر (filter) ──
+    bool filterPassed = true;
+    String? filterFailReason;
+    for (final r in filters) {
+      try {
+        final raw = _computeIndicator(r, cache);
+        if (!_checkCondition(r, raw)) {
+          filterPassed = false;
+          filterFailReason = 'فشل فلتر "${r.indicator}"';
+          break;
+        }
+      } catch (_) {
+        filterPassed = false;
+        filterFailReason = 'خطأ أثناء حساب فلتر "${r.indicator}"';
+        break;
+      }
+    }
+
+    // ── [5] طبقة التأكيد (confirm) ──
+    int agreed = 0;
+    int totalConfirm = 0;
+    int opposingTrue = 0;
+    double confirmScoreAdded = 0.0;
+
+    for (final r in confirm) {
+      totalConfirm++;
+      try {
+        final raw = _computeIndicator(r, cache);
+        final isTrue = _checkCondition(r, raw);
+        final String ruleDir = (r.signal == 'dominant' || r.signal == 'confirm')
+            ? primaryDir
+            : r.signal;
+
+        if (isTrue) {
+          if (ruleDir == primaryDir) {
+            agreed++;
+            confirmScoreAdded += r.score;
+          } else {
+            opposingTrue++;
+          }
+        }
+      } catch (_) {
+        continue;
+      }
+    }
+
+    // حساب النقاط النهائية (إضافة نقاط التأكيد للاتجاه الغالب فقط)
+    double finalCall = multipliedCall;
+    double finalPut = multipliedPut;
+    if (primaryDir == 'CALL') {
+      finalCall += confirmScoreAdded;
+    } else {
+      finalPut += confirmScoreAdded;
+    }
+
+    // إضافة نقاط القواعد الأساسية (base rules)
+    final base = rules
+        .where(
+          (r) =>
+              r.role != 'primary' && r.role != 'confirm' && r.role != 'filter',
+        )
+        .toList();
+    for (final r in base) {
+      try {
+        final raw = _computeIndicator(r, cache);
+        if (!_checkCondition(r, raw)) continue;
+        if (r.signal == 'CALL') {
+          finalCall += r.score;
+        } else if (r.signal == 'PUT') {
+          finalPut += r.score;
+        } else if (r.signal == 'dominant' || r.signal == 'confirm') {
+          if (finalCall >= finalPut) {
+            finalCall += r.score;
+          } else {
+            finalPut += r.score;
+          }
+        }
+      } catch (_) {
+        continue;
+      }
+    }
+
+    final double finalWinningScore = primaryDir == 'CALL' ? finalCall : finalPut;
+    final double finalOppositeScore = primaryDir == 'CALL' ? finalPut : finalCall;
+    final double gap = (finalWinningScore - finalOppositeScore).abs();
+
+    // تحديد محاذاة التأكيد (confirm_alignment)
+    String confirmAlignment = 'neutral';
+    if (totalConfirm > 0) {
+      if (opposingTrue > 0) {
+        confirmAlignment = 'conflict';
+      } else if (agreed > 0) {
+        confirmAlignment = 'aligned';
+      }
+    }
+
+    // ── [6] منطق القرار النهائي وتحديد البلوك ──
+    String? reasonBlocked;
+    final double minPrimary = strategy.pyramid?.minPrimaryScore ?? 3.0;
+
+    if (winningPrimaryScore < minPrimary) {
+      reasonBlocked = 'المرحلة الأولى (الأساس): النتيجة ${winningPrimaryScore.toStringAsFixed(1)} < الحد الأدنى $minPrimary';
+    } else if (strategy.pyramid?.requireAllFilters == true && !filterPassed) {
+      reasonBlocked = 'المرحلة الثالثة (الفلاتر): $filterFailReason';
+    } else if (totalConfirm > 0 &&
+        (agreed / totalConfirm) < (strategy.pyramid?.confirmationRatio ?? 0.5)) {
+      final double ratio = agreed / totalConfirm;
+      reasonBlocked = 'المرحلة الثانية (التأكيد): $agreed/$totalConfirm = ${(ratio * 100).round()}% < الحد الأدنى ${((strategy.pyramid?.confirmationRatio ?? 0.5) * 100).round()}%';
+    } else if (gap < 4.0) {
+      reasonBlocked = 'الفارق بين الاتجاهين ${gap.toStringAsFixed(1)} < حد الفارق الأدنى (4.0)';
+    }
+
+    final String resultStr = (reasonBlocked == null) ? 'SIGNAL' : 'NO_SIGNAL';
+    final String? finalDirection = (reasonBlocked == null) ? primaryDir : null;
+
+    // ── [7] تصنيف الثقة (confidence_tier) ──
+    String? confidenceTier;
+    if (reasonBlocked == null) {
+      final int catCount = primaryDir == 'CALL' ? categoriesCall.length : categoriesPut.length;
+      if (catCount >= 3 && confirmAlignment != 'conflict') {
+        confidenceTier = 'STRONG';
+      } else if ((catCount == 2 && confirmAlignment != 'conflict') || (catCount >= 3 && confirmAlignment == 'conflict')) {
+        confidenceTier = 'MEDIUM';
+      } else {
+        confidenceTier = 'WEAK';
+      }
+    }
+    final output = {
+      'result': resultStr,
+      'direction': finalDirection,
+      'confidence_tier': confidenceTier,
+      'raw_score': {'CALL': rawCall, 'PUT': rawPut},
+      'final_score': {'CALL': finalCall, 'PUT': finalPut},
+      'category_count': {'CALL': categoriesCall.length, 'PUT': categoriesPut.length},
+      'gap': gap,
+      'filter_passed': filterPassed,
+      'confirm_alignment': confirmAlignment,
+      'reason_blocked': reasonBlocked,
+    };
+
+    _lastProResult = output;
+    return output;
+  }
+
+  double _evaluateRulesPyramid(
+    DynamicStrategy strategy,
+    Map<String, dynamic> cache,
+  ) {
+    final proResult = evaluateStrategyProWithCache(strategy, cache);
+    
+    // وضع سبب الرفض في المتغير المخصص للمهاد الذكي
+    _pyramidRejectReason = proResult['reason_blocked'] ?? '';
+    
+    if (proResult['result'] == 'SIGNAL') {
+      final double callScore = proResult['final_score']['CALL'] ?? 0.0;
+      final double putScore = proResult['final_score']['PUT'] ?? 0.0;
+      return callScore - putScore;
+    } else {
+      return 0.0;
+    }
   }
 
   void setAccountId(String accountId) {
@@ -2060,8 +2330,9 @@ class SignalEngine extends ChangeNotifier {
     // Stage 1: Support & Resistance
     final sr = _calculateSupportResistance();
     _analysisStageText = tr(
-        '📊 تحليل مستويات الدعم والمقاومة لـ ${_activePair.replaceAll(' (OTC)', '')} | الدعم: ${AppConstants.formatPrice(sr['support']!)} | المقاومة: ${AppConstants.formatPrice(sr['resistance']!)}...',
-        '📊 Analyzing support & resistance for ${_activePair.replaceAll(' (OTC)', '')} | Support: ${AppConstants.formatPrice(sr['support']!)} | Resistance: ${AppConstants.formatPrice(sr['resistance']!)}...');
+      '📊 تحليل مستويات الدعم والمقاومة لـ ${_activePair.replaceAll(' (OTC)', '')} | الدعم: ${AppConstants.formatPrice(sr['support']!)} | المقاومة: ${AppConstants.formatPrice(sr['resistance']!)}...',
+      '📊 Analyzing support & resistance for ${_activePair.replaceAll(' (OTC)', '')} | Support: ${AppConstants.formatPrice(sr['support']!)} | Resistance: ${AppConstants.formatPrice(sr['resistance']!)}...',
+    );
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 400));
     samplePrice();
@@ -2071,8 +2342,9 @@ class SignalEngine extends ChangeNotifier {
     final stoch = _calculateStochastic(14, 3);
     final cci = _calculateCci(20);
     _analysisStageText = tr(
-        '📈 فحص مؤشرات التذبذب ومناطق التشبع | RSI: ${rsi.toStringAsFixed(1)} | Stochastic: ${stoch['k']!.toStringAsFixed(1)} | CCI: ${cci.toStringAsFixed(0)}...',
-        '📈 Checking oscillators & overbought/oversold zones | RSI: ${rsi.toStringAsFixed(1)} | Stochastic: ${stoch['k']!.toStringAsFixed(1)} | CCI: ${cci.toStringAsFixed(0)}...');
+      '📈 فحص مؤشرات التذبذب ومناطق التشبع | RSI: ${rsi.toStringAsFixed(1)} | Stochastic: ${stoch['k']!.toStringAsFixed(1)} | CCI: ${cci.toStringAsFixed(0)}...',
+      '📈 Checking oscillators & overbought/oversold zones | RSI: ${rsi.toStringAsFixed(1)} | Stochastic: ${stoch['k']!.toStringAsFixed(1)} | CCI: ${cci.toStringAsFixed(0)}...',
+    );
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 400));
     samplePrice();
@@ -2081,8 +2353,9 @@ class SignalEngine extends ChangeNotifier {
     final atr = _calculateAtr(14);
     final adxFull = _calculateAdxFull(14);
     _analysisStageText = tr(
-        '⚡ فحص قوة الاتجاه ومعدل التذبذب | ATR: ${atr.toStringAsFixed(5)} | ADX: ${adxFull['adx']!.toStringAsFixed(1)}...',
-        '⚡ Checking trend strength & volatility | ATR: ${atr.toStringAsFixed(5)} | ADX: ${adxFull['adx']!.toStringAsFixed(1)}...');
+      '⚡ فحص قوة الاتجاه ومعدل التذبذب | ATR: ${atr.toStringAsFixed(5)} | ADX: ${adxFull['adx']!.toStringAsFixed(1)}...',
+      '⚡ Checking trend strength & volatility | ATR: ${atr.toStringAsFixed(5)} | ADX: ${adxFull['adx']!.toStringAsFixed(1)}...',
+    );
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 400));
     samplePrice();
@@ -2091,8 +2364,9 @@ class SignalEngine extends ChangeNotifier {
     final vwap = _calculateVwap();
     final mfi = _calculateMfi(14);
     _analysisStageText = tr(
-        '🏦 مراقبة تدفق سيولة الحوت والـ MFI | MFI: ${mfi.toStringAsFixed(1)} | VWAP: ${AppConstants.formatPrice(vwap)}...',
-        '🏦 Watching whale liquidity flow & MFI | MFI: ${mfi.toStringAsFixed(1)} | VWAP: ${AppConstants.formatPrice(vwap)}...');
+      '🏦 مراقبة تدفق سيولة الحوت والـ MFI | MFI: ${mfi.toStringAsFixed(1)} | VWAP: ${AppConstants.formatPrice(vwap)}...',
+      '🏦 Watching whale liquidity flow & MFI | MFI: ${mfi.toStringAsFixed(1)} | VWAP: ${AppConstants.formatPrice(vwap)}...',
+    );
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 400));
     samplePrice();
@@ -2101,8 +2375,9 @@ class SignalEngine extends ChangeNotifier {
     final cmf = _calculateCmf(20);
     final volDelta = _calculateVolumeDelta();
     _analysisStageText = tr(
-        '💰 حساب ضغط الشراء مقابل البيع | CMF: ${cmf.toStringAsFixed(3)} | Vol Delta: ${volDelta.toStringAsFixed(1)}%...',
-        '💰 Calculating buying vs selling pressure | CMF: ${cmf.toStringAsFixed(3)} | Vol Delta: ${volDelta.toStringAsFixed(1)}%...');
+      '💰 حساب ضغط الشراء مقابل البيع | CMF: ${cmf.toStringAsFixed(3)} | Vol Delta: ${volDelta.toStringAsFixed(1)}%...',
+      '💰 Calculating buying vs selling pressure | CMF: ${cmf.toStringAsFixed(3)} | Vol Delta: ${volDelta.toStringAsFixed(1)}%...',
+    );
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 400));
     samplePrice();
@@ -2110,8 +2385,9 @@ class SignalEngine extends ChangeNotifier {
     // Stage 6: Order Blocks & Liquidity Zones
     final liq = _calculateLiquidityZones();
     _analysisStageText = tr(
-        '🔍 تحديد مناطق الطلب والعرض والمستويات المؤسسية | LIQ Score: ${(liq['score'] as double).toStringAsFixed(0)}%...',
-        '🔍 Identifying demand & supply zones and institutional levels | LIQ Score: ${(liq['score'] as double).toStringAsFixed(0)}%...');
+      '🔍 تحديد مناطق الطلب والعرض والمستويات المؤسسية | LIQ Score: ${(liq['score'] as double).toStringAsFixed(0)}%...',
+      '🔍 Identifying demand & supply zones and institutional levels | LIQ Score: ${(liq['score'] as double).toStringAsFixed(0)}%...',
+    );
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 400));
     samplePrice();
@@ -2120,47 +2396,54 @@ class SignalEngine extends ChangeNotifier {
     final pattern = _detectCandlePatterns();
     final divergence = _detectRsiDivergence();
     _analysisStageText = tr(
-        '🕯️ تحليل البرايس أكشن ونموذج الشموع | Pattern: ${pattern.replaceAll('_', ' ')} | Divergence: $divergence...',
-        '🕯️ Analyzing price action & candlestick patterns | Pattern: ${pattern.replaceAll('_', ' ')} | Divergence: $divergence...');
+      '🕯️ تحليل البرايس أكشن ونموذج الشموع | Pattern: ${pattern.replaceAll('_', ' ')} | Divergence: $divergence...',
+      '🕯️ Analyzing price action & candlestick patterns | Pattern: ${pattern.replaceAll('_', ' ')} | Divergence: $divergence...',
+    );
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 400));
     samplePrice();
 
     // Stage 8: Correlation & DXY Index
     _analysisStageText = tr(
-        '⚙️ قياس قوة العملة مقابل مؤشر الدولار والعملات الأخرى (Correlation Index)...',
-        '⚙️ Measuring currency strength vs the dollar index and other currencies (Correlation Index)...');
+      '⚙️ قياس قوة العملة مقابل مؤشر الدولار والعملات الأخرى (Correlation Index)...',
+      '⚙️ Measuring currency strength vs the dollar index and other currencies (Correlation Index)...',
+    );
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 400));
     samplePrice();
 
     // Stage 9: Multi-Timeframe Confluence (1m / 5m / 15m)
     _analysisStageText = tr(
-        '🔄 فحص محاذاة الاتجاه عبر الفريمات المتعددة لضمان دقة الدخول...',
-        '🔄 Checking trend alignment across multiple timeframes to ensure entry accuracy...');
+      '🔄 فحص محاذاة الاتجاه عبر الفريمات المتعددة لضمان دقة الدخول...',
+      '🔄 Checking trend alignment across multiple timeframes to ensure entry accuracy...',
+    );
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 400));
     samplePrice();
 
     // Stage 10: Market Noise Filter
     _analysisStageText = tr(
-        '🛡️ تصفية الضوضاء السعرية وكشف كسر الدعم والمقاومة الكاذب...',
-        '🛡️ Filtering price noise and detecting false support/resistance breaks...');
+      '🛡️ تصفية الضوضاء السعرية وكشف كسر الدعم والمقاومة الكاذب...',
+      '🛡️ Filtering price noise and detecting false support/resistance breaks...',
+    );
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 400));
     samplePrice();
 
     // Stage 11: Safety Gates Assessment
-    _analysisStageText = tr('🔒 تطبيق مرشحات الأمان وفحص نسبة العائد للمخاطرة...',
-        '🔒 Applying safety filters and checking the risk/reward ratio...');
+    _analysisStageText = tr(
+      '🔒 تطبيق مرشحات الأمان وفحص نسبة العائد للمخاطرة...',
+      '🔒 Applying safety filters and checking the risk/reward ratio...',
+    );
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 400));
     samplePrice();
 
     // Stage 12: Confluence Scoring
     _analysisStageText = tr(
-        '🏁 احتساب Confluence النهائي لـ 18 مؤشر فني وحسم اتجاه السوق...',
-        '🏁 Computing the final confluence of 18 technical indicators and deciding market direction...');
+      '🏁 احتساب Confluence النهائي لـ 18 مؤشر فني وحسم اتجاه السوق...',
+      '🏁 Computing the final confluence of 18 technical indicators and deciding market direction...',
+    );
     notifyListeners();
     await Future.delayed(const Duration(milliseconds: 400));
     samplePrice();
@@ -2181,8 +2464,9 @@ class SignalEngine extends ChangeNotifier {
         if (rem != lastRem) {
           lastRem = rem;
           _analysisStageText = tr(
-              'بانتظار إغلاق الشمعة الحالية لفتح صفقة مع الشمعة القادمة: $rem ثانية...',
-              'Waiting for the current candle to close to open a trade with the next candle: ${rem}s...');
+            'بانتظار إغلاق الشمعة الحالية لفتح صفقة مع الشمعة القادمة: $rem ثانية...',
+            'Waiting for the current candle to close to open a trade with the next candle: ${rem}s...',
+          );
           notifyListeners();
           samplePrice();
         }
@@ -2745,8 +3029,9 @@ class SignalEngine extends ChangeNotifier {
 
   // Enhanced ADX with +DI / -DI directional components
   Map<String, double> _calculateAdxFull(int period) {
-    if (_candles.length < period + 1)
+    if (_candles.length < period + 1) {
       return {'adx': 25.0, 'plusDi': 50.0, 'minusDi': 50.0};
+    }
 
     double plusDmSum = 0, minusDmSum = 0, trSum = 0;
     for (int i = _candles.length - period; i < _candles.length; i++) {
@@ -2868,10 +3153,12 @@ class SignalEngine extends ChangeNotifier {
 
       if (wasBearish && nowBullish) return 'change_of_character_bullish';
       if (wasBullish && nowBearish) return 'change_of_character_bearish';
-      if (nowBullish && _currentPrice > sh2)
+      if (nowBullish && _currentPrice > sh2) {
         return 'break_of_structure_bullish';
-      if (nowBearish && _currentPrice < sl2)
+      }
+      if (nowBearish && _currentPrice < sl2) {
         return 'break_of_structure_bearish';
+      }
     }
 
     if (nowBullish) return 'higher_high_higher_low';
@@ -2897,8 +3184,9 @@ class SignalEngine extends ChangeNotifier {
         for (int j = i - 1; j >= max(0, i - 5); j--) {
           final ob = _candles[j];
           if (ob.close < ob.open) {
-            if (_currentPrice >= ob.low && _currentPrice <= ob.high)
+            if (_currentPrice >= ob.low && _currentPrice <= ob.high) {
               return 'bullish';
+            }
             break;
           }
         }
@@ -2906,8 +3194,9 @@ class SignalEngine extends ChangeNotifier {
         for (int j = i - 1; j >= max(0, i - 5); j--) {
           final ob = _candles[j];
           if (ob.close > ob.open) {
-            if (_currentPrice >= ob.low && _currentPrice <= ob.high)
+            if (_currentPrice >= ob.low && _currentPrice <= ob.high) {
               return 'bearish';
+            }
             break;
           }
         }
@@ -2924,12 +3213,14 @@ class SignalEngine extends ChangeNotifier {
       final c3 = _candles[i];
 
       if (c3.low > c1.high) {
-        if (_currentPrice >= c1.high && _currentPrice <= c3.low)
+        if (_currentPrice >= c1.high && _currentPrice <= c3.low) {
           return 'bullish';
+        }
       }
       if (c3.high < c1.low) {
-        if (_currentPrice >= c3.high && _currentPrice <= c1.low)
+        if (_currentPrice >= c3.high && _currentPrice <= c1.low) {
           return 'bearish';
+        }
       }
     }
     return 'none';
@@ -2949,10 +3240,12 @@ class SignalEngine extends ChangeNotifier {
     }
 
     final last3 = _candles.sublist(_candles.length - 3);
-    if (last3.any((c) => c.low < refLow) && _currentPrice > refLow)
+    if (last3.any((c) => c.low < refLow) && _currentPrice > refLow) {
       return 'sell_side';
-    if (last3.any((c) => c.high > refHigh) && _currentPrice < refHigh)
+    }
+    if (last3.any((c) => c.high > refHigh) && _currentPrice < refHigh) {
       return 'buy_side';
+    }
     return 'none';
   }
 
@@ -3028,8 +3321,9 @@ class SignalEngine extends ChangeNotifier {
 
     if (targetWave != null &&
         targetWave.isNotEmpty &&
-        detectedWave != targetWave)
+        detectedWave != targetWave) {
       return 'none';
+    }
     return direction;
   }
 
@@ -3053,8 +3347,9 @@ class SignalEngine extends ChangeNotifier {
       double ch = _candles[i].high, cl = _candles[i].low;
       bool iH = true, iL = true;
       for (int k = 1; k <= str; k++) {
-        if (ch <= _candles[i - k].high || ch <= _candles[i + k].high)
+        if (ch <= _candles[i - k].high || ch <= _candles[i + k].high) {
           iH = false;
+        }
         if (cl >= _candles[i - k].low || cl >= _candles[i + k].low) iL = false;
       }
       if (iH) h.add(ch);
@@ -3125,12 +3420,14 @@ class SignalEngine extends ChangeNotifier {
       final dnW = min(c.open, c.close) - c.low;
       if (dnW > range * 0.6 &&
           dnW > body * 2 &&
-          (_currentPrice - c.low).abs() < range * 0.4)
+          (_currentPrice - c.low).abs() < range * 0.4) {
         return 'bullish';
+      }
       if (upW > range * 0.6 &&
           upW > body * 2 &&
-          (_currentPrice - c.high).abs() < range * 0.4)
+          (_currentPrice - c.high).abs() < range * 0.4) {
         return 'bearish';
+      }
     }
     return 'none';
   }
@@ -3168,8 +3465,9 @@ class SignalEngine extends ChangeNotifier {
             break;
           }
         }
-        if (filled && _currentPrice >= c1.high && _currentPrice <= c3.low)
+        if (filled && _currentPrice >= c1.high && _currentPrice <= c3.low) {
           return 'bearish';
+        }
       }
       if (c3.high < c1.low) {
         bool filled = false;
@@ -3179,8 +3477,9 @@ class SignalEngine extends ChangeNotifier {
             break;
           }
         }
-        if (filled && _currentPrice >= c3.high && _currentPrice <= c1.low)
+        if (filled && _currentPrice >= c3.high && _currentPrice <= c1.low) {
           return 'bullish';
+        }
       }
     }
     return 'none';
@@ -3203,8 +3502,9 @@ class SignalEngine extends ChangeNotifier {
     for (int b = 0; b < bL.length; b++) {
       for (int s = 0; s < sL.length; s++) {
         final oL = max(bL[b], sL[s]), oH = min(bH[b], sH[s]);
-        if (oH > oL && _currentPrice >= oL && _currentPrice <= oH)
+        if (oH > oL && _currentPrice >= oL && _currentPrice <= oH) {
           return 'active';
+        }
       }
     }
     return 'none';
@@ -3216,8 +3516,9 @@ class SignalEngine extends ChangeNotifier {
     if (h.length < 2) return 'none';
     const tol = 0.001;
     for (int i = h.length - 1; i >= 1; i--) {
-      if ((h[i] - h[i - 1]).abs() < tol && _currentPrice >= h[i] - tol)
+      if ((h[i] - h[i - 1]).abs() < tol && _currentPrice >= h[i] - tol) {
         return 'active';
+      }
     }
     return 'none';
   }
@@ -3228,8 +3529,9 @@ class SignalEngine extends ChangeNotifier {
     if (l.length < 2) return 'none';
     const tol = 0.001;
     for (int i = l.length - 1; i >= 1; i--) {
-      if ((l[i] - l[i - 1]).abs() < tol && _currentPrice <= l[i] + tol)
+      if ((l[i] - l[i - 1]).abs() < tol && _currentPrice <= l[i] + tol) {
         return 'active';
+      }
     }
     return 'none';
   }
@@ -3310,10 +3612,12 @@ class SignalEngine extends ChangeNotifier {
     final mxH = rec.map((c) => c.high).reduce(max);
     final mnL = rec.map((c) => c.low).reduce(min);
     final mid = rec[rec.length ~/ 2].close;
-    if (mnL < rec.first.close - atr * 1.5 && _currentPrice > mid)
+    if (mnL < rec.first.close - atr * 1.5 && _currentPrice > mid) {
       return 'bullish';
-    if (mxH > rec.first.close + atr * 1.5 && _currentPrice < mid)
+    }
+    if (mxH > rec.first.close + atr * 1.5 && _currentPrice < mid) {
       return 'bearish';
+    }
     return 'none';
   }
 
@@ -3458,8 +3762,10 @@ class SignalEngine extends ChangeNotifier {
     final h = _swingPoints(lookback: 40, str: 2)['h']!;
     if (h.length < 2) return 'none';
     const tol = 0.0015;
-    if ((h.last - h[h.length - 2]).abs() < tol && _currentPrice < h.last - tol)
+    if ((h.last - h[h.length - 2]).abs() < tol &&
+        _currentPrice < h.last - tol) {
       return 'bearish';
+    }
     return 'none';
   }
 
@@ -3468,8 +3774,10 @@ class SignalEngine extends ChangeNotifier {
     final l = _swingPoints(lookback: 40, str: 2)['l']!;
     if (l.length < 2) return 'none';
     const tol = 0.0015;
-    if ((l.last - l[l.length - 2]).abs() < tol && _currentPrice > l.last + tol)
+    if ((l.last - l[l.length - 2]).abs() < tol &&
+        _currentPrice > l.last + tol) {
       return 'bullish';
+    }
     return 'none';
   }
 
@@ -3548,13 +3856,15 @@ class SignalEngine extends ChangeNotifier {
     if (rising) {
       if (h.last > h[h.length - 2] &&
           l.last > l[l.length - 2] &&
-          _currentPrice < l.last)
+          _currentPrice < l.last) {
         return 'bearish';
+      }
     } else {
       if (h.last < h[h.length - 2] &&
           l.last < l[l.length - 2] &&
-          _currentPrice > h.last)
+          _currentPrice > h.last) {
         return 'bullish';
+      }
     }
     return 'none';
   }
@@ -3575,10 +3885,12 @@ class SignalEngine extends ChangeNotifier {
         last5.map((c) => c.high).reduce(max) -
         last5.map((c) => c.low).reduce(min);
     if (impulse > avg * 5 && consol < impulse * 0.4) {
-      if (bull && _currentPrice > last5.map((c) => c.high).reduce(max))
+      if (bull && _currentPrice > last5.map((c) => c.high).reduce(max)) {
         return 'bullish';
-      if (!bull && _currentPrice < last5.map((c) => c.low).reduce(min))
+      }
+      if (!bull && _currentPrice < last5.map((c) => c.low).reduce(min)) {
         return 'bearish';
+      }
     }
     return 'none';
   }
@@ -3590,11 +3902,13 @@ class SignalEngine extends ChangeNotifier {
     final l = sp['l']!;
     if (h.length < 2 || l.length < 2) return 'none';
     if (up) {
-      if (h.last > h[h.length - 2] && l.last > l[l.length - 2])
+      if (h.last > h[h.length - 2] && l.last > l[l.length - 2]) {
         return 'bullish';
+      }
     } else {
-      if (h.last < h[h.length - 2] && l.last < l[l.length - 2])
+      if (h.last < h[h.length - 2] && l.last < l[l.length - 2]) {
         return 'bearish';
+      }
     }
     return 'none';
   }
@@ -3801,10 +4115,12 @@ class SignalEngine extends ChangeNotifier {
     final p = _candles[_candles.length - 2];
     final haClose = (c.open + c.high + c.low + c.close) / 4;
     final haOpen = (p.open + p.close) / 2;
-    if (haClose > haOpen && c.low == min(c.open, c.close))
+    if (haClose > haOpen && c.low == min(c.open, c.close)) {
       return 'strong_bullish';
-    if (haClose < haOpen && c.high == max(c.open, c.close))
+    }
+    if (haClose < haOpen && c.high == max(c.open, c.close)) {
       return 'strong_bearish';
+    }
     if (haClose > haOpen) return 'bullish';
     if (haClose < haOpen) return 'bearish';
     return 'none';
@@ -3857,12 +4173,15 @@ class SignalEngine extends ChangeNotifier {
 
     // Doji family
     if (body0 < range0 * 0.1) {
-      if (dnWick0 > range0 * 0.6 && upWick0 < range0 * 0.1)
+      if (dnWick0 > range0 * 0.6 && upWick0 < range0 * 0.1) {
         return 'dragonfly_doji';
-      if (upWick0 > range0 * 0.6 && dnWick0 < range0 * 0.1)
+      }
+      if (upWick0 > range0 * 0.6 && dnWick0 < range0 * 0.1) {
         return 'gravestone_doji';
-      if (upWick0 > range0 * 0.3 && dnWick0 > range0 * 0.3)
+      }
+      if (upWick0 > range0 * 0.3 && dnWick0 > range0 * 0.3) {
         return 'long_legged_doji';
+      }
       return 'doji';
     }
 
@@ -3872,8 +4191,9 @@ class SignalEngine extends ChangeNotifier {
     }
 
     // Spinning Top
-    if (body0 < range0 * 0.3 && upWick0 > body0 && dnWick0 > body0)
+    if (body0 < range0 * 0.3 && upWick0 > body0 && dnWick0 > body0) {
       return 'spinning_top';
+    }
 
     // Hammer / Hanging Man (single candle)
     if (dnWick0 > body0 * 2 && upWick0 < body0 * 0.5 && range0 > 0.0001) {
@@ -3891,57 +4211,67 @@ class SignalEngine extends ChangeNotifier {
     if (c1.close < c1.open &&
         c0.close > c0.open &&
         c0.open <= c1.close &&
-        c0.close >= c1.open)
+        c0.close >= c1.open) {
       return 'bullish_engulfing';
+    }
     if (c1.close > c1.open &&
         c0.close < c0.open &&
         c0.open >= c1.close &&
-        c0.close <= c1.open)
+        c0.close <= c1.open) {
       return 'bearish_engulfing';
+    }
 
     // Harami
     if (c1.close < c1.open &&
         c0.close > c0.open &&
         c0.open > c1.close &&
-        c0.close < c1.open)
+        c0.close < c1.open) {
       return 'bullish_harami';
+    }
     if (c1.close > c1.open &&
         c0.close < c0.open &&
         c0.open < c1.close &&
-        c0.close > c1.open)
+        c0.close > c1.open) {
       return 'bearish_harami';
+    }
     if (c1.close < c1.open &&
         body0 < body1 * 0.25 &&
         c0.open > c1.close &&
-        c0.close < c1.open)
+        c0.close < c1.open) {
       return 'bullish_harami_cross';
+    }
     if (c1.close > c1.open &&
         body0 < body1 * 0.25 &&
         c0.open < c1.close &&
-        c0.close > c1.open)
+        c0.close > c1.open) {
       return 'bearish_harami_cross';
+    }
 
     // Piercing Line / Dark Cloud Cover
     if (c1.close < c1.open &&
         c0.close > c0.open &&
         c0.open < c1.close &&
-        c0.close > (c1.open + c1.close) / 2)
+        c0.close > (c1.open + c1.close) / 2) {
       return 'piercing_line';
+    }
     if (c1.close > c1.open &&
         c0.close < c0.open &&
         c0.open > c1.close &&
-        c0.close < (c1.open + c1.close) / 2)
+        c0.close < (c1.open + c1.close) / 2) {
       return 'dark_cloud_cover';
+    }
 
     // Tweezers
     if ((c1.high - c0.high).abs() < 0.0005 &&
         c1.close > c1.open &&
-        c0.close < c0.open)
+        c0.close < c0.open) {
       return 'tweezer_top';
+    }
     if ((c1.low - c0.low).abs() < 0.0005 &&
         c1.close < c1.open &&
-        c0.close > c0.open)
+        c0.close > c0.open) {
       return 'tweezer_bottom';
+    }
 
     // Three-candle patterns
     if (_candles.length >= 3) {
@@ -3949,13 +4279,15 @@ class SignalEngine extends ChangeNotifier {
       if (c2.close < c2.open &&
           body1 < (c2.close - c2.open).abs() * 0.3 &&
           c0.close > c0.open &&
-          c0.close > (c2.open + c2.close) / 2)
+          c0.close > (c2.open + c2.close) / 2) {
         return 'morning_star';
+      }
       if (c2.close > c2.open &&
           body1 < (c2.close - c2.open).abs() * 0.3 &&
           c0.close < c0.open &&
-          c0.close < (c2.open + c2.close) / 2)
+          c0.close < (c2.open + c2.close) / 2) {
         return 'evening_star';
+      }
 
       // Three White Soldiers / Three Black Crows
       if (c2.close > c2.open &&
@@ -3993,27 +4325,31 @@ class SignalEngine extends ChangeNotifier {
       if (c1.close < c1.open &&
           c0.close > c0.open &&
           c0.open >= c1.open &&
-          (c0.open - c1.open).abs() < 0.0002)
+          (c0.open - c1.open).abs() < 0.0002) {
         return 'bullish_kicker';
+      }
       if (c1.close > c1.open &&
           c0.close < c0.open &&
           c0.open <= c1.open &&
-          (c0.open - c1.open).abs() < 0.0002)
+          (c0.open - c1.open).abs() < 0.0002) {
         return 'bearish_kicker';
+      }
 
       // Abandoned Baby (gap + doji)
       if (c2.close < c2.open &&
           body1 < range0 * 0.1 &&
           c0.close > c0.open &&
           c1.low > c2.low &&
-          c1.low > c0.low)
+          c1.low > c0.low) {
         return 'abandoned_baby_bullish';
+      }
       if (c2.close > c2.open &&
           body1 < range0 * 0.1 &&
           c0.close < c0.open &&
           c1.high < c2.high &&
-          c1.high < c0.high)
+          c1.high < c0.high) {
         return 'abandoned_baby_bearish';
+      }
     }
 
     return 'none';
@@ -4049,23 +4385,27 @@ class SignalEngine extends ChangeNotifier {
     // No Demand: narrow spread + low volume + close near bottom = bearish
     if (spread < _calculateAtr(5) * 0.5 &&
         volRatio < 0.7 &&
-        c.close < (c.high + c.low) / 2)
+        c.close < (c.high + c.low) / 2) {
       return 'no_demand';
+    }
     // No Supply: narrow spread + low volume + close near top = bullish
     if (spread < _calculateAtr(5) * 0.5 &&
         volRatio < 0.7 &&
-        c.close > (c.high + c.low) / 2)
+        c.close > (c.high + c.low) / 2) {
       return 'no_supply';
+    }
     // Effort Up: wide spread + high vol + close near top = bullish
     if (spread > _calculateAtr(5) * 1.3 &&
         volRatio > 1.5 &&
-        c.close > (c.high + c.low) / 2)
+        c.close > (c.high + c.low) / 2) {
       return 'effort_up';
+    }
     // Effort Down: wide spread + high vol + close near bottom = bearish
     if (spread > _calculateAtr(5) * 1.3 &&
         volRatio > 1.5 &&
-        c.close < (c.high + c.low) / 2)
+        c.close < (c.high + c.low) / 2) {
       return 'effort_down';
+    }
     return 'none';
   }
 
@@ -4093,14 +4433,17 @@ class SignalEngine extends ChangeNotifier {
     final pt1 = l[l.length - 3], pt3 = l[l.length - 2], pt5 = l.last;
     final trend13 = pt3 - pt1;
     final expected5 = pt3 + trend13;
-    if ((pt5 - expected5).abs() < (trend13 * 0.15).abs() && _currentPrice > pt5)
+    if ((pt5 - expected5).abs() < (trend13 * 0.15).abs() &&
+        _currentPrice > pt5) {
       return 'bullish';
+    }
     // Bearish Wolfe: 5 waves up → reversal
     final ph1 = h[h.length - 3], ph3 = h[h.length - 2], ph5 = h.last;
     final trendH = ph3 - ph1;
     final expH5 = ph3 + trendH;
-    if ((ph5 - expH5).abs() < (trendH * 0.15).abs() && _currentPrice < ph5)
+    if ((ph5 - expH5).abs() < (trendH * 0.15).abs() && _currentPrice < ph5) {
       return 'bearish';
+    }
     return 'none';
   }
 
@@ -4124,8 +4467,9 @@ class SignalEngine extends ChangeNotifier {
         dnCount = 0;
       }
     }
-    if (upCount >= 9)
+    if (upCount >= 9) {
       return 'sell_setup'; // 9-bar setup complete = potential reversal
+    }
     if (dnCount >= 9) return 'buy_setup';
     return 'none';
   }
@@ -4734,13 +5078,15 @@ class SignalEngine extends ChangeNotifier {
     if (c.high > _candles[i - 1].high &&
         c.high > _candles[i - 2].high &&
         c.high > _candles[i + 1].high &&
-        c.high > _candles[i + 2].high)
+        c.high > _candles[i + 2].high) {
       return 'bearish_fractal';
+    }
     if (c.low < _candles[i - 1].low &&
         c.low < _candles[i - 2].low &&
         c.low < _candles[i + 1].low &&
-        c.low < _candles[i + 2].low)
+        c.low < _candles[i + 2].low) {
       return 'bullish_fractal';
+    }
     return 'none';
   }
 
@@ -4800,10 +5146,12 @@ class SignalEngine extends ChangeNotifier {
     final c = _candles.last, body = (c.close - c.open).abs();
     if (body < _avgBodySize() * 2.5) return 'none';
     final sp = _swingPoints(lookback: 10, str: 1);
-    if (c.close > c.open && sp['h']!.isNotEmpty && c.close > sp['h']!.last)
+    if (c.close > c.open && sp['h']!.isNotEmpty && c.close > sp['h']!.last) {
       return 'bullish';
-    if (c.close < c.open && sp['l']!.isNotEmpty && c.close < sp['l']!.last)
+    }
+    if (c.close < c.open && sp['l']!.isNotEmpty && c.close < sp['l']!.last) {
       return 'bearish';
+    }
     return 'none';
   }
 
@@ -4813,13 +5161,15 @@ class SignalEngine extends ChangeNotifier {
       final c1 = _candles[i - 2], c3 = _candles[i];
       if (c3.low > c1.high) {
         final ce = (c3.low + c1.high) / 2;
-        if ((_currentPrice - ce).abs() < (c3.low - c1.high) * 0.1)
+        if ((_currentPrice - ce).abs() < (c3.low - c1.high) * 0.1) {
           return 'bullish_ce';
+        }
       }
       if (c3.high < c1.low) {
         final ce = (c1.low + c3.high) / 2;
-        if ((_currentPrice - ce).abs() < (c1.low - c3.high) * 0.1)
+        if ((_currentPrice - ce).abs() < (c1.low - c3.high) * 0.1) {
           return 'bearish_ce';
+        }
       }
     }
     return 'none';
@@ -4833,13 +5183,15 @@ class SignalEngine extends ChangeNotifier {
     if (h.length >= 2 && l.isNotEmpty) {
       // Inducement high: intermediate high between two lows (draw liquidity above)
       if (h.last < h[h.length - 2] &&
-          (_currentPrice - h.last).abs() < _calculateAtr(5))
+          (_currentPrice - h.last).abs() < _calculateAtr(5)) {
         return 'inducement_high';
+      }
     }
     if (l.length >= 2 && h.isNotEmpty) {
       if (l.last > l[l.length - 2] &&
-          (_currentPrice - l.last).abs() < _calculateAtr(5))
+          (_currentPrice - l.last).abs() < _calculateAtr(5)) {
         return 'inducement_low';
+      }
     }
     return 'none';
   }
@@ -4864,8 +5216,9 @@ class SignalEngine extends ChangeNotifier {
     final lastClose = _candles.last.close,
         lastHL = (_candles.last.high + _candles.last.low) / 2;
     if (isDown && vr > 2.0 && atrR > 1.5 && lastClose > lastHL) return 'sc';
-    if (isDown && lastClose > _candles[_candles.length - 3].close * 1.005)
+    if (isDown && lastClose > _candles[_candles.length - 3].close * 1.005) {
       return 'ar';
+    }
     if (_detectWyckoffSpring() == 'bullish') return 'spring_test';
     if (!isDown && isUp && vr > 1.5) return 'sos';
     if (isUp && atrR < 0.7) return 'lps';
@@ -4886,8 +5239,9 @@ class SignalEngine extends ChangeNotifier {
     final hi = sub.map((c) => c.high).reduce(max),
         lo = sub.map((c) => c.low).reduce(min);
     final range = hi - lo;
-    if (range < 0.0001)
+    if (range < 0.0001) {
       return {'poc': _currentPrice, 'vah': _currentPrice, 'val': _currentPrice};
+    }
     final buckets = List<double>.filled(10, 0);
     for (final c in sub) {
       buckets[((c.close - lo) / range * 9).round().clamp(0, 9)] += c.volume;
@@ -4989,11 +5343,13 @@ class SignalEngine extends ChangeNotifier {
     final atr = _calculateAtr(14);
     for (int i = 2; i < _candles.length - 2; i++) {
       if (_candles[i].low > _candles[i - 1].high + atr * 0.5 &&
-          _candles[i + 1].high < _candles[i].low - atr * 0.5)
+          _candles[i + 1].high < _candles[i].low - atr * 0.5) {
         return 'bearish';
+      }
       if (_candles[i].high < _candles[i - 1].low - atr * 0.5 &&
-          _candles[i + 1].low > _candles[i].high + atr * 0.5)
+          _candles[i + 1].low > _candles[i].high + atr * 0.5) {
         return 'bullish';
+      }
     }
     return 'none';
   }
@@ -5024,13 +5380,15 @@ class SignalEngine extends ChangeNotifier {
     if (bottom &&
         extreme < first * 0.998 &&
         extreme < last * 0.998 &&
-        _currentPrice > last)
+        _currentPrice > last) {
       return 'bullish';
+    }
     if (!bottom &&
         extreme > first * 1.002 &&
         extreme > last * 1.002 &&
-        _currentPrice < last)
+        _currentPrice < last) {
       return 'bearish';
+    }
     return 'none';
   }
 
@@ -5179,8 +5537,9 @@ class SignalEngine extends ChangeNotifier {
     if (ts != 'new_york') return 'none';
     final now = DateTime.now().toUtc().subtract(const Duration(hours: 4)); // NY
     final h = now.hour, m = now.minute;
-    if ((h == 10 && m < 0) || (h == 10 && m >= 0 && h < 11))
+    if ((h == 10 && m < 0) || (h == 10 && m >= 0 && h < 11)) {
       return 'window_10_11';
+    }
     if (h == 14 || (h == 15 && m < 0)) return 'window_14_15';
     if (h == 15) return 'window_15_16';
     return 'none';
@@ -5240,10 +5599,12 @@ class SignalEngine extends ChangeNotifier {
     // Run: price reverting toward trend line
     final leadAvg =
         lead.map((c) => c.close).reduce((a, b) => a + b) / lead.length;
-    if (_currentPrice < leadAvg && bump.last.close < bump.first.close)
+    if (_currentPrice < leadAvg && bump.last.close < bump.first.close) {
       return 'bearish_run';
-    if (_currentPrice > leadAvg && bump.last.close > bump.first.close)
+    }
+    if (_currentPrice > leadAvg && bump.last.close > bump.first.close) {
       return 'bullish_run';
+    }
     return 'none';
   }
 
@@ -5372,12 +5733,14 @@ class SignalEngine extends ChangeNotifier {
       final gapDown = _candles[i - 1].low - _candles[i].high;
       if (gapUp > atr * 3 &&
           _currentPrice >= _candles[i - 1].high &&
-          _currentPrice <= _candles[i].low)
+          _currentPrice <= _candles[i].low) {
         return 'bullish';
+      }
       if (gapDown > atr * 3 &&
           _currentPrice >= _candles[i].high &&
-          _currentPrice <= _candles[i - 1].low)
+          _currentPrice <= _candles[i - 1].low) {
         return 'bearish';
+      }
     }
     return 'none';
   }
@@ -5513,10 +5876,12 @@ class SignalEngine extends ChangeNotifier {
     final volRatio = (_analyzeVolumeProfile()['ratio'] as double);
     final volDelta = _calculateVolumeDelta();
     final cmf = _calculateCmf(20);
-    if (volRatio > 1.5 && volDelta > 0 && cmf > 0.05)
+    if (volRatio > 1.5 && volDelta > 0 && cmf > 0.05) {
       return 'institutional_buying';
-    if (volRatio > 1.5 && volDelta < 0 && cmf < -0.05)
+    }
+    if (volRatio > 1.5 && volDelta < 0 && cmf < -0.05) {
       return 'institutional_selling';
+    }
     return 'none';
   }
 
@@ -6138,7 +6503,8 @@ class SignalEngine extends ChangeNotifier {
         // Update active candle (the last one)
         Candle activeCandle = _candles.last;
         activeCandle.close = _currentPrice;
-        if (_currentPrice > activeCandle.high) activeCandle.high = _currentPrice;
+        if (_currentPrice > activeCandle.high)
+          activeCandle.high = _currentPrice;
         if (_currentPrice < activeCandle.low) activeCandle.low = _currentPrice;
         // Accumulate tick volume on active candle
         activeCandle.volume += 10.0 + _random.nextDouble() * 50.0;
@@ -6696,8 +7062,14 @@ class SignalEngine extends ChangeNotifier {
     final bool rejected = _pyramidRejectReason.isNotEmpty;
     if (rejected || absScore < minScore) {
       _lastWaitNotice = rejected
-          ? tr('لا توجد فرصة دخول الآن — لم تتحقق شروط الاستراتيجية', 'No entry opportunity now — the strategy conditions were not met')
-          : tr('لا توجد فرصة دخول الآن — لم يتحقق الحد الأدنى للتوافق (min_score)', 'No entry opportunity now — the minimum confluence (min_score) was not reached');
+          ? tr(
+              'لا توجد فرصة دخول الآن — لم تتحقق شروط الاستراتيجية',
+              'No entry opportunity now — the strategy conditions were not met',
+            )
+          : tr(
+              'لا توجد فرصة دخول الآن — لم يتحقق الحد الأدنى للتوافق (min_score)',
+              'No entry opportunity now — the minimum confluence (min_score) was not reached',
+            );
       _activeSignal = null;
       _secondsRemaining = 0;
       evalJs("CandleChart.setGlobalEntryLine(null, null)");
@@ -6749,13 +7121,25 @@ class SignalEngine extends ChangeNotifier {
       marketCondition: _userRole == 'vip'
           ? '${_vipLastResult?.grade ?? "VIP"} | Score: ${_vipLastResult?.overallScore.toStringAsFixed(0) ?? "—"}/100 | ${_vipLastResult?.riskAssessment ?? ""}'
           : (isCall
-                ? tr('اتجاه صاعد مستقر وقوي مدعوم بسيولة ممتازة ✅', 'Stable, strong uptrend backed by excellent liquidity ✅')
-                : tr('اتجاه هابط حاد وضغط بيعي قوي مدعوم بسيولة ممتازة ✅', 'Sharp downtrend with strong selling pressure backed by excellent liquidity ✅')),
+                ? tr(
+                    'اتجاه صاعد مستقر وقوي مدعوم بسيولة ممتازة ✅',
+                    'Stable, strong uptrend backed by excellent liquidity ✅',
+                  )
+                : tr(
+                    'اتجاه هابط حاد وضغط بيعي قوي مدعوم بسيولة ممتازة ✅',
+                    'Sharp downtrend with strong selling pressure backed by excellent liquidity ✅',
+                  )),
       recommendation: _userRole == 'vip'
           ? '${isCall ? "VIP CALL ✅" : "VIP PUT ✅"} | ${_vipLastResult?.historical?.summary ?? tr("تحليل مزدوج مؤكد", "Confirmed dual analysis")}'
           : (isCall
-                ? tr('دخول صفقة صعود (CALL) فوراً - فرصة دخول آمنة ونسبة نجاح عالية.', 'Enter a CALL trade now — a safe entry with a high success rate.')
-                : tr('دخول صفقة هبوط (PUT) فوراً - فرصة دخول آمنة ونسبة نجاح عالية.', 'Enter a PUT trade now — a safe entry with a high success rate.')),
+                ? tr(
+                    'دخول صفقة صعود (CALL) فوراً - فرصة دخول آمنة ونسبة نجاح عالية.',
+                    'Enter a CALL trade now — a safe entry with a high success rate.',
+                  )
+                : tr(
+                    'دخول صفقة هبوط (PUT) فوراً - فرصة دخول آمنة ونسبة نجاح عالية.',
+                    'Enter a PUT trade now — a safe entry with a high success rate.',
+                  )),
     );
 
     _secondsRemaining = alignedDuration;
@@ -6777,8 +7161,9 @@ class SignalEngine extends ChangeNotifier {
     // VIP: skip direction flip if consensus engine rejected the setup
     if (_userRole == 'vip' &&
         _vipLastResult != null &&
-        !_vipLastResult!.isApproved)
+        !_vipLastResult!.isApproved) {
       return;
+    }
     bool isCall = netScore >= 0;
     double absScore = netScore.abs();
 
@@ -6807,13 +7192,25 @@ class SignalEngine extends ChangeNotifier {
         marketCondition: _userRole == 'vip'
             ? '${_vipLastResult?.grade ?? "VIP"} | Score: ${_vipLastResult?.overallScore.toStringAsFixed(0) ?? "—"}/100 | ${_vipLastResult?.riskAssessment ?? ""}'
             : (newDirection == 'CALL'
-                  ? tr('تم تحديث الاتجاه إلى صعود قوي ✅', 'Direction updated to a strong uptrend ✅')
-                  : tr('تم تحديث الاتجاه إلى هبوط قوي ✅', 'Direction updated to a strong downtrend ✅')),
+                  ? tr(
+                      'تم تحديث الاتجاه إلى صعود قوي ✅',
+                      'Direction updated to a strong uptrend ✅',
+                    )
+                  : tr(
+                      'تم تحديث الاتجاه إلى هبوط قوي ✅',
+                      'Direction updated to a strong downtrend ✅',
+                    )),
         recommendation: _userRole == 'vip'
             ? '${newDirection == "CALL" ? "VIP CALL ✅" : "VIP PUT ✅"} | ${_vipLastResult?.historical?.summary ?? tr("تحليل مزدوج مؤكد", "Confirmed dual analysis")}'
             : (newDirection == 'CALL'
-                  ? tr('تحديث التوصية: دخول صفقة صعود (CALL) مع الشمعة الحالية.', 'Updated recommendation: enter a CALL trade with the current candle.')
-                  : tr('تحديث التوصية: دخول صفقة هبوط (PUT) مع الشمعة الحالية.', 'Updated recommendation: enter a PUT trade with the current candle.')),
+                  ? tr(
+                      'تحديث التوصية: دخول صفقة صعود (CALL) مع الشمعة الحالية.',
+                      'Updated recommendation: enter a CALL trade with the current candle.',
+                    )
+                  : tr(
+                      'تحديث التوصية: دخول صفقة هبوط (PUT) مع الشمعة الحالية.',
+                      'Updated recommendation: enter a PUT trade with the current candle.',
+                    )),
       );
 
       String tfLabel = tr('دقيقة واحدة', '1 minute');
@@ -6828,8 +7225,14 @@ class SignalEngine extends ChangeNotifier {
       }
 
       _signalChangeNotice = _userRole == 'vip'
-          ? tr('تنبيه VIP: تم تصحيح مسار الإشارة وتحديث الاتجاه فوراً ($tfLabel)', 'VIP alert: the signal path was corrected and the direction updated instantly ($tfLabel)')
-          : tr('تم تحديث اتجاه الإشارة مع الشمعة الحالية ($tfLabel)', 'The signal direction was updated with the current candle ($tfLabel)');
+          ? tr(
+              'تنبيه VIP: تم تصحيح مسار الإشارة وتحديث الاتجاه فوراً ($tfLabel)',
+              'VIP alert: the signal path was corrected and the direction updated instantly ($tfLabel)',
+            )
+          : tr(
+              'تم تحديث اتجاه الإشارة مع الشمعة الحالية ($tfLabel)',
+              'The signal direction was updated with the current candle ($tfLabel)',
+            );
 
       _playNewSignalSound();
       notifyListeners();
@@ -6858,14 +7261,17 @@ class SignalEngine extends ChangeNotifier {
       // same scale we keep it (so the number matches the chart); otherwise we
       // snap to a small realistic margin. Either way it is always a win and the
       // entry/exit pair is always coherent — never derived from another scale.
-      final bool winning = liveSane &&
+      final bool winning =
+          liveSane &&
           (isCall ? live > signal.entryPrice : live < signal.entryPrice);
       if (winning) {
         exitP = live;
       } else {
         final double margin =
             signal.entryPrice * 0.00008 * (0.6 + _random.nextDouble() * 0.8);
-        exitP = isCall ? signal.entryPrice + margin : signal.entryPrice - margin;
+        exitP = isCall
+            ? signal.entryPrice + margin
+            : signal.entryPrice - margin;
       }
     }
 
@@ -6881,7 +7287,8 @@ class SignalEngine extends ChangeNotifier {
       result = 'TIE';
     } else if (isCall) {
       result = diff > 0 ? 'WIN' : 'LOSS';
-    } else { // PUT
+    } else {
+      // PUT
       result = diff < 0 ? 'WIN' : 'LOSS';
     }
 
@@ -7146,7 +7553,10 @@ class SignalEngine extends ChangeNotifier {
         quality: 0,
         status: 'FAIL',
         evidence: const ['Insufficient candle data (<20)'],
-        summary: tr('FAIL: بيانات غير كافية — رفض', 'FAIL: Insufficient data — rejected'),
+        summary: tr(
+          'FAIL: بيانات غير كافية — رفض',
+          'FAIL: Insufficient data — rejected',
+        ),
       );
     }
     final adxD = _calculateAdxFull(14);
@@ -7159,8 +7569,9 @@ class SignalEngine extends ChangeNotifier {
     int dirChanges = 0;
     for (int i = max(2, _candles.length - 8); i < _candles.length; i++) {
       if ((_candles[i].close > _candles[i - 1].close) !=
-          (_candles[i - 1].close > _candles[i - 2].close))
+          (_candles[i - 1].close > _candles[i - 2].close)) {
         dirChanges++;
+      }
     }
     if (adx < 15 && dirChanges >= 4) {
       return EngineResult(
@@ -7168,7 +7579,10 @@ class SignalEngine extends ChangeNotifier {
         quality: 0,
         status: 'FAIL',
         evidence: const ['ADX < 15 + Erratic moves — Chaotic'],
-        summary: tr('FAIL: سوق عشوائي فوضوي — رفض فوري', 'FAIL: Random chaotic market — instant rejection'),
+        summary: tr(
+          'FAIL: سوق عشوائي فوضوي — رفض فوري',
+          'FAIL: Random chaotic market — instant rejection',
+        ),
       );
     }
     if (adx < 15 && atr < avgR * 0.4) {
@@ -7177,7 +7591,10 @@ class SignalEngine extends ChangeNotifier {
         quality: 0,
         status: 'FAIL',
         evidence: const ['ADX < 15 + Tight ATR — Sideways/Range'],
-        summary: tr('FAIL: سوق عرضي مضغوط — رفض', 'FAIL: Tight sideways market — rejected'),
+        summary: tr(
+          'FAIL: سوق عرضي مضغوط — رفض',
+          'FAIL: Tight sideways market — rejected',
+        ),
       );
     }
 
@@ -7280,8 +7697,9 @@ class SignalEngine extends ChangeNotifier {
         status: 'FAIL',
         evidence: ['ADX ${adx.toStringAsFixed(0)} < 20'],
         summary: tr(
-            'FAIL: Weak Trend Regime (ADX ${adx.toStringAsFixed(0)}) — رفض',
-            'FAIL: Weak Trend Regime (ADX ${adx.toStringAsFixed(0)}) — rejected'),
+          'FAIL: Weak Trend Regime (ADX ${adx.toStringAsFixed(0)}) — رفض',
+          'FAIL: Weak Trend Regime (ADX ${adx.toStringAsFixed(0)}) — rejected',
+        ),
       );
     }
     if (bbWp < 0.12 && atr < avgR * 0.45) {
@@ -7293,7 +7711,10 @@ class SignalEngine extends ChangeNotifier {
           'BB Width ${bbWp.toStringAsFixed(3)}% compressed',
           'ATR low',
         ],
-        summary: tr('FAIL: Compression Regime — رفض', 'FAIL: Compression Regime — rejected'),
+        summary: tr(
+          'FAIL: Compression Regime — رفض',
+          'FAIL: Compression Regime — rejected',
+        ),
       );
     }
 
@@ -7371,12 +7792,15 @@ class SignalEngine extends ChangeNotifier {
     int fH4 = max(1, (14400 / tfSec).round());
     int fH1 = max(1, (3600 / tfSec).round());
     int fM30 = max(1, (1800 / tfSec).round());
-    if (_candles.length >= fH4 * 3)
+    if (_candles.length >= fH4 * 3) {
       analyzeHtf(_aggregateCandles(fH4), 'H4-sim');
-    if (_candles.length >= fH1 * 3)
+    }
+    if (_candles.length >= fH1 * 3) {
       analyzeHtf(_aggregateCandles(fH1), 'H1-sim');
-    if (_candles.length >= fM30 * 3)
+    }
+    if (_candles.length >= fM30 * 3) {
       analyzeHtf(_aggregateCandles(fM30), 'M30-sim');
+    }
 
     if (votes.isEmpty) {
       final e50 = _calculateEma(min(50, _candles.length));
@@ -7402,7 +7826,10 @@ class SignalEngine extends ChangeNotifier {
         quality: 20,
         status: 'FAIL',
         evidence: evid,
-        summary: tr('FAIL: HTF Major Conflict (Bull:$bull Bear:$bear) — رفض', 'FAIL: HTF Major Conflict (Bull:$bull Bear:$bear) — rejected'),
+        summary: tr(
+          'FAIL: HTF Major Conflict (Bull:$bull Bear:$bear) — رفض',
+          'FAIL: HTF Major Conflict (Bull:$bull Bear:$bear) — rejected',
+        ),
       );
     }
     String dir = bull > bear
@@ -7454,12 +7881,15 @@ class SignalEngine extends ChangeNotifier {
     int f5 = max(1, (300 / tfSec).round());
     int f15 = max(1, (900 / tfSec).round());
     int f30 = max(1, (1800 / tfSec).round());
-    if (f5 > 1 && _candles.length >= f5 * 5)
+    if (f5 > 1 && _candles.length >= f5 * 5) {
       analyzeMtf(_aggregateCandles(f5), 'M5-sim');
-    if (f15 > 1 && _candles.length >= f15 * 5)
+    }
+    if (f15 > 1 && _candles.length >= f15 * 5) {
       analyzeMtf(_aggregateCandles(f15), 'M15-sim');
-    if (f30 > 1 && _candles.length >= f30 * 5)
+    }
+    if (f30 > 1 && _candles.length >= f30 * 5) {
       analyzeMtf(_aggregateCandles(f30), 'M30-sim');
+    }
 
     if (dirs.isEmpty) {
       return const EngineResult(
@@ -7479,7 +7909,10 @@ class SignalEngine extends ChangeNotifier {
         quality: 0,
         status: 'FAIL',
         evidence: [...evid, 'MTF Major Conflict: $bull Bull / $bear Bear'],
-        summary: tr('FAIL: MTF Major Conflict — رفض', 'FAIL: MTF Major Conflict — rejected'),
+        summary: tr(
+          'FAIL: MTF Major Conflict — رفض',
+          'FAIL: MTF Major Conflict — rejected',
+        ),
       );
     }
     double avgQ = qs.reduce((a, b) => a + b) / qs.length;
@@ -7521,7 +7954,10 @@ class SignalEngine extends ChangeNotifier {
         quality: 0,
         status: 'FAIL',
         evidence: ['ADX ${adx.toStringAsFixed(0)} < 17 — Trend too weak'],
-        summary: tr('FAIL: ADX ${adx.toStringAsFixed(0)} — Trend too weak — رفض', 'FAIL: ADX ${adx.toStringAsFixed(0)} — Trend too weak — rejected'),
+        summary: tr(
+          'FAIL: ADX ${adx.toStringAsFixed(0)} — Trend too weak — رفض',
+          'FAIL: ADX ${adx.toStringAsFixed(0)} — Trend too weak — rejected',
+        ),
       );
     }
 
@@ -7802,7 +8238,10 @@ class SignalEngine extends ChangeNotifier {
         quality: score.clamp(0, 100),
         status: 'FAIL',
         evidence: [...evid, ...weak.map((w) => '⚠ $w')],
-        summary: tr('FAIL: No BOS + No OB + No FVG — Zero SMC evidence — رفض', 'FAIL: No BOS + No OB + No FVG — Zero SMC evidence — rejected'),
+        summary: tr(
+          'FAIL: No BOS + No OB + No FVG — Zero SMC evidence — رفض',
+          'FAIL: No BOS + No OB + No FVG — Zero SMC evidence — rejected',
+        ),
       );
     }
     double quality = score.clamp(0, 100);
@@ -7813,8 +8252,9 @@ class SignalEngine extends ChangeNotifier {
         status: 'FAIL',
         evidence: [...evid, ...weak.map((w) => '⚠ $w')],
         summary: tr(
-            'FAIL: SMC Quality ${quality.toStringAsFixed(0)} — Zero institutional evidence — رفض',
-            'FAIL: SMC Quality ${quality.toStringAsFixed(0)} — Zero institutional evidence — rejected'),
+          'FAIL: SMC Quality ${quality.toStringAsFixed(0)} — Zero institutional evidence — رفض',
+          'FAIL: SMC Quality ${quality.toStringAsFixed(0)} — Zero institutional evidence — rejected',
+        ),
       );
     }
     return EngineResult(
@@ -8020,7 +8460,10 @@ class SignalEngine extends ChangeNotifier {
         sampleSize: 0,
         winRate: 0,
         verdict: 'FAIL',
-        summary: tr('Historical: HISTORICAL DATA NOT AVAILABLE — بيانات غير كافية', 'Historical: HISTORICAL DATA NOT AVAILABLE — insufficient data'),
+        summary: tr(
+          'Historical: HISTORICAL DATA NOT AVAILABLE — بيانات غير كافية',
+          'Historical: HISTORICAL DATA NOT AVAILABLE — insufficient data',
+        ),
       );
     }
 
@@ -8117,8 +8560,9 @@ class SignalEngine extends ChangeNotifier {
         double worst = entry;
         for (int j = i + 1; j <= fi; j++) {
           if (direction > 0 && _candles[j].low < worst) worst = _candles[j].low;
-          if (direction < 0 && _candles[j].high > worst)
+          if (direction < 0 && _candles[j].high > worst) {
             worst = _candles[j].high;
+          }
         }
         if (entry > 0) totalDd += (worst - entry).abs() / entry * 100;
       }

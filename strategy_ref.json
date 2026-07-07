@@ -1,0 +1,1642 @@
+{
+  "system_info": {
+    "title": "Euro Trade Strategy Rules Engine Specification",
+    "version": "2.0.0",
+    "description": "Comprehensive reference guide of all technical indicators, chart patterns, candlestick formations, market structures, and session filters supported by the Euro Trade signals engine.",
+    "syntax_rules": {
+      "strategy_format": "The strategy uploaded from the admin panel to configs/strategy_standard or configs/strategy_vip must be a single JSON object wrapping the rules inside a 'rules' array. Optionally, a 'pyramid' object can be included.",
+      "pyramid_structure": {
+        "pyramid": {
+          "min_primary_score": 3.0,
+          "confirmation_ratio": 0.5,
+          "require_all_filters": true,
+          "wait_message": "الهرم لم يكتمل — انتظار الشمعة القادمة"
+        }
+      }
+    }
+  },
+  "global_parameters": {
+    "indicator": "String (Name of the indicator case)",
+    "condition": "String (Comparison operator to evaluate indicator output)",
+    "signal": "String (CALL | PUT | dominant | confirm)",
+    "score": "Double (Points assigned if condition is met)",
+    "enabled": "Boolean (true/false)",
+    "role": "String (Optional. Use 'primary' for direction-defining rules, 'confirm' for stage-2 checks, 'filter' for hard gating in Pyramid mode, or '' empty for standard scoring)",
+    "period": "Integer (Optional, defaults to 14. Used for indicator lookbacks)",
+    "fast": "Integer (Optional, defaults to 9. Fast period for MACD or EMA cross)",
+    "slow": "Integer (Optional, defaults to 21. Slow period for MACD or EMA cross)",
+    "smooth": "Integer (Optional, defaults to 3. Smoothing factor for Stochastic)",
+    "stddev": "Double (Optional, defaults to 2.0. Bollinger Bands standard deviation multiplier)",
+    "value": "Double (Optional constant value to compare against)",
+    "value_min": "Double (Optional lower bound for 'between' condition)",
+    "value_max": "Double (Optional upper bound for 'between' condition)",
+    "pattern": "String (Optional. Specifies patterns like candle patterns, waves, sessions, or custom targets)"
+  },
+  "supported_conditions": {
+    "numeric_outputs": [
+      { "name": "gt", "description": "Greater than (v > value)" },
+      { "name": "lt", "description": "Less than (v < value)" },
+      { "name": "gte", "description": "Greater than or equal (v >= value)" },
+      { "name": "lte", "description": "Less than or equal (v <= value)" },
+      { "name": "eq", "description": "Exactly equal (v == value)" },
+      { "name": "neq", "description": "Not equal (v != value)" },
+      { "name": "between", "description": "Between range (v >= value_min && v <= value_max)" },
+      { "name": "bullish", "description": "Positive value (v > 0)" },
+      { "name": "bearish", "description": "Negative value (v < 0)" },
+      { "name": "is_true", "description": "Non-zero (v != 0)" },
+      { "name": "is_false", "description": "Zero (v == 0)" },
+      { "name": "gt_average", "description": "Above average (v > 1.0)" },
+      { "name": "lt_average", "description": "Below average (v < 1.0)" }
+    ],
+    "string_outputs": [
+      { "name": "eq", "description": "Matches pattern exactly (raw == pattern)" },
+      { "name": "neq", "description": "Does not match pattern (raw != pattern)" },
+      { "name": "bullish", "description": "Matches if string contains: 'bullish', 'hammer', 'morning', 'soldiers', or 'pin_bar_b'" },
+      { "name": "bearish", "description": "Matches if string contains: 'bearish', 'shooting', 'evening', 'crows', or 'pin_bar_bear'" }
+    ]
+  },
+  "indicators": {
+    "oscillators": [
+      {
+        "indicator": "rsi",
+        "parameters": ["period"],
+        "output": "Double (RSI value, e.g. 0 to 100)",
+        "description": "Relative Strength Index."
+      },
+      {
+        "indicator": "macd_histogram",
+        "parameters": [],
+        "output": "Double (MACD histogram value)",
+        "description": "Moving Average Convergence Divergence histogram."
+      },
+      {
+        "indicator": "macd_line",
+        "parameters": [],
+        "output": "Double (MACD main line value)",
+        "description": "MACD line."
+      },
+      {
+        "indicator": "macd_signal",
+        "parameters": [],
+        "output": "Double (MACD signal line value)",
+        "description": "MACD signal line."
+      },
+      {
+        "indicator": "stoch_k",
+        "parameters": ["period", "smooth"],
+        "output": "Double (Stochastic %K value, 0 to 100)",
+        "description": "Stochastic %K oscillator."
+      },
+      {
+        "indicator": "stoch_d",
+        "parameters": ["period", "smooth"],
+        "output": "Double (Stochastic %D value, 0 to 100)",
+        "description": "Stochastic %D oscillator."
+      },
+      {
+        "indicator": "stoch_cross",
+        "parameters": ["period", "smooth"],
+        "output": "Double (K - D difference. Positive = bullish cross, Negative = bearish cross)",
+        "description": "Stochastic K line minus D line cross value."
+      },
+      {
+        "indicator": "cci",
+        "parameters": ["period"],
+        "output": "Double (CCI value, e.g. -200 to +200)",
+        "description": "Commodity Channel Index."
+      },
+      {
+        "indicator": "mfi",
+        "parameters": ["period"],
+        "output": "Double (MFI value, 0 to 100)",
+        "description": "Money Flow Index (Volume-weighted RSI)."
+      },
+      {
+        "indicator": "williams_r",
+        "parameters": ["period"],
+        "output": "Double (Williams %R value, -100 to 0)",
+        "description": "Williams %R momentum indicator."
+      },
+      {
+        "indicator": "roc",
+        "parameters": ["period"],
+        "output": "Double (Rate of Change percentage)",
+        "description": "Rate of Change."
+      },
+      {
+        "indicator": "ultimate_oscillator",
+        "parameters": [],
+        "output": "Double",
+        "description": "Ultimate Oscillator."
+      },
+      {
+        "indicator": "tsi",
+        "parameters": [],
+        "output": "Double",
+        "description": "True Strength Index."
+      },
+      {
+        "indicator": "fisher_transform",
+        "parameters": ["period"],
+        "output": "Double",
+        "description": "Fisher Transform."
+      },
+      {
+        "indicator": "cmo",
+        "parameters": ["period"],
+        "output": "Double",
+        "description": "Chande Momentum Oscillator."
+      },
+      {
+        "indicator": "rvi",
+        "parameters": ["period"],
+        "output": "Double",
+        "description": "Relative Vigor Index."
+      },
+      {
+        "indicator": "dpo",
+        "parameters": ["period"],
+        "output": "Double",
+        "description": "Detrended Price Oscillator."
+      },
+      {
+        "indicator": "connors_rsi",
+        "parameters": [],
+        "output": "Double",
+        "description": "Connors RSI."
+      },
+      {
+        "indicator": "stc",
+        "parameters": [],
+        "output": "Double",
+        "description": "Schaff Trend Cycle."
+      },
+      {
+        "indicator": "ao",
+        "parameters": [],
+        "output": "Double",
+        "description": "Awesome Oscillator."
+      },
+      {
+        "indicator": "awesome_oscillator",
+        "parameters": [],
+        "output": "Double",
+        "description": "Awesome Oscillator (alias)."
+      },
+      {
+        "indicator": "ac",
+        "parameters": [],
+        "output": "Double",
+        "description": "Accelerator Oscillator."
+      },
+      {
+        "indicator": "accelerator_oscillator",
+        "parameters": [],
+        "output": "Double",
+        "description": "Accelerator Oscillator (alias)."
+      },
+      {
+        "indicator": "ppo",
+        "parameters": [],
+        "output": "Double",
+        "description": "Percentage Price Oscillator."
+      },
+      {
+        "indicator": "trix",
+        "parameters": ["period"],
+        "output": "Double",
+        "description": "Trix Oscillator."
+      },
+      {
+        "indicator": "kst",
+        "parameters": [],
+        "output": "Double",
+        "description": "Know Sure Thing."
+      }
+    ],
+    "trend_following": [
+      {
+        "indicator": "ema",
+        "parameters": ["period"],
+        "output": "Double (EMA price value)",
+        "description": "Exponential Moving Average."
+      },
+      {
+        "indicator": "ema_cross",
+        "parameters": ["fast", "slow"],
+        "output": "Double (Fast EMA minus Slow EMA. Positive = bullish trend, Negative = bearish trend)",
+        "description": "Difference between two EMAs."
+      },
+      {
+        "indicator": "adx",
+        "parameters": ["period"],
+        "output": "Double (ADX value, 0 to 100)",
+        "description": "Average Directional Index (Trend Strength)."
+      },
+      {
+        "indicator": "plus_di",
+        "parameters": ["period"],
+        "output": "Double (+DI value)",
+        "description": "Positive Directional Indicator."
+      },
+      {
+        "indicator": "minus_di",
+        "parameters": ["period"],
+        "output": "Double (-DI value)",
+        "description": "Negative Directional Indicator."
+      },
+      {
+        "indicator": "supertrend",
+        "parameters": ["period", "value"],
+        "output": "Double (1.0 for bullish, -1.0 for bearish)",
+        "description": "SuperTrend trend indicator. Use 'value' to pass multiplier (default is 3.0)."
+      },
+      {
+        "indicator": "ichimoku",
+        "parameters": [],
+        "output": "Double (1.0 for bullish, -1.0 for bearish, 0.0 neutral)",
+        "description": "Ichimoku Cloud status."
+      },
+      {
+        "indicator": "hma",
+        "parameters": ["period"],
+        "output": "Double",
+        "description": "Hull Moving Average."
+      },
+      {
+        "indicator": "hull_ma",
+        "parameters": ["period"],
+        "output": "Double",
+        "description": "Hull Moving Average (alias)."
+      },
+      {
+        "indicator": "dema",
+        "parameters": ["period"],
+        "output": "Double",
+        "description": "Double Exponential Moving Average."
+      },
+      {
+        "indicator": "tema",
+        "parameters": ["period"],
+        "output": "Double",
+        "description": "Triple Exponential Moving Average."
+      },
+      {
+        "indicator": "alma",
+        "parameters": ["period"],
+        "output": "Double",
+        "description": "Arnaud Legoux Moving Average."
+      },
+      {
+        "indicator": "lsma",
+        "parameters": ["period"],
+        "output": "Double",
+        "description": "Least Squares Moving Average."
+      },
+      {
+        "indicator": "linear_regression",
+        "parameters": ["period"],
+        "output": "Double",
+        "description": "Linear Regression curve (alias of lsma)."
+      },
+      {
+        "indicator": "aroon_up",
+        "parameters": ["period"],
+        "output": "Double (0 to 100)",
+        "description": "Aroon Up."
+      },
+      {
+        "indicator": "aroon_down",
+        "parameters": ["period"],
+        "output": "Double (0 to 100)",
+        "description": "Aroon Down."
+      },
+      {
+        "indicator": "aroon",
+        "parameters": ["period"],
+        "output": "Double (-100 to 100)",
+        "description": "Aroon Oscillator (Aroon Up - Aroon Down)."
+      },
+      {
+        "indicator": "aroon_oscillator",
+        "parameters": ["period"],
+        "output": "Double (-100 to 100)",
+        "description": "Aroon Oscillator (alias)."
+      },
+      {
+        "indicator": "vortex_plus",
+        "parameters": ["period"],
+        "output": "Double",
+        "description": "Vortex VI+."
+      },
+      {
+        "indicator": "vortex_minus",
+        "parameters": ["period"],
+        "output": "Double",
+        "description": "Vortex VI-."
+      },
+      {
+        "indicator": "vortex",
+        "parameters": ["period"],
+        "output": "Double (VI+ minus VI-)",
+        "description": "Vortex Oscillator."
+      },
+      {
+        "indicator": "alligator",
+        "parameters": [],
+        "output": "Double (1.0 bullish, -1.0 bearish, 0.0 neutral)",
+        "description": "Williams Alligator."
+      },
+      {
+        "indicator": "trend_following",
+        "parameters": [],
+        "output": "Double (1.0 bullish, -1.0 bearish, 0.0 sideways)",
+        "description": "General Trend following filter."
+      },
+      {
+        "indicator": "dow_theory",
+        "parameters": [],
+        "output": "String ('uptrend' | 'downtrend' | 'sideways')",
+        "description": "Market trend classification using Dow Theory swing points."
+      }
+    ],
+    "volatility_and_bands": [
+      {
+        "indicator": "atr",
+        "parameters": ["period"],
+        "output": "Double (ATR value in price unit, e.g. 0.00045)",
+        "description": "Average True Range (Volatility measure)."
+      },
+      {
+        "indicator": "bb_position",
+        "parameters": ["period", "stddev"],
+        "output": "Double (Percentage location. 0 = lower band, 100 = upper band, 50 = middle. Can go below 0 or above 100)",
+        "description": "Current price position relative to Bollinger Bands."
+      },
+      {
+        "indicator": "bb_upper",
+        "parameters": ["period", "stddev"],
+        "output": "Double (Upper Bollinger Band price)",
+        "description": "Upper Bollinger Band."
+      },
+      {
+        "indicator": "bb_lower",
+        "parameters": ["period", "stddev"],
+        "output": "Double (Lower Bollinger Band price)",
+        "description": "Lower Bollinger Band."
+      },
+      {
+        "indicator": "bb_width",
+        "parameters": ["period", "stddev"],
+        "output": "Double (Upper minus Lower band value)",
+        "description": "Bollinger Band Width (Volatility band expansion)."
+      },
+      {
+        "indicator": "keltner_channel",
+        "parameters": [],
+        "output": "Double (1.0 bullish breakout, -1.0 bearish breakdown, 0.0 inside bands)",
+        "description": "Keltner Channel breakout status."
+      },
+      {
+        "indicator": "donchian_channel",
+        "parameters": ["period"],
+        "output": "Double (1.0 breakout high, -1.0 breakdown low, 0.0 inside)",
+        "description": "Donchian Channel status."
+      },
+      {
+        "indicator": "mass_index",
+        "parameters": ["period"],
+        "output": "Double",
+        "description": "Mass Index."
+      },
+      {
+        "indicator": "historical_volatility",
+        "parameters": ["period"],
+        "output": "Double",
+        "description": "Historical Volatility percentage."
+      },
+      {
+        "indicator": "hv",
+        "parameters": ["period"],
+        "output": "Double",
+        "description": "Historical Volatility (alias)."
+      },
+      {
+        "indicator": "ulcer_index",
+        "parameters": ["period"],
+        "output": "Double",
+        "description": "Ulcer Index."
+      },
+      {
+        "indicator": "starc_bands",
+        "parameters": [],
+        "output": "Double",
+        "description": "STARC Bands position."
+      },
+      {
+        "indicator": "starc",
+        "parameters": [],
+        "output": "Double",
+        "description": "STARC Bands (alias)."
+      },
+      {
+        "indicator": "chaikin_volatility",
+        "parameters": ["period"],
+        "output": "Double",
+        "description": "Chaikin Volatility."
+      }
+    ],
+    "volume_and_liquidity": [
+      {
+        "indicator": "cmf",
+        "parameters": ["period"],
+        "output": "Double (Chaikin Money Flow, e.g. -0.5 to +0.5)",
+        "description": "Chaikin Money Flow."
+      },
+      {
+        "indicator": "vol_delta",
+        "parameters": [],
+        "output": "Double (Volume delta - buying pressure vs selling pressure)",
+        "description": "Volume Delta."
+      },
+      {
+        "indicator": "vol_ratio",
+        "parameters": [],
+        "output": "Double (Ratio of current volume to average volume)",
+        "description": "Volume Ratio. Values > 1.0 indicate above average volume."
+      },
+      {
+        "indicator": "volume",
+        "parameters": [],
+        "output": "Double (Alias of vol_ratio)",
+        "description": "Volume profile ratio."
+      },
+      {
+        "indicator": "obv",
+        "parameters": [],
+        "output": "Double (Cumulative On-Balance Volume)",
+        "description": "On-Balance Volume."
+      },
+      {
+        "indicator": "vwap",
+        "parameters": [],
+        "output": "Double (VWAP price value)",
+        "description": "Volume Weighted Average Price. Note: Do not compare vwap directly with 0; use price_vs_vwap for cross strategies."
+      },
+      {
+        "indicator": "price_vs_vwap",
+        "parameters": [],
+        "output": "Double (Current Price minus VWAP. Positive = Price above VWAP, Negative = Price below VWAP)",
+        "description": "Distance between Price and VWAP. Perfect for cross strategies (gt 0 for CALL, lt 0 for PUT)."
+      },
+      {
+        "indicator": "liquidity_score",
+        "parameters": [],
+        "output": "Double (0 to 100, closeness to order book liquidity zones)",
+        "description": "Liquidity zone score."
+      },
+      {
+        "indicator": "emv",
+        "parameters": ["period"],
+        "output": "Double",
+        "description": "Ease of Movement."
+      },
+      {
+        "indicator": "ease_of_movement",
+        "parameters": ["period"],
+        "output": "Double",
+        "description": "Ease of Movement (alias)."
+      },
+      {
+        "indicator": "pvt",
+        "parameters": [],
+        "output": "Double",
+        "description": "Price Volume Trend."
+      },
+      {
+        "indicator": "klinger",
+        "parameters": [],
+        "output": "Double",
+        "description": "Klinger Oscillator."
+      },
+      {
+        "indicator": "klinger_oscillator",
+        "parameters": [],
+        "output": "Double",
+        "description": "Klinger Oscillator (alias)."
+      },
+      {
+        "indicator": "nvi",
+        "parameters": [],
+        "output": "Double",
+        "description": "Negative Volume Index."
+      },
+      {
+        "indicator": "pvi",
+        "parameters": [],
+        "output": "Double",
+        "description": "Positive Volume Index."
+      },
+      {
+        "indicator": "volume_oscillator",
+        "parameters": ["fast", "slow"],
+        "output": "Double",
+        "description": "Volume Oscillator."
+      },
+      {
+        "indicator": "cvd",
+        "parameters": [],
+        "output": "Double",
+        "description": "Cumulative Volume Delta."
+      },
+      {
+        "indicator": "cumulative_volume_delta",
+        "parameters": [],
+        "output": "Double",
+        "description": "Cumulative Volume Delta (alias)."
+      }
+    ],
+    "support_resistance_and_liquidity_zones": [
+      {
+        "indicator": "sr_support",
+        "parameters": [],
+        "output": "Double (Nearest support line price)",
+        "description": "Support Level."
+      },
+      {
+        "indicator": "sr_resistance",
+        "parameters": [],
+        "output": "Double (Nearest resistance line price)",
+        "description": "Resistance Level."
+      },
+      {
+        "indicator": "supply_demand",
+        "parameters": [],
+        "output": "String ('supply' | 'demand' | 'none')",
+        "description": "Supply & Demand Zone detection."
+      },
+      {
+        "indicator": "liquidity_voids",
+        "parameters": [],
+        "output": "Double (1.0 bullish gap, -1.0 bearish gap, 0.0 none)",
+        "description": "Liquidity void / gap indicator."
+      },
+      {
+        "indicator": "market_profile",
+        "parameters": [],
+        "output": "String ('at_poc' | 'above_vah' | 'below_val' | 'inside')",
+        "description": "Market Profile Position."
+      },
+      {
+        "indicator": "tpo",
+        "parameters": [],
+        "output": "String (alias of market_profile)",
+        "description": "Market Profile TPO position."
+      },
+      {
+        "indicator": "poc",
+        "parameters": [],
+        "output": "Double (Point of Control price)",
+        "description": "Market Profile Point of Control."
+      },
+      {
+        "indicator": "vah",
+        "parameters": [],
+        "output": "Double (Value Area High price)",
+        "description": "Market Profile Value Area High."
+      },
+      {
+        "indicator": "val",
+        "parameters": [],
+        "output": "Double (Value Area Low price)",
+        "description": "Market Profile Value Area Low."
+      },
+      {
+        "indicator": "pivot_point",
+        "parameters": [],
+        "output": "Double (Standard pivot point price)",
+        "description": "Standard Pivot Point."
+      },
+      {
+        "indicator": "cpr",
+        "parameters": [],
+        "output": "Double",
+        "description": "Central Pivot Range (middle line)."
+      },
+      {
+        "indicator": "camarilla_pivot",
+        "parameters": [],
+        "output": "Double",
+        "description": "Camarilla Pivot point."
+      },
+      {
+        "indicator": "camarilla",
+        "parameters": [],
+        "output": "Double (alias of camarilla_pivot)",
+        "description": "Camarilla Pivot (alias)."
+      },
+      {
+        "indicator": "woodie_pivot",
+        "parameters": [],
+        "output": "Double",
+        "description": "Woodie Pivot point."
+      },
+      {
+        "indicator": "woodie",
+        "parameters": [],
+        "output": "Double (alias of woodie_pivot)",
+        "description": "Woodie Pivot (alias)."
+      },
+      {
+        "indicator": "fibonacci_pivot",
+        "parameters": [],
+        "output": "Double",
+        "description": "Fibonacci Pivot point."
+      },
+      {
+        "indicator": "fib_pivot",
+        "parameters": [],
+        "output": "Double (alias of fibonacci_pivot)",
+        "description": "Fibonacci Pivot (alias)."
+      },
+      {
+        "indicator": "demark_pivot",
+        "parameters": [],
+        "output": "Double",
+        "description": "DeMark Pivot point."
+      },
+      {
+        "indicator": "demark_p",
+        "parameters": [],
+        "output": "Double (alias of demark_pivot)",
+        "description": "DeMark Pivot (alias)."
+      }
+    ],
+    "japanese_candlestick_patterns": [
+      {
+        "indicator": "candle_pattern",
+        "parameters": [],
+        "output": "String (detected pattern name)",
+        "description": "Matches exact professional patterns using condition='eq' and setting pattern='<name>'",
+        "valid_patterns": [
+          "doji",
+          "bullish_engulfing",
+          "bearish_engulfing",
+          "hammer",
+          "shooting_star",
+          "morning_star",
+          "evening_star",
+          "three_white_soldiers",
+          "three_black_crows",
+          "pin_bar_bullish",
+          "pin_bar_bearish",
+          "none"
+        ]
+      },
+      {
+        "indicator": "advanced_candle",
+        "parameters": [],
+        "output": "String (detected advanced pattern)",
+        "description": "Advanced candlestick pattern engine. Valid patterns to match:",
+        "valid_patterns": [
+          "dragonfly_doji",
+          "gravestone_doji",
+          "long_legged_doji",
+          "doji",
+          "bullish_marubozu",
+          "bearish_marubozu",
+          "spinning_top",
+          "hammer",
+          "hanging_man",
+          "inverted_hammer",
+          "shooting_star",
+          "bullish_engulfing",
+          "bearish_engulfing",
+          "bullish_harami",
+          "bearish_harami",
+          "bullish_harami_cross",
+          "bearish_harami_cross",
+          "piercing_line",
+          "dark_cloud_cover",
+          "tweezer_top",
+          "tweezer_bottom",
+          "morning_star",
+          "evening_star",
+          "three_white_soldiers",
+          "three_black_crows",
+          "three_inside_up",
+          "three_inside_down",
+          "bullish_kicker",
+          "bearish_kicker",
+          "abandoned_baby_bullish",
+          "abandoned_baby_bearish",
+          "none"
+        ]
+      },
+      {
+        "indicator": "doji",
+        "parameters": [],
+        "output": "String (alias of advanced_candle)",
+        "description": "Doji patterns."
+      },
+      {
+        "indicator": "dragonfly_doji",
+        "parameters": [],
+        "output": "String (alias of advanced_candle)",
+        "description": "Dragonfly Doji pattern."
+      },
+      {
+        "indicator": "gravestone_doji",
+        "parameters": [],
+        "output": "String (alias of advanced_candle)",
+        "description": "Gravestone Doji pattern."
+      },
+      {
+        "indicator": "spinning_top",
+        "parameters": [],
+        "output": "String (alias of advanced_candle)",
+        "description": "Spinning Top pattern."
+      },
+      {
+        "indicator": "marubozu",
+        "parameters": [],
+        "output": "String (alias of advanced_candle)",
+        "description": "Marubozu patterns."
+      },
+      {
+        "indicator": "tweezer",
+        "parameters": [],
+        "output": "String (alias of advanced_candle)",
+        "description": "Tweezer Top/Bottom patterns."
+      },
+      {
+        "indicator": "harami",
+        "parameters": [],
+        "output": "String (alias of advanced_candle)",
+        "description": "Harami patterns."
+      },
+      {
+        "indicator": "kicker",
+        "parameters": [],
+        "output": "String (alias of advanced_candle)",
+        "description": "Kicker patterns."
+      },
+      {
+        "indicator": "abandoned_baby",
+        "parameters": [],
+        "output": "String (alias of advanced_candle)",
+        "description": "Abandoned Baby patterns."
+      },
+      {
+        "indicator": "belt_hold",
+        "parameters": [],
+        "output": "String (alias of advanced_candle)",
+        "description": "Belt Hold patterns."
+      },
+      {
+        "indicator": "three_inside",
+        "parameters": [],
+        "output": "String (alias of advanced_candle)",
+        "description": "Three Inside Up/Down."
+      },
+      {
+        "indicator": "three_outside",
+        "parameters": [],
+        "output": "String (alias of advanced_candle)",
+        "description": "Three Outside Up/Down."
+      },
+      {
+        "indicator": "inside_bar",
+        "parameters": [],
+        "output": "Double (1.0 bullish inside bar, -1.0 bearish inside bar, 0.0 none)",
+        "description": "Inside Bar."
+      },
+      {
+        "indicator": "outside_bar",
+        "parameters": [],
+        "output": "Double (1.0 bullish outside bar, -1.0 bearish outside bar, 0.0 none)",
+        "description": "Outside Bar."
+      },
+      {
+        "indicator": "fakey",
+        "parameters": [],
+        "output": "Double (1.0 bullish fakey, -1.0 bearish fakey, 0.0 none)",
+        "description": "Inside Bar Fakey pattern."
+      },
+      {
+        "indicator": "inside_bar_fakey",
+        "parameters": [],
+        "output": "Double (alias of fakey)",
+        "description": "Inside Bar Fakey (alias)."
+      },
+      {
+        "indicator": "institutional_candle",
+        "parameters": [],
+        "output": "Double (1.0 bullish institutional candle, -1.0 bearish, 0.0 none)",
+        "description": "Institutional candle."
+      },
+      {
+        "indicator": "pipe_top",
+        "parameters": [],
+        "output": "Double",
+        "description": "Pipe Top pattern."
+      },
+      {
+        "indicator": "pipe_bottom",
+        "parameters": [],
+        "output": "Double",
+        "description": "Pipe Bottom pattern."
+      }
+    ],
+    "ict_smc_smart_money": [
+      {
+        "indicator": "market_structure",
+        "parameters": [],
+        "output": "String",
+        "description": "SMC market structure swing status. Valid returned values:",
+        "valid_patterns": [
+          "change_of_character_bullish",
+          "change_of_character_bearish",
+          "break_of_structure_bullish",
+          "break_of_structure_bearish",
+          "higher_high_higher_low",
+          "lower_low_lower_high",
+          "none"
+        ]
+      },
+      {
+        "indicator": "break_of_structure",
+        "parameters": [],
+        "output": "String ('bullish' | 'bearish' | 'none')",
+        "description": "SMC Break of Structure (BOS)."
+      },
+      {
+        "indicator": "change_of_character",
+        "parameters": [],
+        "output": "String ('bullish' | 'bearish' | 'none')",
+        "description": "SMC Change of Character (CHoCH)."
+      },
+      {
+        "indicator": "internal_bos",
+        "parameters": [],
+        "output": "Double (1.0 bullish internal BOS, -1.0 bearish, 0.0 none)",
+        "description": "Internal Break of Structure."
+      },
+      {
+        "indicator": "external_bos",
+        "parameters": [],
+        "output": "Double (1.0 bullish external BOS, -1.0 bearish, 0.0 none)",
+        "description": "External Break of Structure."
+      },
+      {
+        "indicator": "order_block",
+        "parameters": [],
+        "output": "Double (1.0 bullish OB, -1.0 bearish OB, 0.0 none)",
+        "description": "SMC Order Block identification."
+      },
+      {
+        "indicator": "breaker_block",
+        "parameters": [],
+        "output": "Double (1.0 bullish breaker, -1.0 bearish breaker, 0.0 none)",
+        "description": "SMC Breaker Block."
+      },
+      {
+        "indicator": "rejection_block",
+        "parameters": [],
+        "output": "Double (1.0 bullish, -1.0 bearish, 0.0 none)",
+        "description": "SMC Rejection Block."
+      },
+      {
+        "indicator": "mitigation_block",
+        "parameters": [],
+        "output": "Double (1.0 bullish, -1.0 bearish, 0.0 none)",
+        "description": "SMC Mitigation Block."
+      },
+      {
+        "indicator": "fair_value_gap",
+        "parameters": [],
+        "output": "Double (1.0 bullish FVG, -1.0 bearish FVG, 0.0 none)",
+        "description": "ICT Fair Value Gap."
+      },
+      {
+        "indicator": "imbalance",
+        "parameters": [],
+        "output": "Double (alias of fair_value_gap)",
+        "description": "Fair Value Gap / Imbalance."
+      },
+      {
+        "indicator": "inverse_fvg",
+        "parameters": [],
+        "output": "Double (1.0 bullish IFVG, -1.0 bearish, 0.0 none)",
+        "description": "ICT Inverse Fair Value Gap."
+      },
+      {
+        "indicator": "bpr",
+        "parameters": [],
+        "output": "Double (1.0 bullish BPR, -1.0 bearish, 0.0 none)",
+        "description": "ICT Balanced Price Range."
+      },
+      {
+        "indicator": "liquidity_sweep",
+        "parameters": [],
+        "output": "Double (1.0 bullish sweep of old lows, -1.0 bearish sweep of old highs, 0.0 none)",
+        "description": "ICT Liquidity Sweep."
+      },
+      {
+        "indicator": "equal_highs",
+        "parameters": [],
+        "output": "Double (1.0 if Equal Highs / Buy Side Liquidity detected, 0.0 none)",
+        "description": "Equal Highs (EQH) - Buy-side liquidity pool."
+      },
+      {
+        "indicator": "eqh",
+        "parameters": [],
+        "output": "Double (alias of equal_highs)",
+        "description": "Equal Highs (alias)."
+      },
+      {
+        "indicator": "equal_lows",
+        "parameters": [],
+        "output": "Double (1.0 if Equal Lows / Sell Side Liquidity detected, 0.0 none)",
+        "description": "Equal Lows (EQL) - Sell-side liquidity pool."
+      },
+      {
+        "indicator": "eql",
+        "parameters": [],
+        "output": "Double (alias of equal_lows)",
+        "description": "Equal Lows (alias)."
+      },
+      {
+        "indicator": "premium_zone",
+        "parameters": [],
+        "output": "Double (1.0 if current price is in premium zone > 0.5 of dealing range, 0.0 otherwise)",
+        "description": "Premium zone (good for sell/PUT entries)."
+      },
+      {
+        "indicator": "discount_zone",
+        "parameters": [],
+        "output": "Double (1.0 if current price is in discount zone < 0.5 of dealing range, 0.0 otherwise)",
+        "description": "Discount zone (good for buy/CALL entries)."
+      },
+      {
+        "indicator": "ote",
+        "parameters": [],
+        "output": "Double (1.0 if price is inside Optimal Trade Entry 0.62-0.79 zone, 0.0 otherwise)",
+        "description": "Optimal Trade Entry zone."
+      },
+      {
+        "indicator": "dealing_range",
+        "parameters": [],
+        "output": "Double (1.0 if inside active dealing range, 0.0 otherwise)",
+        "description": "Active Dealing Range."
+      },
+      {
+        "indicator": "market_maker_buy_model",
+        "parameters": [],
+        "output": "Double (1.0 if ICT MMBM buy profile detected, 0.0 none)",
+        "description": "Market Maker Buy Model."
+      },
+      {
+        "indicator": "market_maker_sell_model",
+        "parameters": [],
+        "output": "Double (1.0 if ICT MMSM sell profile detected, 0.0 none)",
+        "description": "Market Maker Sell Model."
+      },
+      {
+        "indicator": "judas_swing",
+        "parameters": [],
+        "output": "Double (1.0 bullish stop hunt swing, -1.0 bearish stop hunt swing, 0.0 none)",
+        "description": "ICT Judas Swing."
+      },
+      {
+        "indicator": "power_of_three",
+        "parameters": [],
+        "output": "Double (1.0 accumulation/manipulation completed for buys, -1.0 for sells, 0.0 none)",
+        "description": "ICT Power of Three (Accumulation, Manipulation, Distribution)."
+      },
+      {
+        "indicator": "po3",
+        "parameters": [],
+        "output": "Double (alias of power_of_three)",
+        "description": "Power of Three (alias)."
+      },
+      {
+        "indicator": "amd_cycle",
+        "parameters": [],
+        "output": "Double (alias of power_of_three)",
+        "description": "Accumulation Manipulation Distribution (alias)."
+      },
+      {
+        "indicator": "turtle_soup",
+        "parameters": [],
+        "output": "Double (1.0 bullish turtle soup at low, -1.0 bearish turtle soup at high, 0.0 none)",
+        "description": "ICT Turtle Soup setup."
+      },
+      {
+        "indicator": "cisd",
+        "parameters": [],
+        "output": "Double (1.0 bullish CISD, -1.0 bearish, 0.0 none)",
+        "description": "Consecutive Candle Impulsive State Delivery."
+      },
+      {
+        "indicator": "consequent_encroachment",
+        "parameters": [],
+        "output": "Double (1.0 if price touches 50% of recent FVG, 0.0 none)",
+        "description": "Consequent Encroachment (50% FVG)."
+      },
+      {
+        "indicator": "ce",
+        "parameters": [],
+        "output": "Double (alias of consequent_encroachment)",
+        "description": "Consequent Encroachment (alias)."
+      },
+      {
+        "indicator": "inducement",
+        "parameters": [],
+        "output": "Double (1.0 bullish inducement swept, -1.0 bearish inducement swept, 0.0 none)",
+        "description": "ICT Inducement sweep."
+      },
+      {
+        "indicator": "silver_bullet",
+        "parameters": [],
+        "output": "Double (1.0 if inside Silver Bullet hour and FVG formed, 0.0 otherwise)",
+        "description": "ICT Silver Bullet setup."
+      }
+    ],
+    "chart_patterns_harmonic_fibonacci": [
+      {
+        "indicator": "fibonacci",
+        "parameters": ["value"],
+        "output": "String",
+        "description": "Fibonacci retracement level rejection. Specify level in 'value' (e.g. 0.618). Returns:",
+        "valid_patterns": ["bullish_rejection", "bearish_rejection", "none"]
+      },
+      {
+        "indicator": "double_top",
+        "parameters": [],
+        "output": "String ('bearish' | 'none')",
+        "description": "Double Top pattern."
+      },
+      {
+        "indicator": "double_bottom",
+        "parameters": [],
+        "output": "String ('bullish' | 'none')",
+        "description": "Double Bottom pattern."
+      },
+      {
+        "indicator": "head_and_shoulders",
+        "parameters": [],
+        "output": "String ('bearish' | 'none')",
+        "description": "Head and Shoulders pattern."
+      },
+      {
+        "indicator": "inverse_head_and_shoulders",
+        "parameters": [],
+        "output": "String ('bullish' | 'none')",
+        "description": "Inverse Head and Shoulders."
+      },
+      {
+        "indicator": "ascending_triangle",
+        "parameters": [],
+        "output": "String ('bullish' | 'none')",
+        "description": "Ascending Triangle."
+      },
+      {
+        "indicator": "descending_triangle",
+        "parameters": [],
+        "output": "String ('bearish' | 'none')",
+        "description": "Descending Triangle."
+      },
+      {
+        "indicator": "symmetrical_triangle",
+        "parameters": [],
+        "output": "String ('bullish' | 'bearish' | 'none')",
+        "description": "Symmetrical Triangle."
+      },
+      {
+        "indicator": "rising_wedge",
+        "parameters": [],
+        "output": "String ('bearish' | 'none')",
+        "description": "Rising Wedge."
+      },
+      {
+        "indicator": "falling_wedge",
+        "parameters": [],
+        "output": "String ('bullish' | 'none')",
+        "description": "Falling Wedge."
+      },
+      {
+        "indicator": "bull_flag",
+        "parameters": [],
+        "output": "String ('bullish' | 'none')",
+        "description": "Bull Flag pattern."
+      },
+      {
+        "indicator": "bear_flag",
+        "parameters": [],
+        "output": "String ('bearish' | 'none')",
+        "description": "Bear Flag pattern."
+      },
+      {
+        "indicator": "pennant",
+        "parameters": [],
+        "output": "String ('bullish' | 'bearish' | 'none')",
+        "description": "Pennant (alias of symmetrical_triangle)."
+      },
+      {
+        "indicator": "rectangle",
+        "parameters": [],
+        "output": "String ('bullish' | 'bearish' | 'none')",
+        "description": "Rectangle consolidation breakout."
+      },
+      {
+        "indicator": "channel_up",
+        "parameters": [],
+        "output": "String ('bullish' | 'bearish' | 'none')",
+        "description": "Ascending channel status."
+      },
+      {
+        "indicator": "channel_down",
+        "parameters": [],
+        "output": "String ('bullish' | 'bearish' | 'none')",
+        "description": "Descending channel status."
+      },
+      {
+        "indicator": "horizontal_channel",
+        "parameters": [],
+        "output": "String ('bullish' | 'bearish' | 'none')",
+        "description": "Horizontal Channel (alias of rectangle)."
+      },
+      {
+        "indicator": "cup_and_handle",
+        "parameters": [],
+        "output": "String ('bullish' | 'none')",
+        "description": "Cup and Handle pattern."
+      },
+      {
+        "indicator": "broadening_wedge",
+        "parameters": [],
+        "output": "String ('bullish' | 'bearish' | 'none')",
+        "description": "Megaphone / Broadening Wedge."
+      },
+      {
+        "indicator": "megaphone",
+        "parameters": [],
+        "output": "String (alias of broadening_wedge)",
+        "description": "Megaphone pattern."
+      },
+      {
+        "indicator": "island_reversal",
+        "parameters": [],
+        "output": "String ('bullish' | 'bearish' | 'none')",
+        "description": "Island Reversal gap pattern."
+      },
+      {
+        "indicator": "diamond",
+        "parameters": [],
+        "output": "String ('bullish' | 'bearish' | 'none')",
+        "description": "Diamond Chart pattern."
+      },
+      {
+        "indicator": "diamond_top",
+        "parameters": [],
+        "output": "String (alias of diamond)",
+        "description": "Diamond Top pattern."
+      },
+      {
+        "indicator": "rounding_bottom",
+        "parameters": [],
+        "output": "String ('bullish' | 'none')",
+        "description": "Rounding Bottom pattern."
+      },
+      {
+        "indicator": "rounding_top",
+        "parameters": [],
+        "output": "String ('bearish' | 'none')",
+        "description": "Rounding Top pattern."
+      },
+      {
+        "indicator": "gartley",
+        "parameters": [],
+        "output": "String ('bullish' | 'bearish' | 'none')",
+        "description": "Gartley Harmonic Pattern."
+      },
+      {
+        "indicator": "bat",
+        "parameters": [],
+        "output": "String ('bullish' | 'bearish' | 'none')",
+        "description": "Bat Harmonic Pattern."
+      },
+      {
+        "indicator": "alternate_bat",
+        "parameters": [],
+        "output": "String ('bullish' | 'bearish' | 'none')",
+        "description": "Alternate Bat Harmonic Pattern (alias of bat)."
+      },
+      {
+        "indicator": "butterfly",
+        "parameters": [],
+        "output": "String ('bullish' | 'bearish' | 'none')",
+        "description": "Butterfly Harmonic Pattern."
+      },
+      {
+        "indicator": "crab",
+        "parameters": [],
+        "output": "String ('bullish' | 'bearish' | 'none')",
+        "description": "Crab Harmonic Pattern."
+      },
+      {
+        "indicator": "deep_crab",
+        "parameters": [],
+        "output": "String ('bullish' | 'bearish' | 'none')",
+        "description": "Deep Crab Harmonic Pattern (alias of crab)."
+      },
+      {
+        "indicator": "shark",
+        "parameters": [],
+        "output": "String ('bullish' | 'bearish' | 'none')",
+        "description": "Shark Harmonic Pattern."
+      },
+      {
+        "indicator": "cypher",
+        "parameters": [],
+        "output": "String ('bullish' | 'bearish' | 'none')",
+        "description": "Cypher Harmonic Pattern."
+      },
+      {
+        "indicator": "ab_cd",
+        "parameters": [],
+        "output": "String ('bullish' | 'bearish' | 'none')",
+        "description": "AB=CD Harmonic Pattern."
+      },
+      {
+        "indicator": "three_drives",
+        "parameters": [],
+        "output": "String ('bullish' | 'bearish' | 'none')",
+        "description": "Three Drives Harmonic Pattern."
+      },
+      {
+        "indicator": "5_0",
+        "parameters": [],
+        "output": "String ('bullish' | 'bearish' | 'none')",
+        "description": "5-0 Harmonic Pattern (alias of ab_cd)."
+      },
+      {
+        "indicator": "divergence",
+        "parameters": [],
+        "output": "Double (1.0 if RSI divergence is bullish, -1.0 if bearish, 0.0 otherwise)",
+        "description": "RSI divergence detector. Match gt 0 for CALL, lt 0 for PUT."
+      },
+      {
+        "indicator": "elliott_wave",
+        "parameters": ["pattern"],
+        "output": "String ('bullish' | 'bearish' | 'none')",
+        "description": "Elliott Wave identifier. Specify wave to match in 'pattern' parameter. Valid pattern waves: '1', '2', '3', '5', 'B', 'C'."
+      }
+    ],
+    "time_and_sessions": [
+      {
+        "indicator": "time_analysis",
+        "parameters": ["pattern"],
+        "output": "String ('active' | 'inactive')",
+        "description": "Time session active window filter. Set target session in 'pattern'. Valid target sessions: 'london_newyork_overlap', 'london', 'new_york', 'tokyo'. Defaults to 'london_newyork_overlap'."
+      },
+      {
+        "indicator": "session",
+        "parameters": ["pattern"],
+        "output": "String ('active' | 'inactive')",
+        "description": "Alias of time_analysis. Defaults to 'london'."
+      },
+      {
+        "indicator": "kill_zone",
+        "parameters": [],
+        "output": "String ('asian_killzone' | 'london_killzone' | 'newyork_killzone' | 'none')",
+        "description": "ICT Killzones."
+      },
+      {
+        "indicator": "day_of_week",
+        "parameters": [],
+        "output": "String ('monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'weekend')",
+        "description": "Current weekday."
+      },
+      {
+        "indicator": "session_overlap",
+        "parameters": [],
+        "output": "String ('asian_london' | 'london_newyork' | 'none')",
+        "description": "Active session overlaps."
+      },
+      {
+        "indicator": "session_open",
+        "parameters": [],
+        "output": "Double (1.0 if current candle is the session open candle, 0.0 otherwise)",
+        "description": "Session opening candle."
+      },
+      {
+        "indicator": "opening_range",
+        "parameters": [],
+        "output": "Double (1.0 if inside opening range period, 0.0 otherwise)",
+        "description": "Opening Range."
+      },
+      {
+        "indicator": "opening_gap",
+        "parameters": [],
+        "output": "Double (1.0 bullish gap, -1.0 bearish gap, 0.0 none)",
+        "description": "Market opening gap."
+      }
+    ],
+    "statistical_and_quantitative": [
+      {
+        "indicator": "hurst_exponent",
+        "parameters": [],
+        "output": "Double (Hurst Exponent, < 0.5 mean reverting, > 0.5 trending, 0.5 random walk)",
+        "description": "Hurst Exponent (Market Efficiency & Regime classification)."
+      },
+      {
+        "indicator": "fractal_dimension",
+        "parameters": [],
+        "output": "Double (2.0 minus Hurst Exponent)",
+        "description": "Fractal Dimension."
+      },
+      {
+        "indicator": "entropy_analysis",
+        "parameters": [],
+        "output": "Double",
+        "description": "Shannon Entropy of prices."
+      },
+      {
+        "indicator": "regime_detection",
+        "parameters": [],
+        "output": "Double (1.0 trending market, -1.0 mean-reverting market, 0.0 sideways)",
+        "description": "Market regime classification."
+      },
+      {
+        "indicator": "market_regime_classification",
+        "parameters": [],
+        "output": "Double (alias of regime_detection)",
+        "description": "Market regime classification."
+      },
+      {
+        "indicator": "volatility_regime_analysis",
+        "parameters": [],
+        "output": "Double (1.0 high vol expansion, -1.0 low vol compression, 0.0 neutral)",
+        "description": "Volatility regime."
+      },
+      {
+        "indicator": "anomaly_detection",
+        "parameters": [],
+        "output": "Double (1.0 volume/spread anomaly detected, 0.0 none)",
+        "description": "Anomaly Detection."
+      },
+      {
+        "indicator": "spectral_analysis",
+        "parameters": [],
+        "output": "Double (dominant cycle frequency)",
+        "description": "Spectral Cycle Analysis."
+      },
+      {
+        "indicator": "monte_carlo_risk_simulation",
+        "parameters": [],
+        "output": "Double (Value at Risk score)",
+        "description": "Monte Carlo simulated risk."
+      },
+      {
+        "indicator": "wavelet_decomposition",
+        "parameters": [],
+        "output": "Double (trend strength from wavelet details)",
+        "description": "Wavelet trend."
+      },
+      {
+        "indicator": "kelly_criterion",
+        "parameters": [],
+        "output": "Double (Optimal leverage bet ratio)",
+        "description": "Kelly Criterion sizing recommendation."
+      },
+      {
+        "indicator": "z_score",
+        "parameters": ["period"],
+        "output": "Double (Z-score, standard deviations from mean)",
+        "description": "Z-score."
+      }
+    ],
+    "adaptive_and_advanced_mas": [
+      {
+        "indicator": "kama",
+        "parameters": ["period"],
+        "output": "Double (Kaufman Adaptive MA price)",
+        "description": "Kaufman Adaptive Moving Average."
+      },
+      {
+        "indicator": "t3",
+        "parameters": ["period"],
+        "output": "Double (T3 Tilson MA price)",
+        "description": "T3 Tilson Moving Average."
+      },
+      {
+        "indicator": "chande_kroll_stop",
+        "parameters": ["period", "value"],
+        "output": "Double (Stop price level)",
+        "description": "Chande Kroll Stop. Use 'value' to pass ATR multiplier (default 1.5)."
+      },
+      {
+        "indicator": "ckstop",
+        "parameters": ["period", "value"],
+        "output": "Double (alias of chande_kroll_stop)",
+        "description": "Chande Kroll Stop (alias)."
+      },
+      {
+        "indicator": "vwap_bands",
+        "parameters": [],
+        "output": "Double (Current price offset from VWAP bands)",
+        "description": "VWAP standard deviation bands."
+      },
+      {
+        "indicator": "anchored_vwap",
+        "parameters": [],
+        "output": "Double (Anchored VWAP price)",
+        "description": "Anchored VWAP."
+      }
+    ],
+    "other_methods": [
+      {
+        "indicator": "wyckoff_spring",
+        "parameters": [],
+        "output": "Double (1.0 bullish spring breakout, 0.0 none)",
+        "description": "Wyckoff Spring."
+      },
+      {
+        "indicator": "wyckoff_upthrust",
+        "parameters": [],
+        "output": "Double (1.0 bearish upthrust breakout, 0.0 none)",
+        "description": "Wyckoff Upthrust."
+      },
+      {
+        "indicator": "accumulation",
+        "parameters": [],
+        "output": "Double (1.0 Wyckoff accumulation phase, 0.0 none)",
+        "description": "Wyckoff Accumulation."
+      },
+      {
+        "indicator": "distribution",
+        "parameters": [],
+        "output": "Double (1.0 Wyckoff distribution phase, 0.0 none)",
+        "description": "Wyckoff Distribution."
+      },
+      {
+        "indicator": "manipulation",
+        "parameters": [],
+        "output": "Double (1.0 Wyckoff manipulation phase, 0.0 none)",
+        "description": "Wyckoff Manipulation."
+      },
+      {
+        "indicator": "expansion",
+        "parameters": [],
+        "output": "Double (1.0 Wyckoff expansion phase, 0.0 none)",
+        "description": "Wyckoff Expansion."
+      },
+      {
+        "indicator": "wyckoff_phase",
+        "parameters": [],
+        "output": "String ('A' | 'B' | 'C' | 'D' | 'E' | 'none')",
+        "description": "Wyckoff Phase classification."
+      },
+      {
+        "indicator": "wyckoff",
+        "parameters": [],
+        "output": "Double (alias of wyckoff_spring)",
+        "description": "Wyckoff Spring (alias)."
+      },
+      {
+        "indicator": "breakout",
+        "parameters": [],
+        "output": "Double (1.0 bullish breakout, -1.0 bearish breakdown, 0.0 none)",
+        "description": "Breakout Strategy indicator."
+      },
+      {
+        "indicator": "momentum_trading",
+        "parameters": [],
+        "output": "Double (1.0 bullish momentum, -1.0 bearish, 0.0 neutral)",
+        "description": "Momentum trading."
+      },
+      {
+        "indicator": "momentum",
+        "parameters": [],
+        "output": "Double (alias of momentum_trading)",
+        "description": "Momentum (alias)."
+      },
+      {
+        "indicator": "mean_reversion",
+        "parameters": [],
+        "output": "Double (1.0 bullish mean reversion, -1.0 bearish mean reversion, 0.0 none)",
+        "description": "Mean reversion entry."
+      },
+      {
+        "indicator": "nr4",
+        "parameters": [],
+        "output": "Double (1.0 if inside Narrow Range 4 bar pattern, 0.0 none)",
+        "description": "Narrow Range 4 (NR4)."
+      },
+      {
+        "indicator": "nr7",
+        "parameters": [],
+        "output": "Double (1.0 if inside Narrow Range 7 bar pattern, 0.0 none)",
+        "description": "Narrow Range 7 (NR7)."
+      },
+      {
+        "indicator": "vcp",
+        "parameters": [],
+        "output": "Double (1.0 Volatility Contraction Pattern breakout, 0.0 none)",
+        "description": "Volatility Contraction Pattern."
+      },
+      {
+        "indicator": "orb",
+        "parameters": [],
+        "output": "Double (1.0 bullish opening range breakout, -1.0 bearish opening range breakdown, 0.0 none)",
+        "description": "Opening Range Breakout."
+      },
+      {
+        "indicator": "opening_range_breakout",
+        "parameters": [],
+        "output": "Double (alias of orb)",
+        "description": "Opening Range Breakout (alias)."
+      },
+      {
+        "indicator": "heikin_ashi",
+        "parameters": [],
+        "output": "Double (1.0 bullish Heikin Ashi candle, -1.0 bearish, 0.0 none)",
+        "description": "Heikin Ashi candle trend."
+      },
+      {
+        "indicator": "vsa",
+        "parameters": [],
+        "output": "String ('no_demand' | 'no_supply' | 'none')",
+        "description": "Volume Spread Analysis signal."
+      },
+      {
+        "indicator": "no_demand",
+        "parameters": [],
+        "output": "String (alias of vsa)",
+        "description": "No Demand (alias)."
+      },
+      {
+        "indicator": "no_supply",
+        "parameters": [],
+        "output": "String (alias of vsa)",
+        "description": "No Supply (alias)."
+      },
+      {
+        "indicator": "wolfe_waves",
+        "parameters": [],
+        "output": "Double (1.0 bullish Wolfe Wave breakout, -1.0 bearish, 0.0 none)",
+        "description": "Wolfe Waves pattern."
+      },
+      {
+        "indicator": "demark",
+        "parameters": [],
+        "output": "Double (DeMark count, 1.0 to 13.0 for buy setup/countdown, -1.0 to -13.0 for sell)",
+        "description": "DeMark Sequential."
+      },
+      {
+        "indicator": "td_sequential",
+        "parameters": [],
+        "output": "Double (alias of demark)",
+        "description": "Tom DeMark Sequential (alias)."
+      },
+      {
+        "indicator": "darvas_box",
+        "parameters": [],
+        "output": "Double (1.0 Darvas Box bullish breakout, -1.0 bearish breakdown, 0.0 none)",
+        "description": "Darvas Box."
+      },
+      {
+        "indicator": "gann_angle",
+        "parameters": [],
+        "output": "Double (1.0 price touches key Gann angle, 0.0 none)",
+        "description": "Gann Angle."
+      },
+      {
+        "indicator": "gann_fan",
+        "parameters": [],
+        "output": "Double (1.0 price hits key Gann Fan support/resistance, 0.0 none)",
+        "description": "Gann Fan."
+      },
+      {
+        "indicator": "td_combo",
+        "parameters": [],
+        "output": "Double (Tom DeMark Combo signal)",
+        "description": "DeMark Combo."
+      },
+      {
+        "indicator": "bump_and_run",
+        "parameters": [],
+        "output": "Double (1.0 bullish Bump and Run Reversal, -1.0 bearish, 0.0 none)",
+        "description": "Bump and Run chart pattern."
+      },
+      {
+        "indicator": "price",
+        "parameters": [],
+        "output": "Double (current price of the asset)",
+        "description": "Returns current price value."
+      }
+    ]
+  }
+}
