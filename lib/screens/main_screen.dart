@@ -164,16 +164,21 @@ class _MainScreenState extends State<MainScreen> {
   String _searchQuery = '';
   String _historyFilter = 'today';
   DateTimeRange? _customDateRange;
+  // _roleListener stays a realtime subscription (needs instant ban/delete/VIP).
   StreamSubscription<List<Map<String, dynamic>>>? _roleListener;
-  StreamSubscription<List<Map<String, dynamic>>>? _maintenanceListener;
-  StreamSubscription<List<Map<String, dynamic>>>? _stdStrategyListener;
-  StreamSubscription<List<Map<String, dynamic>>>? _vipStrategyListener;
-  StreamSubscription<List<Map<String, dynamic>>>? _monStdStrategyListener;
-  StreamSubscription<List<Map<String, dynamic>>>? _monVipStrategyListener;
-  StreamSubscription<List<Map<String, dynamic>>>? _chartModeListener;
-  StreamSubscription<List<Map<String, dynamic>>>? _pairsListener;
-  StreamSubscription<List<Map<String, dynamic>>>? _priceSystemListener;
-  StreamSubscription<List<Map<String, dynamic>>>? _displaySourceListener;
+  // The rest are rarely-changing admin config/pairs reads. They were realtime
+  // .stream()s, but a transient DB blip made ALL of them re-subscribe + re-fetch
+  // at once → a 522/CORS error storm in the console + extra DB churn. They're now
+  // 30s polls (Timer), which never storm. Timer.cancel() matches the old API.
+  Timer? _maintenanceListener;
+  Timer? _stdStrategyListener;
+  Timer? _vipStrategyListener;
+  Timer? _monStdStrategyListener;
+  Timer? _monVipStrategyListener;
+  Timer? _chartModeListener;
+  Timer? _pairsListener;
+  Timer? _priceSystemListener;
+  Timer? _displaySourceListener;
   String _chartMode = 'sim';
   // Admin System Settings (configs, live): price source + which source shows.
   String?
@@ -677,11 +682,7 @@ class _MainScreenState extends State<MainScreen> {
   void _startMaintenanceListener() {
     try {
       _maintenanceListener?.cancel();
-      _maintenanceListener = Supabase.instance.client
-          .from('configs')
-          .stream(primaryKey: ['id'])
-          .eq('id', 'maintenance')
-          .listen((rows) {
+      _maintenanceListener = _pollConfig('maintenance', (rows) {
             if (rows.isEmpty || !mounted) return;
             final d = rows.first['data'] as Map<String, dynamic>? ?? {};
             final isActive = d['isActive'] as bool? ?? false;
@@ -2520,14 +2521,58 @@ class _MainScreenState extends State<MainScreen> {
     super.dispose();
   }
 
+  // Poll a single `configs` row every 30s and deliver it to `onData` in the same
+  // shape the old realtime .stream() did (`[{id, data}]`, or `[]` if missing).
+  // Replaces a realtime channel so a transient DB blip can't trigger a reconnect
+  // storm; a failed poll is swallowed and the next tick retries.
+  Timer _pollConfig(
+    String id,
+    void Function(List<Map<String, dynamic>>) onData,
+  ) {
+    Future<void> fetch() async {
+      try {
+        final row = await Supabase.instance.client
+            .from('configs')
+            .select('data')
+            .eq('id', id)
+            .maybeSingle()
+            .timeout(const Duration(seconds: 8));
+        if (!mounted) return;
+        onData(
+          row == null
+              ? const <Map<String, dynamic>>[]
+              : [
+                  {'id': id, 'data': row['data']},
+                ],
+        );
+      } catch (_) {/* transient DB blip — next tick retries */}
+    }
+
+    fetch();
+    return Timer.periodic(const Duration(seconds: 30), (_) => fetch());
+  }
+
+  // Same idea for the full `pairs` table (rarely changes; a 30s refresh is fine).
+  Timer _pollPairs(void Function(List<Map<String, dynamic>>) onData) {
+    Future<void> fetch() async {
+      try {
+        final rows = await Supabase.instance.client
+            .from('pairs')
+            .select('*')
+            .timeout(const Duration(seconds: 8));
+        if (!mounted) return;
+        onData((rows as List).cast<Map<String, dynamic>>());
+      } catch (_) {/* transient DB blip — next tick retries */}
+    }
+
+    fetch();
+    return Timer.periodic(const Duration(seconds: 30), (_) => fetch());
+  }
+
   void _startChartModeListener() {
     try {
       _chartModeListener?.cancel();
-      _chartModeListener = Supabase.instance.client
-          .from('configs')
-          .stream(primaryKey: ['id'])
-          .eq('id', 'chart_settings')
-          .listen((rows) {
+      _chartModeListener = _pollConfig('chart_settings', (rows) {
             if (rows.isEmpty || !mounted) return;
             final data = rows.first['data'] as Map<String, dynamic>? ?? {};
             final mode = data['mode'] as String? ?? 'sim';
@@ -2544,11 +2589,7 @@ class _MainScreenState extends State<MainScreen> {
   void _startSettingsListeners() {
     try {
       _priceSystemListener?.cancel();
-      _priceSystemListener = Supabase.instance.client
-          .from('configs')
-          .stream(primaryKey: ['id'])
-          .eq('id', 'price_system')
-          .listen((rows) {
+      _priceSystemListener = _pollConfig('price_system', (rows) {
             if (!mounted) return;
             final v = rows.isNotEmpty
                 ? ((rows.first['data'] as Map?)?['value'] as String?)
@@ -2556,11 +2597,7 @@ class _MainScreenState extends State<MainScreen> {
             if (v != _priceSystemRaw) setState(() => _priceSystemRaw = v);
           });
       _displaySourceListener?.cancel();
-      _displaySourceListener = Supabase.instance.client
-          .from('configs')
-          .stream(primaryKey: ['id'])
-          .eq('id', 'display_source')
-          .listen((rows) {
+      _displaySourceListener = _pollConfig('display_source', (rows) {
             if (!mounted) return;
             final v =
                 (rows.isNotEmpty
@@ -2682,10 +2719,7 @@ class _MainScreenState extends State<MainScreen> {
 
     try {
       _pairsListener?.cancel();
-      _pairsListener = Supabase.instance.client
-          .from('pairs')
-          .stream(primaryKey: ['id'])
-          .listen((rows) {
+      _pairsListener = _pollPairs((rows) {
             if (!mounted) return;
 
             // Capture the active pair + whether it was a Pocket Option pair
@@ -2786,32 +2820,20 @@ class _MainScreenState extends State<MainScreen> {
       _stdStrategyListener?.cancel();
       _vipStrategyListener?.cancel();
 
-      _stdStrategyListener = Supabase.instance.client
-          .from('configs')
-          .stream(primaryKey: ['id'])
-          .eq('id', 'strategy_standard')
-          .listen((rows) {
+      _stdStrategyListener = _pollConfig('strategy_standard', (rows) {
             if (rows.isEmpty || !mounted) return;
             final data = rows.first['data'] as Map<String, dynamic>? ?? {};
             if (data.isNotEmpty) _signalEngine.updateStandardStrategy(data);
           });
 
-      _vipStrategyListener = Supabase.instance.client
-          .from('configs')
-          .stream(primaryKey: ['id'])
-          .eq('id', 'strategy_vip')
-          .listen((rows) {
+      _vipStrategyListener = _pollConfig('strategy_vip', (rows) {
             if (rows.isEmpty || !mounted) return;
             final data = rows.first['data'] as Map<String, dynamic>? ?? {};
             if (data.isNotEmpty) _signalEngine.updateVipStrategy(data);
           });
 
       _monStdStrategyListener?.cancel();
-      _monStdStrategyListener = Supabase.instance.client
-          .from('configs')
-          .stream(primaryKey: ['id'])
-          .eq('id', 'monitoring_standard')
-          .listen((rows) {
+      _monStdStrategyListener = _pollConfig('monitoring_standard', (rows) {
             if (rows.isEmpty || !mounted) return;
             final data = rows.first['data'] as Map<String, dynamic>? ?? {};
             if (data.isNotEmpty) {
@@ -2820,11 +2842,7 @@ class _MainScreenState extends State<MainScreen> {
           });
 
       _monVipStrategyListener?.cancel();
-      _monVipStrategyListener = Supabase.instance.client
-          .from('configs')
-          .stream(primaryKey: ['id'])
-          .eq('id', 'monitoring_vip')
-          .listen((rows) {
+      _monVipStrategyListener = _pollConfig('monitoring_vip', (rows) {
             if (rows.isEmpty || !mounted) return;
             final data = rows.first['data'] as Map<String, dynamic>? ?? {};
             if (data.isNotEmpty)
