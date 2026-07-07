@@ -239,7 +239,7 @@ class _MainScreenState extends State<MainScreen> {
     // on the real market (scraping mode). Refreshes every 3s + on demand.
     _syncEngineCandles();
     _realCandlesTimer = Timer.periodic(
-      const Duration(seconds: 3),
+      const Duration(seconds: 10),
       (_) => _syncEngineCandles(),
     );
   }
@@ -316,7 +316,7 @@ class _MainScreenState extends State<MainScreen> {
     _marketStatusTimer?.cancel();
     _pollMarketStatus(); // immediate poll so closed market shows instantly
     _marketStatusTimer = Timer.periodic(
-      const Duration(seconds: 5),
+      const Duration(seconds: 10),
       (_) => _pollMarketStatus(),
     );
   }

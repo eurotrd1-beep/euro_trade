@@ -778,10 +778,12 @@ window.CandleChart = (function () {
     var self = this;
     function poll() {
       if (self._destroyed) return;
+      if (self._otcPolling) return; // Prevent request queue piling
       /* STATE 17 — the user's own device is offline. */
       if (navigator.onLine === false) { self._otcMsg('offline'); return; }
       var url = SUPABASE_URL +
         '/rest/v1/configs?id=in.(otc_status,otc_prices)&select=id,data';
+      self._otcPolling = true;
       fetch(url, { headers: self._sbHeaders() })
         .then(function(r) { if (!r.ok) throw 0; return r.json(); })
         .then(function(rows) {
@@ -794,10 +796,11 @@ window.CandleChart = (function () {
           self._onOtcData(status, prices);
         })
         /* STATE 6 — Supabase itself isn't responding. */
-        .catch(function() { if (!self._destroyed) self._otcMsg('supabase'); });
+        .catch(function() { if (!self._destroyed) self._otcMsg('supabase'); })
+        .finally(function() { self._otcPolling = false; });
     }
     poll();
-    this._otcPriceTimer = setInterval(poll, 700);   // sub-second refresh
+    this._otcPriceTimer = setInterval(poll, 1500);   // 1.5s refresh with request lock
   };
 
   Chart.prototype._onOtcData = function(status, prices) {
