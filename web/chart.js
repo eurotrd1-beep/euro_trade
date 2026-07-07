@@ -630,7 +630,8 @@ window.CandleChart = (function () {
             if (price >  last.h)  last.h = price;
             if (price <  last.l)  last.l = price;
           } else if (cTime > last.t) {
-            var nc = { t: cTime, o: price, h: price, l: price, c: price };
+            var open = last.c;
+            var nc = { t: cTime, o: open, h: Math.max(open, price), l: Math.min(open, price), c: price };
             if (!validCandle(nc)) return;
             self.candles.push(nc);
             /* Sliding window: drop oldest candle when limit is exceeded */
