@@ -1510,38 +1510,6 @@ window.CandleChart = (function () {
   /* ── Public API ──────────────────────────────────────────────── */
   var instances = {};
 
-  /* Temporary live diagnostic: run __otcDiag() in the browser console to dump
-     every chart's live state (proxy, WS status, tick freshness, poll lock). */
-  window.__otcDiag = function () {
-    var out = { PROXY: PROXY, now: Math.floor(Date.now() / 1000), charts: [] };
-    Object.keys(instances).forEach(function (id) {
-      var c = instances[id];
-      if (!c) return;
-      var last = c.candles && c.candles.length ? c.candles[c.candles.length - 1] : null;
-      out.charts.push({
-        id: id,
-        mode: c.mode,
-        symbol: c.symbol,
-        interval: c.interval,
-        candles: c.candles ? c.candles.length : 0,
-        lastCandleT: last ? last.t : null,
-        lastCandleC: last ? last.c : null,
-        wsState: c._ws ? c._ws.readyState : 'no-ws',       // 0=connecting 1=open 2=closing 3=closed
-        lastTVPrice: c._lastTVPrice,
-        lastTickAgeSec: c._lastTVTickTime ? Math.round((Date.now() - c._lastTVTickTime) / 1000) : null,
-        otcPolling: c._otcPolling,
-        otcProblem: c._otcProblem,
-        poClosed: c._poClosed,
-        otcHistLoaded: c._otcHistLoaded,
-        hasHistTimer: !!c._otcHistTimer,
-        hasPriceTimer: !!c._otcPriceTimer,
-        hasTvTimer: !!c._tvTimer
-      });
-    });
-    console.log('[OTCDBG]', JSON.stringify(out, null, 2));
-    return out;
-  };
-
   function _tryInit(id, sym, iv, mode, tries) {
     var el = document.getElementById(id);
     if (!el) {

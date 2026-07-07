@@ -584,6 +584,16 @@ class _MainScreenState extends State<MainScreen> {
             // Re-evaluate VIP expiry whenever the row changes (covers admin
             // edits to role/vip_expiry while the session is open).
             _evaluateVipExpiry(newRole, newExpiry);
+          }, onError: (e) {
+            // A transient Supabase blip (503/522, realtime drop) must NOT surface
+            // as an uncaught error. Swallow it and re-arm the listener after a
+            // short delay so it recovers once the DB is healthy again.
+            debugPrint('role listener transient error: $e');
+            _roleListener?.cancel();
+            _roleListener = null;
+            Future.delayed(const Duration(seconds: 5), () {
+              if (mounted) _startRoleListener(accountId);
+            });
           });
     } catch (_) {}
   }
