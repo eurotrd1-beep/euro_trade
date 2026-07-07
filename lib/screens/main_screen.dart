@@ -3710,8 +3710,6 @@ class _MainScreenState extends State<MainScreen> {
                 children: [
                   _buildChartCard(),
                   const SizedBox(height: 20),
-                  _buildAIAnalysisCard(),
-                  const SizedBox(height: 20),
                   _buildSignalHistoryCard(),
                 ],
               ),
@@ -3733,8 +3731,6 @@ class _MainScreenState extends State<MainScreen> {
     return Column(
       children: [
         _buildChartCard(),
-        const SizedBox(height: 20),
-        _buildAIAnalysisCard(),
         const SizedBox(height: 20),
         _buildSignalHistoryCard(),
         const SizedBox(height: 20),
