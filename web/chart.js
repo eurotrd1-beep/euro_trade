@@ -637,8 +637,22 @@ window.CandleChart = (function () {
         try {
           var d     = JSON.parse(e.data);
           var price = d.price;
-          if (!isFinite(price) || !price || !self.candles.length) return;
+          if (!isFinite(price) || !price) return;
 
+          /* OTC: route WS ticks through the SAME price pipeline as the status
+             poll (_feedOtcPrice → _animTarget → eased anim loop). Otherwise the
+             WS wrote last.c directly while the anim loop simultaneously eased it
+             back toward the (stale, 8s) poll target — the anim loop won and the
+             live price froze. Feeding here makes every WS tick the live target,
+             so the price moves in real time and new candles open on the frame. */
+          if (self.mode === 'otc') {
+            self._lastTVTickTime = Date.now();
+            self._marketClosedNote = false;
+            self._feedOtcPrice(price);   // handles gwinAdjust + new-candle + anim
+            return;
+          }
+
+          if (!self.candles.length) return;
           // Guaranteed win — eased price offset (tv mode). `price` is the raw
           // market price; the offset eases in/out so candles never gap.
           price = gwinAdjust(self, price);
