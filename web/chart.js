@@ -34,6 +34,20 @@ window.CandleChart = (function () {
 
   /* ── OTC data flows through the proxy server (no direct Supabase calls). ── */
 
+  /* fetch with a hard timeout. A plain fetch() against a cold-starting / sleeping
+     Render instance can hang indefinitely — which used to leave the OTC status
+     poll's request-lock stuck `true` forever, silently killing the live price
+     loop (chart shows candles + a ticking countdown, but the price is frozen).
+     Aborting after `ms` guarantees the promise settles so .finally() always runs. */
+  function fetchT(url, ms) {
+    ms = ms || 12000;
+    if (typeof AbortController === 'undefined') return fetch(url);
+    var ac = new AbortController();
+    var timer = setTimeout(function () { try { ac.abort(); } catch (_) {} }, ms);
+    return fetch(url, { signal: ac.signal })
+      .finally(function () { clearTimeout(timer); });
+  }
+
   /* ── Sliding window: max candles kept in memory ─────────────── */
   var MAX_CANDLES = 50;
 
@@ -600,10 +614,12 @@ window.CandleChart = (function () {
       self._draw();
     }, 1000);
 
-    var wsUrl = PROXY.replace(/^http/, 'ws') + '/ws';
-
     function connect() {
       if (self._destroyed) return;
+      // Recompute the WS URL from PROXY on EVERY (re)connect so an admin proxy
+      // switch (setProxy) is picked up — otherwise the socket stays pinned to the
+      // proxy that was active when the chart first loaded and can never recover.
+      var wsUrl = PROXY.replace(/^http/, 'ws') + '/ws';
       var ws = new WebSocket(wsUrl);
       self._ws = ws;
 
@@ -728,7 +744,7 @@ window.CandleChart = (function () {
       if (self._destroyed) return;
       var url = PROXY + '/api/otc/candles?symbol=' +
                 encodeURIComponent(toOtcSym(self.symbol)) + '&interval=' + self.interval;
-      fetch(url)
+      fetchT(url)
         .then(function(r) { if (!r.ok) throw 0; return r.json(); })
         .then(function(d) {
           if (self._destroyed) return;
@@ -777,7 +793,7 @@ window.CandleChart = (function () {
       if (navigator.onLine === false) { self._otcMsg('offline'); return; }
       var url = PROXY + '/api/otc/status';
       self._otcPolling = true;
-      fetch(url)
+      fetchT(url)
         .then(function(r) { if (!r.ok) throw 0; return r.json(); })
         .then(function(rows) {
           if (self._destroyed) return;
@@ -1536,9 +1552,11 @@ window.CandleChart = (function () {
         inst._draw();
       });
     },
-    /* Point TV data at a new proxy base URL (admin server switch). Reconnects
-       any live tv-mode chart so the switch takes effect within seconds — no
-       reload. OTC charts are unaffected (their data comes from Supabase). */
+    /* Point data at a new proxy base URL (admin server switch). Reconnects EVERY
+       live chart so the switch takes effect within seconds — no reload. Since the
+       OTC data path now flows through the same proxy (/api/otc/* + /ws), OTC
+       charts MUST be reconnected too — otherwise they stay pinned to the old
+       proxy and their live price freezes. */
     setProxy: function(url) {
       if (!url || typeof url !== 'string') return;
       var clean = url.trim().replace(/\/+$/, '');
@@ -1546,15 +1564,29 @@ window.CandleChart = (function () {
       PROXY = clean;
       Object.keys(instances).forEach(function(id) {
         var inst = instances[id];
-        if (!inst || inst.mode !== 'tv') return;
+        if (!inst) return;
+        // Tear down all live connections/timers for this chart.
         try { if (inst._ws) inst._ws.close(); } catch (_) {}
         inst._ws = null;
         clearTimeout(inst._retryTimer);
         clearTimeout(inst._wsTimer);
-        if (inst._tvTimer) { clearInterval(inst._tvTimer); inst._tvTimer = null; }
-        inst._loadStartedAt = 0;    // restart the status/timing window
-        inst._resolvedSym = null;
-        inst._fetchTVCandles(0, [inst.symbol]);   // refetch against the new server
+        if (inst._tvTimer)      { clearInterval(inst._tvTimer);      inst._tvTimer = null; }
+        if (inst._otcHistTimer) { clearInterval(inst._otcHistTimer); inst._otcHistTimer = null; }
+        if (inst._otcPriceTimer){ clearInterval(inst._otcPriceTimer);inst._otcPriceTimer = null; }
+
+        if (inst.mode === 'tv') {
+          inst._loadStartedAt = 0;    // restart the status/timing window
+          inst._resolvedSym = null;
+          inst._fetchTVCandles(0, [inst.symbol]);   // refetch against the new server
+        } else if (inst.mode === 'otc') {
+          // Re-pull history + status + WS tick from the new proxy. Resetting
+          // _otcHistLoaded lets the first fresh load batch-render and (re)start
+          // the live WS tick via _startTVTick().
+          inst._otcHistLoaded = false;
+          inst._otcPolling = false;
+          inst._fetchOtcCandles();
+          inst._startOtcStream();
+        }
       });
     },
   };
