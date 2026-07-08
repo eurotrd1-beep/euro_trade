@@ -1128,19 +1128,19 @@ window.CandleChart = (function () {
        width, clamped to a readable thickness. step == candleW so body N ends
        exactly where body N+1 begins. */
     var total   = this.candles.length;
-    // Platform-style candles: thin bodies with a small gap between them (like the
-    // Pocket Option chart), just a touch thicker than that reference. `slot` is the
-    // per-candle column; the body fills ~76% of it so a small gap separates each.
-    var MIN_SLOT = 8, MAX_SLOT = 13;
-    var maxFit = Math.max(1, Math.floor(cw / MIN_SLOT));
-    var showN  = Math.max(1, Math.min(total || 1, maxFit));
-    var slot   = clamp(cw / showN, MIN_SLOT, MAX_SLOT);
-    var step   = Math.max(3, Math.round(slot));            // candle-to-candle spacing
-    this.candleW = Math.max(2, Math.round(step * 0.76));   // body width (< step → gap)
-    this.gap     = step - this.candleW;                    // spacing between neighbours
+    // Show EVERY candle we have (up to the 50-cap), sized to fill the plot width
+    // with a small gap between bodies (Pocket Option style). The slot is capped
+    // only from ABOVE (so a FEW candles don't become giant) — never from below,
+    // so all 50 always fit even on a narrow screen instead of clipping the oldest.
+    var MAX_SLOT = 14;
+    var showN = Math.max(1, total);
+    var slot  = Math.min(cw / showN, MAX_SLOT);
+    var step  = slot;                                      // fractional is fine on canvas
+    this.candleW = Math.max(1, Math.round(step * 0.72));   // body ~72% of slot → small gap
+    this.gap     = step - this.candleW;
 
-    /* Visible candles */
-    var maxVis  = Math.max(1, Math.floor(cw / step));
+    /* Visible candles: ALL of them (right-aligned, newest on the right). */
+    var maxVis  = showN;
     var endIdx  = total - clamp(this.scrollRight, 0, total - 1);
     var startIdx = Math.max(0, endIdx - maxVis);
     var vis = this.candles.slice(startIdx, endIdx);
@@ -1158,9 +1158,9 @@ window.CandleChart = (function () {
     /* Right-align so the NEWEST candle sits on the right edge: a short series
        fills from the right (like the broker platform) instead of leaving an
        empty gap on the right. */
-    var xOff = cl + Math.max(0, maxVis - vis.length) * step;
+    var xOff = cl + Math.max(0, cw - vis.length * step);   // right-align by pixels; fills fully when candles span cw
     function py(p) { return cb - ((p - lo) / (hi - lo)) * ch; }
-    function cx(i) { return xOff + i * step + Math.floor(step / 2); }
+    function cx(i) { return xOff + i * step + step / 2; }
 
     this._vis = vis; this._startIdx = startIdx;
     this._py = py; this._cx = cx;
