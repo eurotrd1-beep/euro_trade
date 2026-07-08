@@ -11,8 +11,15 @@ CREATE TABLE IF NOT EXISTS pairs (
   category    TEXT    DEFAULT 'forex',
   type        TEXT    DEFAULT 'forex',
   "order"     BIGINT  DEFAULT 0,
-  created_at  TIMESTAMPTZ DEFAULT NOW()
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  source      TEXT    DEFAULT 'tv',      -- 'tv' | 'po' (data path)
+  is_otc      BOOLEAN DEFAULT false,
+  enabled     BOOLEAN DEFAULT true
 );
+-- If the table pre-exists (created by an older schema), add the newer columns.
+ALTER TABLE pairs ADD COLUMN IF NOT EXISTS source  TEXT    DEFAULT 'tv';
+ALTER TABLE pairs ADD COLUMN IF NOT EXISTS is_otc  BOOLEAN DEFAULT false;
+ALTER TABLE pairs ADD COLUMN IF NOT EXISTS enabled BOOLEAN DEFAULT true;
 
 -- configs (key-value — replaces ALL configs/* Firestore docs)
 CREATE TABLE IF NOT EXISTS configs (
@@ -27,7 +34,7 @@ CREATE TABLE IF NOT EXISTS brokers (
   logo_url            TEXT    DEFAULT '',
   chart_url           TEXT    DEFAULT '',
   registration_link   TEXT    DEFAULT '',
-  desc                TEXT    DEFAULT '',
+  "desc"              TEXT    DEFAULT '',
   click_key           TEXT    DEFAULT '',
   promo_code          TEXT    DEFAULT '',
   bonus_percent       INT     DEFAULT 0,
@@ -126,8 +133,12 @@ CREATE TABLE IF NOT EXISTS otc_pairs (
   "order"       BIGINT  DEFAULT 0,
   created_at    TIMESTAMPTZ DEFAULT NOW(),
   updated_at    TIMESTAMPTZ DEFAULT NOW(),
+  is_otc        BOOLEAN DEFAULT true,
+  asset_type    TEXT,
   UNIQUE (platform, symbol)
 );
+ALTER TABLE otc_pairs ADD COLUMN IF NOT EXISTS is_otc     BOOLEAN DEFAULT true;
+ALTER TABLE otc_pairs ADD COLUMN IF NOT EXISTS asset_type TEXT;
 
 -- Control rows in configs:
 --   otc_scan   — admin "جلب الأزواج" trigger + scraper status
@@ -166,3 +177,28 @@ CREATE POLICY "allow all" ON push_subscriptions FOR ALL USING (true) WITH CHECK 
 INSERT INTO configs (id, data) VALUES
   ('push', '{"vapidPublicKey": ""}'::jsonb)
 ON CONFLICT (id) DO NOTHING;
+
+-- ══════════════════════════════════════════════════════
+-- Proxy persistence tables (written by proxy/po-scraper.js + server.js).
+-- Only a cold-start fallback — live data is served from the proxy's in-memory
+-- store — but the tables must exist or the writes/hydrate error every cycle.
+-- ══════════════════════════════════════════════════════
+
+-- Candle history per "<SYMBOL>_<interval>" key (OTC + TV series).
+CREATE TABLE IF NOT EXISTS candles (
+  key         TEXT PRIMARY KEY,
+  data        JSONB DEFAULT '[]'::jsonb,
+  updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE candles ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "allow all" ON candles FOR ALL USING (true) WITH CHECK (true);
+
+-- 2captcha solve stats (success/cost) — admin analytics.
+CREATE TABLE IF NOT EXISTS captcha_stats (
+  id          UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  success     BOOLEAN     DEFAULT false,
+  cost        NUMERIC(10,4) DEFAULT 0,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE captcha_stats ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "allow all" ON captcha_stats FOR ALL USING (true) WITH CHECK (true);
