@@ -282,6 +282,28 @@ window.CandleChart = (function () {
         unique[unique.length - 1] = valid[j];
       }
     }
+    /* Keep only the most recent CONTIGUOUS run. If the series has a large time
+       gap (scraper was down / restarted — e.g. during a migration), old pre-gap
+       candles otherwise render as a separate cluster with an empty void between
+       them and the live candles. Cut at the last gap wider than 3× the base
+       interval (inferred as the smallest gap) so the chart is one clean series. */
+    if (unique.length > 2) {
+      var minGap = Infinity;
+      for (var k = 1; k < unique.length; k++) {
+        var g = unique[k].t - unique[k - 1].t;
+        if (g > 0 && g < minGap) minGap = g;
+      }
+      if (isFinite(minGap) && minGap > 0) {
+        var cut = 0;
+        for (var m = 1; m < unique.length; m++) {
+          var gg = unique[m].t - unique[m - 1].t;
+          // Only a real downtime gap: >10× the interval AND >30 min absolute
+          // (so a quiet-market minute-skip never trims legit history).
+          if (gg > minGap * 10 && gg > 1800) cut = m;
+        }
+        if (cut > 0) unique = unique.slice(cut);
+      }
+    }
     return unique;
   }
 
