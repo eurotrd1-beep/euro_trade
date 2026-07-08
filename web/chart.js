@@ -49,7 +49,7 @@ window.CandleChart = (function () {
   }
 
   /* ── Sliding window: max candles kept in memory ─────────────── */
-  var MAX_CANDLES = 50;
+  var MAX_CANDLES = 100;
 
   /* ── Asset profiles (realistic base prices + volatility) ────── */
   var ASSETS = {
