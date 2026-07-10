@@ -170,15 +170,17 @@ class _MainScreenState extends State<MainScreen> {
   // .stream()s, but a transient DB blip made ALL of them re-subscribe + re-fetch
   // at once → a 522/CORS error storm in the console + extra DB churn. They're now
   // 30s polls (Timer), which never storm. Timer.cancel() matches the old API.
-  Timer? _maintenanceListener;
-  Timer? _stdStrategyListener;
-  Timer? _vipStrategyListener;
-  Timer? _monStdStrategyListener;
-  Timer? _monVipStrategyListener;
-  Timer? _chartModeListener;
-  Timer? _pairsListener;
-  Timer? _priceSystemListener;
-  Timer? _displaySourceListener;
+  // Realtime subscriptions (NOT polling). Polling these every 30s per user ate
+  // ~5.6GB Egress in 2 days; realtime sends only the initial snapshot + deltas.
+  StreamSubscription<List<Map<String, dynamic>>>? _maintenanceListener;
+  StreamSubscription<List<Map<String, dynamic>>>? _stdStrategyListener;
+  StreamSubscription<List<Map<String, dynamic>>>? _vipStrategyListener;
+  StreamSubscription<List<Map<String, dynamic>>>? _monStdStrategyListener;
+  StreamSubscription<List<Map<String, dynamic>>>? _monVipStrategyListener;
+  StreamSubscription<List<Map<String, dynamic>>>? _chartModeListener;
+  StreamSubscription<List<Map<String, dynamic>>>? _pairsListener;
+  StreamSubscription<List<Map<String, dynamic>>>? _priceSystemListener;
+  StreamSubscription<List<Map<String, dynamic>>>? _displaySourceListener;
   String _chartMode = 'sim';
   // Admin System Settings (configs, live): price source + which source shows.
   String?
@@ -969,26 +971,13 @@ class _MainScreenState extends State<MainScreen> {
     });
   }
 
-  // Reliable fallback to the realtime stream: poll the users row every 20s.
-  // Realtime DELETE events aren't always delivered to a filtered .stream(), so
-  // this guarantees the user is kicked out shortly after the admin deletes them.
+  // DISABLED (Egress): this used to poll the users row every 20s per user. Account
+  // deletion / ban / role changes are already delivered by the realtime
+  // `_roleListener` (`_startRoleListener`), so the poll was pure duplicate Egress.
+  // Realtime-only now.
   void _startAccountExistenceCheck(String accountId) {
     _accountCheckTimer?.cancel();
-    _accountCheckTimer = Timer.periodic(const Duration(seconds: 20), (_) async {
-      if (!mounted || _accountDeletedHandled) return;
-      try {
-        final row = await Supabase.instance.client
-            .from('users')
-            .select('id')
-            .eq('id', accountId)
-            .maybeSingle();
-        if (row == null) {
-          if (_userRowSeen) _handleAccountDeleted();
-        } else {
-          _userRowSeen = true; // confirmed the account exists
-        }
-      } catch (_) {}
-    });
+    _accountCheckTimer = null;
   }
 
   // VIP account is being used on another device → kick this one out.
@@ -2521,52 +2510,36 @@ class _MainScreenState extends State<MainScreen> {
     super.dispose();
   }
 
-  // Poll a single `configs` row every 30s and deliver it to `onData` in the same
-  // shape the old realtime .stream() did (`[{id, data}]`, or `[]` if missing).
-  // Replaces a realtime channel so a transient DB blip can't trigger a reconnect
-  // storm; a failed poll is swallowed and the next tick retries.
-  Timer _pollConfig(
+  // Subscribe to a single `configs` row via Supabase REALTIME (NOT polling).
+  // Realtime sends only the initial snapshot + deltas on change, so a rarely-
+  // changing config costs almost no Egress — vs a 30s poll which re-downloaded
+  // everything per user and burned ~5.6GB in 2 days. onError swallows a transient
+  // blip (the realtime client auto-reconnects) so it can never crash the screen.
+  StreamSubscription<List<Map<String, dynamic>>> _pollConfig(
     String id,
     void Function(List<Map<String, dynamic>>) onData,
   ) {
-    Future<void> fetch() async {
-      try {
-        final row = await Supabase.instance.client
-            .from('configs')
-            .select('data')
-            .eq('id', id)
-            .maybeSingle()
-            .timeout(const Duration(seconds: 8));
-        if (!mounted) return;
-        onData(
-          row == null
-              ? const <Map<String, dynamic>>[]
-              : [
-                  {'id': id, 'data': row['data']},
-                ],
+    return Supabase.instance.client
+        .from('configs')
+        .stream(primaryKey: ['id'])
+        .eq('id', id)
+        .listen(
+          onData,
+          onError: (e) => debugPrint('config[$id] realtime error (transient): $e'),
         );
-      } catch (_) {/* transient DB blip — next tick retries */}
-    }
-
-    fetch();
-    return Timer.periodic(const Duration(seconds: 30), (_) => fetch());
   }
 
-  // Same idea for the full `pairs` table (rarely changes; a 30s refresh is fine).
-  Timer _pollPairs(void Function(List<Map<String, dynamic>>) onData) {
-    Future<void> fetch() async {
-      try {
-        final rows = await Supabase.instance.client
-            .from('pairs')
-            .select('*')
-            .timeout(const Duration(seconds: 8));
-        if (!mounted) return;
-        onData((rows as List).cast<Map<String, dynamic>>());
-      } catch (_) {/* transient DB blip — next tick retries */}
-    }
-
-    fetch();
-    return Timer.periodic(const Duration(seconds: 30), (_) => fetch());
+  // Same, for the full `pairs` table (realtime: one snapshot + rare deltas).
+  StreamSubscription<List<Map<String, dynamic>>> _pollPairs(
+    void Function(List<Map<String, dynamic>>) onData,
+  ) {
+    return Supabase.instance.client
+        .from('pairs')
+        .stream(primaryKey: ['id'])
+        .listen(
+          onData,
+          onError: (e) => debugPrint('pairs realtime error (transient): $e'),
+        );
   }
 
   void _startChartModeListener() {
