@@ -485,6 +485,12 @@ window.CandleChart = (function () {
              so the price moves in real time and new candles open on the frame. */
           self._lastPriceTickTime = Date.now();
           self._marketClosedNote = false;
+          /* A live tick means the server is up — clear any stale server-down /
+             reconnect banner right away instead of waiting for the 8s poll. */
+          if (self._otcProblem === 'server' || self._otcProblem === 'reconnecting') {
+            self._otcProblem = null;
+            self._otcOverlay = null;
+          }
           self._feedOtcPrice(price);   // handles gwinAdjust + new-candle + anim
         } catch(_) {}
       };
@@ -665,10 +671,17 @@ window.CandleChart = (function () {
       this._otcMsg(since > 60000 ? 'repairing_long' : 'repairing');
       return;
     }
+    /* A live WS tick in the last minute PROVES the server is up — never show a
+       "server down / reconnecting" banner off a stale-or-absent otc_status
+       .updatedAt (it's event-driven: it goes stale in steady state and, as seen
+       in prod, can be missing entirely → hbAge = Infinity → false "server" banner
+       while prices stream fine). Price liveness is the ground truth. */
+    var tickAge  = this._lastPriceTickTime ? (now - this._lastPriceTickTime) : Infinity;
+    var liveTick = tickAge < 60000;
     /* STATE 2 & 14 — scraper not heartbeating for long → server down / maintenance. */
-    if (hbAge > 150000) { this._otcMsg('server'); return; }
+    if (!liveTick && hbAge > 150000) { this._otcMsg('server'); return; }
     /* STATE 10 & 13 — short heartbeat gap → new deploy / restart / VPN hiccup. */
-    if (hbAge > 45000)  { this._otcMsg('reconnecting'); return; }
+    if (!liveTick && hbAge > 45000)  { this._otcMsg('reconnecting'); return; }
     /* STATE 4 — re-establishing the Pocket Option session. */
     if (status.phase === 'relogin' || status.phase === 'reconnecting' ||
         status.connected === false) { this._otcMsg('relogin'); return; }
