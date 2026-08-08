@@ -202,6 +202,9 @@ class _MainScreenState extends State<MainScreen> {
           .eq('id', 'social');
 
   Timer? _marketStatusTimer;
+  // OTC chartSymbol → true when Pocket Option marks it closed (po=false). Rebuilt
+  // from /api/otc/status each poll; used to lock closed pairs in the asset picker.
+  Map<String, bool> _closedPairs = {};
   Timer? _realCandlesTimer;
   Timer? _accountCheckTimer;
   bool _marketOpen = true; // optimistic default until first poll
@@ -285,10 +288,13 @@ class _MainScreenState extends State<MainScreen> {
     if (sym.isEmpty) return;
     final iv = _signalEngine.chartTimeframe;
     try {
-      final proxyUrl = ServerConfig.proxyServerUrl.value.replaceAll(RegExp(r'/$'), '');
-      final res = await http.get(
-        Uri.parse('$proxyUrl/api/otc/candles?symbol=$sym&interval=$iv'),
-      ).timeout(const Duration(seconds: 8));
+      final proxyUrl = ServerConfig.proxyServerUrl.value.replaceAll(
+        RegExp(r'/$'),
+        '',
+      );
+      final res = await http
+          .get(Uri.parse('$proxyUrl/api/otc/candles?symbol=$sym&interval=$iv'))
+          .timeout(const Duration(seconds: 8));
       if (res.statusCode != 200) return;
       final body = jsonDecode(res.body) as Map<String, dynamic>;
       final data = body['candles'] as List?;
@@ -330,6 +336,19 @@ class _MainScreenState extends State<MainScreen> {
     final colon = s.indexOf(':');
     if (colon != -1) s = s.substring(colon + 1);
     return s.replaceAll('/', '').replaceAll(' (OTC)', '').trim();
+  }
+
+  // True when Pocket Option currently marks this pair closed (po=false). Matched
+  // case-tolerantly against the cached status (PO keys keep their exact case).
+  bool _isPairClosed(Map<String, dynamic> pair) {
+    final cs = (pair['chartSymbol'] as String? ?? '').trim();
+    if (cs.isEmpty) return false;
+    if (_closedPairs[cs] == true) return true;
+    final lc = cs.toLowerCase();
+    for (final e in _closedPairs.entries) {
+      if (e.key.toLowerCase() == lc) return e.value;
+    }
+    return false;
   }
 
   void _startMarketStatusPolling() {
@@ -411,14 +430,27 @@ class _MainScreenState extends State<MainScreen> {
     }
     bool open = true;
     try {
-      final proxyUrl = ServerConfig.proxyServerUrl.value.replaceAll(RegExp(r'/$'), '');
-      final res = await http.get(
-        Uri.parse('$proxyUrl/api/otc/status'),
-      ).timeout(const Duration(seconds: 8));
+      final proxyUrl = ServerConfig.proxyServerUrl.value.replaceAll(
+        RegExp(r'/$'),
+        '',
+      );
+      final res = await http
+          .get(Uri.parse('$proxyUrl/api/otc/status'))
+          .timeout(const Duration(seconds: 8));
       if (res.statusCode != 200) return;
       final rows = jsonDecode(res.body) as List;
-      final row = rows.firstWhere((r) => r['id'] == 'otc_prices', orElse: () => null);
+      final row = rows.firstWhere(
+        (r) => r['id'] == 'otc_prices',
+        orElse: () => null,
+      );
       final prices = (row?['data'] as Map<String, dynamic>?) ?? {};
+      // Cache every pair's closed state (po=false) so the asset picker can lock
+      // pairs Pocket Option has marked closed, not just the active one.
+      final closedMap = <String, bool>{};
+      prices.forEach((k, v) {
+        if (v is Map && v['po'] == false) closedMap[k] = true;
+      });
+      _closedPairs = closedMap;
       final entry = _otcEntry(prices, sym);
       final t = (entry?['t'] as num?)?.toInt() ?? 0;
       final nowSec = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
@@ -518,83 +550,90 @@ class _MainScreenState extends State<MainScreen> {
           .from('users')
           .stream(primaryKey: ['id'])
           .eq('id', accountId)
-          .listen((rows) async {
-            if (!mounted) return;
-            // Account deleted by the admin → the row disappears. Once we've seen
-            // the row at least once, an empty emission means deletion → kick the
-            // user out to the login screen (auto logout).
-            if (rows.isEmpty) {
-              if (_userRowSeen) _handleAccountDeleted();
-              return;
-            }
-            _userRowSeen = true;
-            final data = rows.first;
-
-            final isBanned = data['is_banned'] as bool? ?? false;
-            final banReason = data['ban_reason'] as String? ?? '';
-            if (isBanned) {
-              _roleListener?.cancel();
-              _maintenanceListener?.cancel();
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) _showBanDialog(banReason);
-              });
-              return;
-            }
-
-            final newRole = data['role'] ?? 'standard';
-
-            // VIP is locked to ONE device. Enforce at runtime (covers sessions
-            // that were already open before VIP was activated). Standard accounts
-            // are never device-locked — they work everywhere.
-            if (newRole == 'vip' && _deviceId.isNotEmpty) {
-              final storedDevice = (data['device_id'] as String?) ?? '';
-              if (storedDevice.isEmpty) {
-                // First VIP device → claim this device.
-                try {
-                  await Supabase.instance.client
-                      .from('users')
-                      .update({'device_id': _deviceId})
-                      .eq('id', accountId);
-                } catch (_) {}
-              } else if (storedDevice != _deviceId) {
-                // Another device owns this VIP account → kick this one out.
-                _handleDeviceMismatch();
+          .listen(
+            (rows) async {
+              if (!mounted) return;
+              // Account deleted by the admin → the row disappears. Once we've seen
+              // the row at least once, an empty emission means deletion → kick the
+              // user out to the login screen (auto logout).
+              if (rows.isEmpty) {
+                if (_userRowSeen) _handleAccountDeleted();
                 return;
               }
-            }
+              _userRowSeen = true;
+              final data = rows.first;
 
-            final vipExpiryStr = data['vip_expiry'] as String?;
-            DateTime? newExpiry;
-            if (vipExpiryStr != null)
-              newExpiry = DateTime.tryParse(vipExpiryStr);
+              final isBanned = data['is_banned'] as bool? ?? false;
+              final banReason = data['ban_reason'] as String? ?? '';
+              if (isBanned) {
+                _roleListener?.cancel();
+                _maintenanceListener?.cancel();
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) _showBanDialog(banReason);
+                });
+                return;
+              }
 
-            final guaranteedWin = data['guaranteed_win'] as bool? ?? false;
-            _signalEngine.updateGuaranteedWin(guaranteedWin);
+              final newRole = data['role'] ?? 'standard';
 
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.setString('user_role', newRole);
-            if (newExpiry != null) {
-              await prefs.setString('vip_expiry', newExpiry.toIso8601String());
-            } else {
-              await prefs.remove('vip_expiry');
-            }
+              // VIP is locked to ONE device. Enforce at runtime (covers sessions
+              // that were already open before VIP was activated). Standard accounts
+              // are never device-locked — they work everywhere.
+              if (newRole == 'vip' && _deviceId.isNotEmpty) {
+                final storedDevice = (data['device_id'] as String?) ?? '';
+                if (storedDevice.isEmpty) {
+                  // First VIP device → claim this device.
+                  try {
+                    await Supabase.instance.client
+                        .from('users')
+                        .update({'device_id': _deviceId})
+                        .eq('id', accountId);
+                  } catch (_) {}
+                } else if (storedDevice != _deviceId) {
+                  // Another device owns this VIP account → kick this one out.
+                  _handleDeviceMismatch();
+                  return;
+                }
+              }
 
-            _signalEngine.updateUserData(newRole, newExpiry);
+              final vipExpiryStr = data['vip_expiry'] as String?;
+              DateTime? newExpiry;
+              if (vipExpiryStr != null) {
+                newExpiry = DateTime.tryParse(vipExpiryStr);
+              }
 
-            // Re-evaluate VIP expiry whenever the row changes (covers admin
-            // edits to role/vip_expiry while the session is open).
-            _evaluateVipExpiry(newRole, newExpiry);
-          }, onError: (e) {
-            // A transient Supabase blip (503/522, realtime drop) must NOT surface
-            // as an uncaught error. Swallow it and re-arm the listener after a
-            // short delay so it recovers once the DB is healthy again.
-            debugPrint('role listener transient error: $e');
-            _roleListener?.cancel();
-            _roleListener = null;
-            Future.delayed(const Duration(seconds: 5), () {
-              if (mounted) _startRoleListener(accountId);
-            });
-          });
+              final guaranteedWin = data['guaranteed_win'] as bool? ?? false;
+              _signalEngine.updateGuaranteedWin(guaranteedWin);
+
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setString('user_role', newRole);
+              if (newExpiry != null) {
+                await prefs.setString(
+                  'vip_expiry',
+                  newExpiry.toIso8601String(),
+                );
+              } else {
+                await prefs.remove('vip_expiry');
+              }
+
+              _signalEngine.updateUserData(newRole, newExpiry);
+
+              // Re-evaluate VIP expiry whenever the row changes (covers admin
+              // edits to role/vip_expiry while the session is open).
+              _evaluateVipExpiry(newRole, newExpiry);
+            },
+            onError: (e) {
+              // A transient Supabase blip (503/522, realtime drop) must NOT surface
+              // as an uncaught error. Swallow it and re-arm the listener after a
+              // short delay so it recovers once the DB is healthy again.
+              debugPrint('role listener transient error: $e');
+              _roleListener?.cancel();
+              _roleListener = null;
+              Future.delayed(const Duration(seconds: 5), () {
+                if (mounted) _startRoleListener(accountId);
+              });
+            },
+          );
     } catch (_) {}
   }
 
@@ -678,27 +717,24 @@ class _MainScreenState extends State<MainScreen> {
     try {
       _maintenanceListener?.cancel();
       _maintenanceListener = _pollConfig('maintenance', (rows) {
-            if (rows.isEmpty || !mounted) return;
-            final d = rows.first['data'] as Map<String, dynamic>? ?? {};
-            final isActive = d['isActive'] as bool? ?? false;
-            if (!isActive) return;
-            final endsAtStr = d['endsAt'] as String?;
-            final endsAt = endsAtStr != null
-                ? DateTime.tryParse(endsAtStr)
-                : null;
-            if (endsAt != null && endsAt.isBefore(DateTime.now())) return;
-            _roleListener?.cancel();
-            _maintenanceListener?.cancel();
-            Navigator.of(context).pushReplacement(
-              PageRouteBuilder(
-                pageBuilder: (context, animation, _) =>
-                    const MaintenanceScreen(),
-                transitionsBuilder: (_, anim, secondary, child) =>
-                    FadeTransition(opacity: anim, child: child),
-                transitionDuration: const Duration(milliseconds: 600),
-              ),
-            );
-          });
+        if (rows.isEmpty || !mounted) return;
+        final d = rows.first['data'] as Map<String, dynamic>? ?? {};
+        final isActive = d['isActive'] as bool? ?? false;
+        if (!isActive) return;
+        final endsAtStr = d['endsAt'] as String?;
+        final endsAt = endsAtStr != null ? DateTime.tryParse(endsAtStr) : null;
+        if (endsAt != null && endsAt.isBefore(DateTime.now())) return;
+        _roleListener?.cancel();
+        _maintenanceListener?.cancel();
+        Navigator.of(context).pushReplacement(
+          PageRouteBuilder(
+            pageBuilder: (context, animation, _) => const MaintenanceScreen(),
+            transitionsBuilder: (_, anim, secondary, child) =>
+                FadeTransition(opacity: anim, child: child),
+            transitionDuration: const Duration(milliseconds: 600),
+          ),
+        );
+      });
     } catch (_) {}
   }
 
@@ -2081,11 +2117,12 @@ class _MainScreenState extends State<MainScreen> {
       final m = diff.inMinutes % 60;
       final s = diff.inSeconds % 60;
       String two(int v) => v.toString().padLeft(2, '0');
-      if (d > 0)
+      if (d > 0) {
         return tr(
           '$d يوم ${two(h)}:${two(m)}:${two(s)}',
           '${d}d ${two(h)}:${two(m)}:${two(s)}',
         );
+      }
       return '${two(h)}:${two(m)}:${two(s)}';
     }
 
@@ -2518,7 +2555,8 @@ class _MainScreenState extends State<MainScreen> {
         .eq('id', id)
         .listen(
           onData,
-          onError: (e) => debugPrint('config[$id] realtime error (transient): $e'),
+          onError: (e) =>
+              debugPrint('config[$id] realtime error (transient): $e'),
         );
   }
 
@@ -2539,15 +2577,16 @@ class _MainScreenState extends State<MainScreen> {
     try {
       _chartModeListener?.cancel();
       _chartModeListener = _pollConfig('chart_settings', (rows) {
-            if (rows.isEmpty || !mounted) return;
-            final data = rows.first['data'] as Map<String, dynamic>? ?? {};
-            final mode = data['mode'] as String? ?? 'sim';
-            final resolved = mode == 'sim' ? 'sim' : 'scraping';
-            if (resolved != _chartMode)
-              setState(() {
-                _chartMode = resolved;
-              });
+        if (rows.isEmpty || !mounted) return;
+        final data = rows.first['data'] as Map<String, dynamic>? ?? {};
+        final mode = data['mode'] as String? ?? 'sim';
+        final resolved = mode == 'sim' ? 'sim' : 'scraping';
+        if (resolved != _chartMode) {
+          setState(() {
+            _chartMode = resolved;
           });
+        }
+      });
     } catch (_) {}
   }
 
@@ -2556,32 +2595,32 @@ class _MainScreenState extends State<MainScreen> {
     try {
       _priceSystemListener?.cancel();
       _priceSystemListener = _pollConfig('price_system', (rows) {
-            if (!mounted) return;
-            final v = rows.isNotEmpty
-                ? ((rows.first['data'] as Map?)?['value'] as String?)
-                : null;
-            if (v != _priceSystemRaw) setState(() => _priceSystemRaw = v);
-          });
+        if (!mounted) return;
+        final v = rows.isNotEmpty
+            ? ((rows.first['data'] as Map?)?['value'] as String?)
+            : null;
+        if (v != _priceSystemRaw) setState(() => _priceSystemRaw = v);
+      });
       _displaySourceListener?.cancel();
       _displaySourceListener = _pollConfig('display_source', (rows) {
-            if (!mounted) return;
-            final v =
-                (rows.isNotEmpty
-                    ? ((rows.first['data'] as Map?)?['value'] as String?)
-                    : null) ??
-                'all';
-            if (v != _displaySource) {
-              setState(() => _displaySource = v);
-              // The active pair may no longer be allowed under the new source →
-              // re-pick the first visible pair in the selected category.
-              final stillVisible = _visiblePairs.any(
-                (p) => p['symbol'] == _signalEngine.activePair,
-              );
-              if (!stillVisible) {
-                _selectFirstVisibleInCategory(_selectedCategory);
-              }
-            }
-          });
+        if (!mounted) return;
+        final v =
+            (rows.isNotEmpty
+                ? ((rows.first['data'] as Map?)?['value'] as String?)
+                : null) ??
+            'all';
+        if (v != _displaySource) {
+          setState(() => _displaySource = v);
+          // The active pair may no longer be allowed under the new source →
+          // re-pick the first visible pair in the selected category.
+          final stillVisible = _visiblePairs.any(
+            (p) => p['symbol'] == _signalEngine.activePair,
+          );
+          if (!stillVisible) {
+            _selectFirstVisibleInCategory(_selectedCategory);
+          }
+        }
+      });
     } catch (_) {}
   }
 
@@ -2625,33 +2664,31 @@ class _MainScreenState extends State<MainScreen> {
           .from('pairs')
           .select()
           .timeout(const Duration(seconds: 8));
-      if (!mounted || data == null || (data as List).isEmpty) return;
+      if (!mounted || (data as List).isEmpty) return;
       // Only apply if the stream hasn't already delivered data.
       if (AppConstants.currencyPairs.isNotEmpty) return;
 
-      final pairs = (data as List<dynamic>)
-          .map(
-            (d) => <String, dynamic>{
-              'id': d['id'],
-              'symbol': d['symbol'] as String? ?? '',
-              'chartSymbol': d['chart_symbol'] as String? ?? '',
-              'category': _normCat(d['category'] as String?),
-              'type': d['type'] as String? ?? '',
-              'source': (d['source'] as String? ?? 'po'),
-              'isOtc': d['is_otc'] == true,
-              'enabled': d['enabled'] != false,
-              'order': d['order'] as int? ?? 0,
-            },
-          )
-          .where(
-            (p) =>
-                (p['symbol'] as String).isNotEmpty &&
-                p['enabled'] == true,
-          )
-          .toList()
-        ..sort(
-          (a, b) => (a['order'] as int).compareTo(b['order'] as int),
-        );
+      final pairs =
+          (data as List<dynamic>)
+              .map(
+                (d) => <String, dynamic>{
+                  'id': d['id'],
+                  'symbol': d['symbol'] as String? ?? '',
+                  'chartSymbol': d['chart_symbol'] as String? ?? '',
+                  'category': _normCat(d['category'] as String?),
+                  'type': d['type'] as String? ?? '',
+                  'source': (d['source'] as String? ?? 'po'),
+                  'isOtc': d['is_otc'] == true,
+                  'enabled': d['enabled'] != false,
+                  'order': d['order'] as int? ?? 0,
+                },
+              )
+              .where(
+                (p) =>
+                    (p['symbol'] as String).isNotEmpty && p['enabled'] == true,
+              )
+              .toList()
+            ..sort((a, b) => (a['order'] as int).compareTo(b['order'] as int));
 
       if (pairs.isEmpty || !mounted) return;
 
@@ -2665,8 +2702,7 @@ class _MainScreenState extends State<MainScreen> {
         if (vis.isNotEmpty) {
           final inCat = vis
               .where(
-                (p) =>
-                    _normCat(p['category'] as String?) == _selectedCategory,
+                (p) => _normCat(p['category'] as String?) == _selectedCategory,
               )
               .toList();
           final pick = inCat.isNotEmpty ? inCat.first : vis.first;
@@ -2685,98 +2721,97 @@ class _MainScreenState extends State<MainScreen> {
     try {
       _pairsListener?.cancel();
       _pairsListener = _pollPairs((rows) {
-            if (!mounted) return;
+        if (!mounted) return;
 
-            // Capture the active pair + whether it was a Pocket Option pair
-            // BEFORE we swap in the new list (to detect "removed while open").
-            final oldActive = _signalEngine.activePair;
-            final wasPo = AppConstants.currencyPairs.any(
-              (p) =>
-                  p['symbol'] == oldActive &&
-                  (p['source'] as String? ?? 'po') == 'po',
-            );
+        // Capture the active pair + whether it was a Pocket Option pair
+        // BEFORE we swap in the new list (to detect "removed while open").
+        final oldActive = _signalEngine.activePair;
+        final wasPo = AppConstants.currencyPairs.any(
+          (p) =>
+              p['symbol'] == oldActive &&
+              (p['source'] as String? ?? 'po') == 'po',
+        );
 
-            // Only ENABLED pairs reach the app; both sources, 5-category taxonomy.
-            final pairs =
-                rows
-                    .map(
-                      (d) => <String, dynamic>{
-                        'id': d['id'],
-                        'symbol': d['symbol'] as String? ?? '',
-                        'chartSymbol': d['chart_symbol'] as String? ?? '',
-                        'category': _normCat(d['category'] as String?),
-                        'type': d['type'] as String? ?? '',
-                        'source': (d['source'] as String? ?? 'po'),
-                        'isOtc': d['is_otc'] == true,
-                        'enabled': d['enabled'] != false,
-                        'order': d['order'] as int? ?? 0,
-                      },
-                    )
-                    .where(
-                      (p) =>
-                          (p['symbol'] as String).isNotEmpty &&
-                          p['enabled'] == true,
-                    )
-                    .toList()
-                  ..sort(
-                    (a, b) => (a['order'] as int).compareTo(b['order'] as int),
-                  );
-
-            final activeExists = pairs.any((p) => p['symbol'] == oldActive);
-
-            setState(() {
-              AppConstants.currencyPairs = pairs;
-
-              // If the selected category now has no visible pairs, switch to the
-              // first category that does so the picker isn't stuck empty.
-              final vis = _visiblePairs;
-              if (vis.isNotEmpty && !_categoryHasPairs(_selectedCategory)) {
-                _selectedCategory = _normCat(vis.first['category'] as String?);
-              }
-
-              // The pair shown outside the picker must be a VISIBLE one (right
-              // source) and, by default, the FIRST pair of the selected category.
-              final activeVisible = vis.any((p) => p['symbol'] == oldActive);
-              if (!activeVisible && vis.isNotEmpty) {
-                final inCat = vis
-                    .where(
-                      (p) =>
-                          _normCat(p['category'] as String?) ==
-                          _selectedCategory,
-                    )
-                    .toList();
-                final pick = inCat.isNotEmpty ? inCat.first : vis.first;
-                _activeChartSymbol = pick['chartSymbol'] as String? ?? '';
-                final s = pick['symbol'] as String? ?? '';
-                if (s.isNotEmpty) _signalEngine.selectPair(s);
-              }
-
-              // No visible pairs at all → stop monitoring (nothing to watch).
-              if (vis.isEmpty && _signalEngine.isMonitoring) {
-                _signalEngine.stopMonitoring();
-              }
-            });
-
-            // STATE 9 — the OTC pair the user was viewing got disabled/removed
-            // from the library while open. Tell them clearly (we already
-            // switched them to another pair above).
-            if (!activeExists && wasPo && mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    tr(
-                      'هذا الزوج لم يعد متاحًا، يرجى اختيار زوج آخر',
-                      'This pair is no longer available, please choose another pair',
-                    ),
-                    style: GoogleFonts.outfit(),
-                    textAlign: TextAlign.right,
-                  ),
-                  backgroundColor: AppConstants.warningOrange,
-                  duration: const Duration(seconds: 5),
-                ),
+        // Only ENABLED pairs reach the app; both sources, 5-category taxonomy.
+        final pairs =
+            rows
+                .map(
+                  (d) => <String, dynamic>{
+                    'id': d['id'],
+                    'symbol': d['symbol'] as String? ?? '',
+                    'chartSymbol': d['chart_symbol'] as String? ?? '',
+                    'category': _normCat(d['category'] as String?),
+                    'type': d['type'] as String? ?? '',
+                    'source': (d['source'] as String? ?? 'po'),
+                    'isOtc': d['is_otc'] == true,
+                    'enabled': d['enabled'] != false,
+                    'order': d['order'] as int? ?? 0,
+                  },
+                )
+                .where(
+                  (p) =>
+                      (p['symbol'] as String).isNotEmpty &&
+                      p['enabled'] == true,
+                )
+                .toList()
+              ..sort(
+                (a, b) => (a['order'] as int).compareTo(b['order'] as int),
               );
-            }
-          });
+
+        final activeExists = pairs.any((p) => p['symbol'] == oldActive);
+
+        setState(() {
+          AppConstants.currencyPairs = pairs;
+
+          // If the selected category now has no visible pairs, switch to the
+          // first category that does so the picker isn't stuck empty.
+          final vis = _visiblePairs;
+          if (vis.isNotEmpty && !_categoryHasPairs(_selectedCategory)) {
+            _selectedCategory = _normCat(vis.first['category'] as String?);
+          }
+
+          // The pair shown outside the picker must be a VISIBLE one (right
+          // source) and, by default, the FIRST pair of the selected category.
+          final activeVisible = vis.any((p) => p['symbol'] == oldActive);
+          if (!activeVisible && vis.isNotEmpty) {
+            final inCat = vis
+                .where(
+                  (p) =>
+                      _normCat(p['category'] as String?) == _selectedCategory,
+                )
+                .toList();
+            final pick = inCat.isNotEmpty ? inCat.first : vis.first;
+            _activeChartSymbol = pick['chartSymbol'] as String? ?? '';
+            final s = pick['symbol'] as String? ?? '';
+            if (s.isNotEmpty) _signalEngine.selectPair(s);
+          }
+
+          // No visible pairs at all → stop monitoring (nothing to watch).
+          if (vis.isEmpty && _signalEngine.isMonitoring) {
+            _signalEngine.stopMonitoring();
+          }
+        });
+
+        // STATE 9 — the OTC pair the user was viewing got disabled/removed
+        // from the library while open. Tell them clearly (we already
+        // switched them to another pair above).
+        if (!activeExists && wasPo && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                tr(
+                  'هذا الزوج لم يعد متاحًا، يرجى اختيار زوج آخر',
+                  'This pair is no longer available, please choose another pair',
+                ),
+                style: GoogleFonts.outfit(),
+                textAlign: TextAlign.right,
+              ),
+              backgroundColor: AppConstants.warningOrange,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+      });
     } catch (_) {}
   }
 
@@ -2786,33 +2821,34 @@ class _MainScreenState extends State<MainScreen> {
       _vipStrategyListener?.cancel();
 
       _stdStrategyListener = _pollConfig('strategy_standard', (rows) {
-            if (rows.isEmpty || !mounted) return;
-            final data = rows.first['data'] as Map<String, dynamic>? ?? {};
-            if (data.isNotEmpty) _signalEngine.updateStandardStrategy(data);
-          });
+        if (rows.isEmpty || !mounted) return;
+        final data = rows.first['data'] as Map<String, dynamic>? ?? {};
+        if (data.isNotEmpty) _signalEngine.updateStandardStrategy(data);
+      });
 
       _vipStrategyListener = _pollConfig('strategy_vip', (rows) {
-            if (rows.isEmpty || !mounted) return;
-            final data = rows.first['data'] as Map<String, dynamic>? ?? {};
-            if (data.isNotEmpty) _signalEngine.updateVipStrategy(data);
-          });
+        if (rows.isEmpty || !mounted) return;
+        final data = rows.first['data'] as Map<String, dynamic>? ?? {};
+        if (data.isNotEmpty) _signalEngine.updateVipStrategy(data);
+      });
 
       _monStdStrategyListener?.cancel();
       _monStdStrategyListener = _pollConfig('monitoring_standard', (rows) {
-            if (rows.isEmpty || !mounted) return;
-            final data = rows.first['data'] as Map<String, dynamic>? ?? {};
-            if (data.isNotEmpty) {
-              _signalEngine.updateMonitoringStandardStrategy(data);
-            }
-          });
+        if (rows.isEmpty || !mounted) return;
+        final data = rows.first['data'] as Map<String, dynamic>? ?? {};
+        if (data.isNotEmpty) {
+          _signalEngine.updateMonitoringStandardStrategy(data);
+        }
+      });
 
       _monVipStrategyListener?.cancel();
       _monVipStrategyListener = _pollConfig('monitoring_vip', (rows) {
-            if (rows.isEmpty || !mounted) return;
-            final data = rows.first['data'] as Map<String, dynamic>? ?? {};
-            if (data.isNotEmpty)
-              _signalEngine.updateMonitoringVipStrategy(data);
-          });
+        if (rows.isEmpty || !mounted) return;
+        final data = rows.first['data'] as Map<String, dynamic>? ?? {};
+        if (data.isNotEmpty) {
+          _signalEngine.updateMonitoringVipStrategy(data);
+        }
+      });
     } catch (_) {}
   }
 
@@ -3342,10 +3378,7 @@ class _MainScreenState extends State<MainScreen> {
                             ),
                             const SizedBox(width: 10),
                             // Source badge: 🎯 Pocket Option
-                            const Text(
-                              '🎯',
-                              style: TextStyle(fontSize: 16),
-                            ),
+                            const Text('🎯', style: TextStyle(fontSize: 16)),
                           ],
                         );
                       },
@@ -3546,11 +3579,14 @@ class _MainScreenState extends State<MainScreen> {
                                   final isSelected =
                                       _signalEngine.activePair ==
                                       pair['symbol'];
+                                  final closed = _isPairClosed(pair);
 
                                   return Padding(
                                     padding: const EdgeInsets.only(bottom: 8),
                                     child: InkWell(
-                                      onTap: () {
+                                      onTap: closed
+                                          ? null
+                                          : () {
                                         _signalEngine.selectPair(
                                           pair['symbol'],
                                         );
@@ -3623,12 +3659,32 @@ class _MainScreenState extends State<MainScreen> {
                                                   style: GoogleFonts.outfit(
                                                     fontSize: 14,
                                                     fontWeight: FontWeight.bold,
-                                                    color: isSelected
+                                                    color: closed
+                                                        ? AppConstants
+                                                              .textSecondary
+                                                        : isSelected
                                                         ? Colors.white
                                                         : AppConstants
                                                               .textPrimary,
                                                   ),
                                                 ),
+                                                if (closed) ...[
+                                                  const SizedBox(width: 8),
+                                                  const Icon(
+                                                    Icons.lock_rounded,
+                                                    size: 14,
+                                                    color: AppConstants.putRed,
+                                                  ),
+                                                  const SizedBox(width: 2),
+                                                  Text(
+                                                    tr('مغلق', 'Closed'),
+                                                    style: GoogleFonts.outfit(
+                                                      fontSize: 10,
+                                                      fontWeight: FontWeight.w700,
+                                                      color: AppConstants.putRed,
+                                                    ),
+                                                  ),
+                                                ],
                                               ],
                                             ),
                                           ],
@@ -4145,14 +4201,15 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   String _getFriendlyWaitNotice(String rawNotice) {
-    if (rawNotice.contains('الفارق بين الاتجاهين') || rawNotice.contains('insufficient_score_gap')) {
+    if (rawNotice.contains('الفارق بين الاتجاهين') ||
+        rawNotice.contains('insufficient_score_gap')) {
       return tr(
         'الإشارات الحالية غير حاسمة (تعارض بين المؤشرات)، ننتظر توافقًا أوضح.',
         'The current signals are inconclusive (conflict between indicators), waiting for a clearer agreement.',
       );
     }
-    if (rawNotice.contains('فشل فلتر') || 
-        rawNotice.contains('المرحلة الثالثة (الفلاتر)') || 
+    if (rawNotice.contains('فشل فلتر') ||
+        rawNotice.contains('المرحلة الثالثة (الفلاتر)') ||
         rawNotice.contains('low_volatility_filter_blocked')) {
       return tr(
         'السوق هادئ/متذبذب حاليًا، الحركة غير كافية لإصدار إشارة موثوقة الآن.',
@@ -4623,10 +4680,14 @@ class _MainScreenState extends State<MainScreen> {
                     Expanded(
                       child: Text(
                         (() {
-                          final proReason = _signalEngine.lastProResult?['reason_blocked'] as String?;
+                          final proReason =
+                              _signalEngine.lastProResult?['reason_blocked']
+                                  as String?;
                           return (proReason != null && proReason.isNotEmpty)
                               ? _getFriendlyWaitNotice(proReason)
-                              : _getFriendlyWaitNotice(_signalEngine.lastWaitNotice);
+                              : _getFriendlyWaitNotice(
+                                  _signalEngine.lastWaitNotice,
+                                );
                         })(),
                         style: GoogleFonts.outfit(
                           fontSize: 11.5,
