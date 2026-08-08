@@ -1144,6 +1144,10 @@ window.CandleChart = (function () {
     this._resolvedSym = null;
     this._stopAnim();
     this._animTarget = null;
+    /* Guaranteed-win state is PER-PAIR: a residual bias/trade must never bleed
+       onto the next pair (a BTC-scale offset applied to EUR/USD freezes it). */
+    this._gwinBias = 0;
+    this._trade    = null;
     /* Reset status-timing windows for the new symbol/interval. */
     this._loadStartedAt    = 0;
     this._sawEmptyResponse = false;

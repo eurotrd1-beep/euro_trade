@@ -2522,7 +2522,7 @@ class SignalEngine extends ChangeNotifier {
           ? _candles.last.close >= _candles[_candles.length - 2].close
           : true;
       final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-      final cs = timeframeSeconds;
+      const cs = 60; // real-minutes duration, 1-minute aligned (not the chart frame)
       final cStart = (nowSec ~/ cs) * cs;
       final expiry = cStart + selectedMinutes * cs;
       final fallbackEntry = _livePriceGetter?.call() ?? _currentPrice;
@@ -2845,7 +2845,12 @@ class SignalEngine extends ChangeNotifier {
     kValues.insert(0, rawK);
 
     double smoothedK = kValues.reduce((a, b) => a + b) / kValues.length;
-    double smoothedD = smoothedK; // %D is SMA of %K (simplified)
+    // %D is the LAGGING line: average the OLDER raw %K values (drop the newest)
+    // so %K and %D genuinely differ and crossovers work. Previously %D was set
+    // equal to %K, which made `stoch_cross` always 0 and killed the whole signal.
+    double smoothedD = kValues.length > 1
+        ? kValues.sublist(1).reduce((a, b) => a + b) / (kValues.length - 1)
+        : smoothedK;
 
     return {'k': smoothedK.clamp(0.0, 100.0), 'd': smoothedD.clamp(0.0, 100.0)};
   }
@@ -4427,12 +4432,24 @@ class SignalEngine extends ChangeNotifier {
   }
 
   String _detectCvd() {
-    // Cumulative Volume Delta: same as OBV direction
+    // Cumulative Volume Delta ≈ recent OBV trend: compare current OBV to OBV as
+    // of ~10 candles ago. (Was recomputing the SAME full-buffer OBV into prevObv,
+    // so obv==prevObv → always 'neutral', and `*1.01` was wrong for negative OBV.)
     final obv = _calculateObv();
-    final n = min(10, _candles.length);
-    final prevObv = _candles.length > n ? _calculateObv() : 0;
-    if (obv > prevObv * 1.01) return 'positive';
-    if (obv < prevObv * 0.99) return 'negative';
+    final n = min(10, _candles.length - 1);
+    if (n < 1) return 'neutral';
+    final end = _candles.length - n; // OBV excluding the last n candles = n bars ago
+    double prevObv = 0.0;
+    for (int i = 1; i < end; i++) {
+      if (_candles[i].close > _candles[i - 1].close) {
+        prevObv += _candles[i].volume;
+      } else if (_candles[i].close < _candles[i - 1].close) {
+        prevObv -= _candles[i].volume;
+      }
+    }
+    final delta = obv - prevObv; // net signed volume over the last n candles
+    if (delta > 0) return 'positive';
+    if (delta < 0) return 'negative';
     return 'neutral';
   }
 
@@ -7108,12 +7125,12 @@ class SignalEngine extends ChangeNotifier {
       confidence = confidence.clamp(confBase, confMax);
     }
 
-    // Align expiry to the candle boundary so the trade ends exactly at a candle close.
-    // After the wait loop we are at (or just past) the opening of a new candle, so we
-    // snap the expiry to: start-of-current-candle + durationMinutes * candleDuration.
-    // Use integer-second arithmetic (same as chart.js) to compute expiry
+    // Duration is REAL minutes regardless of the chart timeframe (the user picks
+    // "N minutes"; the chart frame is only a view). Align to the 1-minute boundary
+    // so the trade still ends on a clean candle close. (Was multiplying minutes by
+    // the frame seconds → a "5 min" trade ran 75 min on a 15m chart.)
     final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    final cs = timeframeSeconds;
+    const cs = 60;
     final cStartSec = (nowSec ~/ cs) * cs;
     final expirySec = cStartSec + selectedMinutes * cs;
     final alignedExpiry = DateTime.fromMillisecondsSinceEpoch(expirySec * 1000);

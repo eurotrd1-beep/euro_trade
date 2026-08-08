@@ -509,8 +509,11 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
   Future<void> _loadUserData() async {
     final prefs = await SharedPreferences.getInstance();
+    // No stored account → the neutral sentinel (same as elsewhere), NOT a real
+    // account id — otherwise a partial storage wipe would silently inherit that
+    // account's role/VIP/device-lock/push.
     final accountId =
-        prefs.getString(AppConstants.keyUserAccountId) ?? '8392019';
+        prefs.getString(AppConstants.keyUserAccountId) ?? '----';
     final brokerName = prefs.getString(AppConstants.keyUserBroker) ?? 'Quotex';
     setState(() {
       _userAccountId = accountId;
