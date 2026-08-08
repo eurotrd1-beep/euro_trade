@@ -251,10 +251,6 @@ window.CandleChart = (function () {
     return candles;
   }
 
-  function toTVSym(sym) {
-    return sym.replace(/^[A-Z]+:/, '').replace(/_/g, '');
-  }
-
   /* ── Candle integrity validator ──────────────────────────────── */
   /* A candle is only usable if it carries a numeric timestamp and finite
      OHLC values. Guards against half-written candles from a server that
@@ -359,7 +355,7 @@ window.CandleChart = (function () {
     this.container  = container;
     this.symbol     = symbol;
     this.interval   = interval;
-    this.mode       = mode || 'sim';   // 'sim' | 'tv'
+    this.mode       = mode || 'sim';   // 'sim' | 'otc'
     this.candles    = [];
     this.scrollRight = 0;
     this.candleW    = 9;   // fallback; _draw sizes candles to fill the width
@@ -369,19 +365,19 @@ window.CandleChart = (function () {
     this.dragX      = 0;
     this.dragScroll = 0;  /* unused — interaction disabled */
     this._tickTimer      = null;
-    this._tvTimer        = null;
+    this._priceTimer        = null;
     this._simFallbackTimer = null;
-    this._lastTVPrice    = 0;
-    this._lastTVTickTime = 0;
-    this._tvDistinctPrices = 0; /* count of distinct TV price changes received */
+    this._lastPrice    = 0;
+    this._lastPriceTickTime = 0;
+    this._distinctPrices = 0; /* count of distinct price changes received */
     this._resolvedSym    = null;
     this._destroyed      = false;
     this._ws             = null;
     this._wsTimer        = null;
-    this._retryTimer     = null;  // tv-mode fetch retry timer
+    this._retryTimer     = null;  // (legacy retry timer handle)
     this._otcHistTimer   = null;  // otc-mode: periodic candle history refresh
     this._otcPriceTimer  = null;  // otc-mode: per-second live price poll
-    this._loadStartedAt  = 0;     // start of current tv load cycle (for status timing)
+    this._loadStartedAt  = 0;     // (legacy load-cycle timing handle)
     this._sawEmptyResponse = false; // received >=1 valid JSON with empty candles
     this._marketClosedNote = false; // overlay 'market closed' note on next _draw
     this._poClosed       = false; // PO marks this pair closed → history load must not repaint
@@ -425,12 +421,6 @@ window.CandleChart = (function () {
       this._resize();          // loading screen until proxy data arrives
       this._fetchOtcCandles();
       this._startOtcStream();
-    } else if (this.mode === 'tv') {
-      this._resize();          // draws loading screen (candles still empty)
-      this._fetchTVCandles();
-      /* NOTE: no sim-data fallback in tv mode — the status/error states drawn
-         by _fetchTVCandles must own the canvas so the user always sees the
-         real connection state instead of fake candles. */
     } else {
       this.candles = buildHistory(this.symbol, this.interval, simCandleCount(this.interval));
       this._resize();
@@ -450,179 +440,7 @@ window.CandleChart = (function () {
     this._draw();
   };
 
-  /* ── TradingView data mode ───────────────────────────────────── */
-
-  Chart.prototype._fetchTVCandles = function(retries, chain) {
-    var self = this;
-    var cs   = candleSec(this.interval);
-
-    /* Mark the start of the current load cycle once (per symbol). Cleared in
-       update() so a symbol/interval change restarts all the timing windows. */
-    if (!this._loadStartedAt) this._loadStartedAt = Date.now();
-
-    if (!chain) chain = [this.symbol];
-    if (!chain.length) {
-      /* Whole fallback chain exhausted with no candles — keep retrying. */
-      self._scheduleRetry(function() { self._fetchTVCandles(0, [self.symbol]); }, 15000);
-      return;
-    }
-
-    var sym     = chain[0];
-    var rest    = chain.slice(1);
-    var attempt = (retries || 0) + 1;
-    var url = PROXY + '/api/tv/candles?symbol=' + encodeURIComponent(toTVSym(sym)) + '&interval=' + this.interval;
-
-    /* State 1 (pre-flight): browser reports offline → don't even try, just
-       poll until connectivity returns. */
-    if (navigator.onLine === false) {
-      self._drawMessage('تحقق من اتصالك بالإنترنت', '#F0C040');
-      self._scheduleRetry(function() { self._fetchTVCandles(0, [self.symbol]); }, 3000);
-      return;
-    }
-
-    var elapsed = function() { return Date.now() - self._loadStartedAt; };
-
-    /* Shown when a request can't reach the server (network error / timeout /
-       no usable response). Picks the right message for how long we've waited. */
-    function showConnectFailure() {
-      if (navigator.onLine === false) {
-        /* State 1: connection dropped mid-flight. */
-        self._drawMessage('تحقق من اتصالك بالإنترنت', '#F0C040');
-      } else if (elapsed() < 55000) {
-        /* State 2: Render free dyno cold start (up to ~50s). Yields to a known
-           market-closed state (keeps the closed chart) — market-closed wins over
-           a transient "server warming up" during an admin server switch. */
-        self._connMessage('جاري تجهيز السيرفر...', '#F0C040');
-      } else {
-        /* State 3: server still unreachable after the cold-start window. */
-        self._connMessage('السيرفر غير متاح حالياً', '#FF5555');
-      }
-    }
-
-    /* Retry delay for connect/data failures: tight during the cold-start
-       window so we recover fast, relaxed afterwards. */
-    function failureDelay() {
-      if (navigator.onLine === false) return 3000;
-      return elapsed() < 55000 ? 3000 : 10000;
-    }
-
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', url);
-    /* Generous timeout so a waking dyno isn't mistaken for a dead server. */
-    xhr.timeout = 30000;
-
-    xhr.onloadend = function() {
-      if (self._destroyed) return;
-
-      var d = null;
-      try { d = JSON.parse(xhr.responseText); } catch (_) { d = null; }
-
-      /* State 4: server responded but body isn't valid JSON, or JSON without
-         a candles array. Treat as a data error. */
-      if (!d || !d.candles || Object.prototype.toString.call(d.candles) !== '[object Array]') {
-        if (elapsed() >= 55000) {
-          self._connMessage('خطأ في تحميل البيانات', '#FF5555');
-        } else {
-          showConnectFailure();
-        }
-        self._scheduleRetry(function() { self._fetchTVCandles(0, [self.symbol]); }, failureDelay());
-        return;
-      }
-
-      /* Valid JSON with a candles array. Sort and deduplicate chronologically. */
-      var good = cleanAndSortCandles(d.candles);
-      var marketOpen = (d.marketOpen === undefined) ? true : !!d.marketOpen;
-
-      if (good.length) {
-        // Got usable candles — cancel sim fallback and display immediately
-        clearTimeout(self._simFallbackTimer);
-        if (self._tickTimer) { clearInterval(self._tickTimer); self._tickTimer = null; }
-
-        var all = good;
-        self.candles      = all.length > MAX_CANDLES ? all.slice(all.length - MAX_CANDLES) : all;
-        self._lastTVPrice = self.candles[self.candles.length - 1].c;
-        self._resolvedSym = sym;
-        self._marketClosedNote = !marketOpen;
-
-        if (marketOpen) {
-          self._marketClosedNote = false;
-          // Bridge gap to current candle if needed
-          var nowSec = Math.floor(Date.now() / 1000);
-          var cT = Math.floor(nowSec / cs) * cs;
-          var lc = self.candles[self.candles.length - 1];
-          if (cT > lc.t) {
-            self.candles.push({ t: cT, o: lc.c, h: lc.c, l: lc.c, c: lc.c });
-            if (self.candles.length > MAX_CANDLES) self.candles.shift();
-          }
-          self._draw();          // _draw clears the closed note when marketOpen
-          self._startTVTick();
-        } else {
-          /* State 6: market closed — draw candles, overlay note, keep polling.
-             Stop any live WS tick so the badge logic stays clean; polling will
-             resume normal drawing once marketOpen flips back to true. */
-          if (self._tvTimer) { clearInterval(self._tvTimer); self._tvTimer = null; }
-          self._draw();          // _draw paints the 'السوق مغلق حالياً' note
-          self._scheduleRetry(function() { self._fetchTVCandles(0, [self.symbol]); }, 15000);
-        }
-        return;
-      }
-
-      /* Reachable but EMPTY candles. Note the symbol is unavailable on this
-         backend; try the fallback chain first, then settle on a message. */
-      self._sawEmptyResponse = true;
-
-      if (rest.length && attempt >= 3) {
-        self._fetchTVCandles(0, rest); return;
-      }
-
-      /* State 5: server reachable + valid JSON but persistently empty. */
-      if (elapsed() >= 30000) {
-        self._drawMessage('الزوج غير متاح حالياً', '#FF5555');
-        self._scheduleRetry(function() { self._fetchTVCandles(0, [self.symbol]); }, 15000);
-        return;
-      }
-
-      /* Still inside the early window — keep loading message and retry soon. */
-      self._drawLoading();
-      self._scheduleRetry(function() { self._fetchTVCandles(attempt, chain); }, 2000);
-    };
-
-    xhr.onerror = xhr.ontimeout = function() {
-      if (self._destroyed) return;
-
-      /* Network-level failure → States 1/2/3 depending on online + elapsed. */
-      if (rest.length && attempt >= 3) {
-        self._fetchTVCandles(0, rest); return;
-      }
-      showConnectFailure();
-      self._scheduleRetry(function() { self._fetchTVCandles(0, [self.symbol]); }, failureDelay());
-    };
-
-    xhr.send();
-  };
-
-  /* A server connection/status message that YIELDS to a known market-closed
-     state: if we already have candles AND the market is flagged closed, keep the
-     (closed) chart on screen instead of covering it with a "connecting" banner.
-     Market-closed always wins over transient server messages — matters most
-     during an admin server switch that coincides with a closed market. */
-  Chart.prototype._connMessage = function(text, color) {
-    if (this._marketClosedNote && this.candles.length) { this._draw(); return; }
-    this._drawMessage(text, color);
-  };
-
-  /* Self-healing retry scheduler: always reschedules, never gives up, and is a
-     no-op once the instance is destroyed. */
-  Chart.prototype._scheduleRetry = function(fn, delay) {
-    var self = this;
-    if (this._destroyed) return;
-    clearTimeout(this._retryTimer);
-    this._retryTimer = setTimeout(function() {
-      if (!self._destroyed) fn();
-    }, delay);
-  };
-
-  Chart.prototype._startTVTick = function() {
+  Chart.prototype._startPriceTick = function() {
     var self = this;
     // Close any existing WS
     if (this._ws) { try { this._ws.close(); } catch(_) {} this._ws = null; }
@@ -633,8 +451,8 @@ window.CandleChart = (function () {
        never as a flat candle on a timer — mirrors the server rule: a new candle
        requires BOTH the frame elapsing AND the price changing. So during a frozen
        price no flat candle is created; the new one opens when the price moves. */
-    if (this._tvTimer) clearInterval(this._tvTimer);
-    this._tvTimer = setInterval(function() {
+    if (this._priceTimer) clearInterval(this._priceTimer);
+    this._priceTimer = setInterval(function() {
       if (self._destroyed || !self.candles.length) return;
       self._draw();
     }, 1000);
@@ -649,12 +467,7 @@ window.CandleChart = (function () {
       self._ws = ws;
 
       ws.onopen = function() {
-        if (self.mode === 'otc') {
-          ws.send(JSON.stringify({ sub: toOtcSym(self.symbol) }));
-        } else {
-          var live = self._resolvedSym || self.symbol;
-          ws.send(JSON.stringify({ sub: toTVSym(live) }));
-        }
+        ws.send(JSON.stringify({ sub: toOtcSym(self.symbol) }));
       };
 
       ws.onmessage = function(e) {
@@ -670,44 +483,9 @@ window.CandleChart = (function () {
              back toward the (stale, 8s) poll target — the anim loop won and the
              live price froze. Feeding here makes every WS tick the live target,
              so the price moves in real time and new candles open on the frame. */
-          if (self.mode === 'otc') {
-            self._lastTVTickTime = Date.now();
-            self._marketClosedNote = false;
-            self._feedOtcPrice(price);   // handles gwinAdjust + new-candle + anim
-            return;
-          }
-
-          if (!self.candles.length) return;
-          // Guaranteed win — eased price offset (tv mode). `price` is the raw
-          // market price; the offset eases in/out so candles never gap.
-          price = gwinAdjust(self, price);
-
-          if (price === self._lastTVPrice) return;
-          self._tvDistinctPrices++;
-          self._lastTVPrice = price;
-          self._lastTVTickTime = Date.now();
-          /* Price moved → market is live: drop the CLOSED badge / note instantly. */
+          self._lastPriceTickTime = Date.now();
           self._marketClosedNote = false;
-
-          var last  = self.candles[self.candles.length - 1];
-          var cs    = candleSec(self.interval);
-          var now   = Math.floor(Date.now() / 1000);
-          var cTime = Math.floor(now / cs) * cs;
-
-          if (cTime === last.t) {
-            if (price !== last.c) last.c = price;
-            if (price >  last.h)  last.h = price;
-            if (price <  last.l)  last.l = price;
-          } else if (cTime > last.t) {
-            var open = last.c;
-            var nc = { t: cTime, o: open, h: Math.max(open, price), l: Math.min(open, price), c: price };
-            if (!validCandle(nc)) return;
-            self.candles.push(nc);
-            /* Sliding window: drop oldest candle when limit is exceeded */
-            if (self.candles.length > MAX_CANDLES) self.candles.shift();
-          }
-          /* Always redraw on a fresh price so the CLOSED badge clears immediately. */
-          self._draw();
+          self._feedOtcPrice(price);   // handles gwinAdjust + new-candle + anim
         } catch(_) {}
       };
 
@@ -725,7 +503,7 @@ window.CandleChart = (function () {
   };
 
   /* ── OTC data mode (Pocket Option via proxy server) ─────────────────
-     OTC pairs aren't on TradingView. Their candles + per-second price + scraper
+     OTC pair candles + per-second price + scraper
      status flow through the proxy server's /api/otc/* endpoints (backed by the
      OTC scraper's in-memory store, with Supabase as persistence-only fallback).
      Live ticks arrive over the WebSocket. All candle timing is UTC-epoch based,
@@ -802,7 +580,7 @@ window.CandleChart = (function () {
             // that state. Adopt the candles now; they'll show when it reopens.
             if (!self._poClosed) {
               self._draw();
-              self._startTVTick();
+              self._startPriceTick();
             }
             return;
           }
@@ -955,7 +733,7 @@ window.CandleChart = (function () {
       if (this.candles.length > MAX_CANDLES) this.candles.shift();
       this._animTarget = price;
     } else { return; }
-    this._lastTVPrice = price;
+    this._lastPrice = price;
     this._startAnim();
   };
 
@@ -1045,7 +823,7 @@ window.CandleChart = (function () {
     }, 500); // new tick every 500 ms
   };
 
-  /* ── Loading screen (TV mode waiting for data) ───────────────── */
+  /* ── Loading screen (waiting for data) ──────────────────────── */
   Chart.prototype._drawLoading = function() {
     var ctx = this.ctx;
     var W = this.W || 400, H = this.H || 300, dpr = this.dpr || 1;
@@ -1065,7 +843,7 @@ window.CandleChart = (function () {
 
   /* ── Generic on-canvas message (status / error states) ───────── */
   /* Clears the canvas and draws `text` centered (word-wrapped if long) in
-     `color` (default light gray). Used for all TV-mode status states. */
+     `color` (default light gray). Used for all status states. */
   Chart.prototype._drawMessage = function(text, color) {
     var ctx = this.ctx;
     var W = this.W || 400, H = this.H || 300, dpr = this.dpr || 1;
@@ -1213,10 +991,10 @@ window.CandleChart = (function () {
     }
 
     /* ── Candle countdown badge on X axis (below last candle) ── */
-    /* noTickYet: TV mode and fewer than 2 distinct price changes received yet → don't show countdown */
+    /* OTC market-closed is shown via the _marketClosedNote overlay, not this
+       countdown badge — so the badge only ever shows the live countdown. */
     var noTickYet    = false;
-    var marketClosed = this.mode === 'tv' && this._tvDistinctPrices >= 1 &&
-                       (Date.now() - this._lastTVTickTime) > 10000;
+    var marketClosed = false;
     if (!noTickYet && last && lastCX >= cl && lastCX <= cr && (secsLeft > 0 || marketClosed)) {
       var badgeLabel = marketClosed ? 'CLOSED' : countdownStr;
       var bW = marketClosed ? 58 : 46, bH = 18, bX = lastCX - bW / 2, bY = cb + 4;
@@ -1359,7 +1137,7 @@ window.CandleChart = (function () {
     this._marketClosedNote = false;
 
     if (this._tickTimer) { clearInterval(this._tickTimer); this._tickTimer = null; }
-    if (this._tvTimer)   { clearInterval(this._tvTimer);   this._tvTimer   = null; }
+    if (this._priceTimer)   { clearInterval(this._priceTimer);   this._priceTimer   = null; }
     if (this._ws)        { try { this._ws.close(); } catch(_) {} this._ws = null; }
     clearTimeout(this._wsTimer); this._wsTimer = null;
     clearTimeout(this._retryTimer); this._retryTimer = null;
@@ -1375,11 +1153,6 @@ window.CandleChart = (function () {
       this._draw();   // loading screen until Supabase data arrives
       this._fetchOtcCandles();
       this._startOtcStream();
-    } else if (this.mode === 'tv') {
-      clearTimeout(this._simFallbackTimer);
-      /* No sim-data fallback in tv mode — status/error states own the canvas. */
-      this._draw();   // loading screen (candles are [])
-      this._fetchTVCandles();
     } else {
       this.candles = buildHistory(this.symbol, this.interval, simCandleCount(self.interval));
       this._startTick();
@@ -1391,7 +1164,7 @@ window.CandleChart = (function () {
     this._destroyed = true;
     this._stopAnim();
     if (this._tickTimer) clearInterval(this._tickTimer);
-    if (this._tvTimer)   clearInterval(this._tvTimer);
+    if (this._priceTimer)   clearInterval(this._priceTimer);
     if (this._otcHistTimer)  clearInterval(this._otcHistTimer);
     if (this._otcPriceTimer) clearInterval(this._otcPriceTimer);
     if (this._ws)        { try { this._ws.close(); } catch(_) {} this._ws = null; }
@@ -1592,7 +1365,7 @@ window.CandleChart = (function () {
       if (!p) return;
       Object.keys(instances).forEach(function(id) {
         var inst = instances[id];
-        if (!inst || inst.mode === 'tv' || !inst.candles.length) return;
+        if (!inst || !inst.candles.length) return;
         var last = inst.candles[inst.candles.length - 1];
         last.c = p;
         if (p > last.h) last.h = p;
@@ -1618,18 +1391,14 @@ window.CandleChart = (function () {
         inst._ws = null;
         clearTimeout(inst._retryTimer);
         clearTimeout(inst._wsTimer);
-        if (inst._tvTimer)      { clearInterval(inst._tvTimer);      inst._tvTimer = null; }
+        if (inst._priceTimer)      { clearInterval(inst._priceTimer);      inst._priceTimer = null; }
         if (inst._otcHistTimer) { clearInterval(inst._otcHistTimer); inst._otcHistTimer = null; }
         if (inst._otcPriceTimer){ clearInterval(inst._otcPriceTimer);inst._otcPriceTimer = null; }
 
-        if (inst.mode === 'tv') {
-          inst._loadStartedAt = 0;    // restart the status/timing window
-          inst._resolvedSym = null;
-          inst._fetchTVCandles(0, [inst.symbol]);   // refetch against the new server
-        } else if (inst.mode === 'otc') {
+        if (inst.mode === 'otc') {
           // Re-pull history + status + WS tick from the new proxy. Resetting
           // _otcHistLoaded lets the first fresh load batch-render and (re)start
-          // the live WS tick via _startTVTick().
+          // the live WS tick via _startPriceTick().
           inst._otcHistLoaded = false;
           inst._otcPolling = false;
           inst._fetchOtcCandles();

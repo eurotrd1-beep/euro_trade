@@ -650,7 +650,6 @@ class SignalEngine extends ChangeNotifier {
   // Single source of truth for the live room / social feed. `_marketClosed` is
   // computed per-system by main_screen._pollMarketStatus:
   //   • Pocket Option (OTC) pairs → closed ONLY when the N/A flag (po) is set.
-  //   • TradingView pairs        → closed ONLY per the time schedule (crypto 24/7).
   bool get isWeekendClosed => _marketClosed;
 
   void updateGuaranteedWin(bool value) {
@@ -713,10 +712,10 @@ class SignalEngine extends ChangeNotifier {
   // timeframe/pair every loop so it adapts when the user changes either one.
   Future<void> startMonitoring(
     int selectedMinutes, {
-    double Function()? tvPriceGetter,
+    double Function()? livePriceGetter,
   }) async {
     if (_monitoring) return;
-    _tvPriceGetter = tvPriceGetter;
+    _livePriceGetter = livePriceGetter;
     _monitoring = true;
     _monPhase = 'waiting';
     _monStartTime = DateTime.now();
@@ -835,7 +834,7 @@ class SignalEngine extends ChangeNotifier {
     final alignedExpiry = DateTime.fromMillisecondsSinceEpoch(expirySec * 1000);
     final int alignedDuration = (expirySec - nowSec).clamp(1, cs + cs);
 
-    final double liveNow = _tvPriceGetter?.call() ?? 0;
+    final double liveNow = _livePriceGetter?.call() ?? 0;
     final double entryP = liveNow > 0 ? liveNow : _currentPrice;
 
     _activeSignal = TradingSignal(
@@ -2171,7 +2170,7 @@ class SignalEngine extends ChangeNotifier {
   final List<String> _socialWinLogs = [];
 
   // Live price getter from the chart widget (set on each requestNextSignal call)
-  double Function()? _tvPriceGetter;
+  double Function()? _livePriceGetter;
 
   // Countdown timer for active signal
   int _secondsRemaining = 0;
@@ -2301,7 +2300,7 @@ class SignalEngine extends ChangeNotifier {
 
   Future<void> requestNextSignal(
     int selectedMinutes, {
-    double Function()? tvPriceGetter,
+    double Function()? livePriceGetter,
   }) async {
     if (_isAnalyzing ||
         (_activeSignal != null && _activeSignal!.status == 'ACTIVE')) {
@@ -2309,7 +2308,7 @@ class SignalEngine extends ChangeNotifier {
     }
     // The instant button takes over from monitoring if it was running.
     if (_monitoring) stopMonitoring();
-    _tvPriceGetter = tvPriceGetter; // save for entry + exit price lookups
+    _livePriceGetter = livePriceGetter; // save for entry + exit price lookups
 
     _isAnalyzing = true;
     _marketClosed = false;
@@ -2318,12 +2317,12 @@ class SignalEngine extends ChangeNotifier {
     _activeSignal =
         null; // Clear previous signal card to show analysis progress
 
-    // Track TV price samples across all stages to detect static market
-    final double priceAtStart = tvPriceGetter?.call() ?? 0;
+    // Track live price samples across all stages to detect static market
+    final double priceAtStart = livePriceGetter?.call() ?? 0;
     final Set<double> priceSamples = priceAtStart > 0 ? {priceAtStart} : {};
     void samplePrice() {
-      if (tvPriceGetter == null) return;
-      final p = tvPriceGetter();
+      if (livePriceGetter == null) return;
+      final p = livePriceGetter();
       if (p > 0) priceSamples.add(p);
     }
 
@@ -2490,8 +2489,8 @@ class SignalEngine extends ChangeNotifier {
       return;
     }
 
-    // Detect static price in TV/scraping mode — price never changed across all analysis stages
-    if (_tvPriceGetter != null &&
+    // Detect static price in scraping mode — price never changed across all analysis stages
+    if (_livePriceGetter != null &&
         priceSamples.length <= 1 &&
         priceSamples.isNotEmpty) {
       _isAnalyzing = false;
@@ -2523,7 +2522,7 @@ class SignalEngine extends ChangeNotifier {
       final cs = timeframeSeconds;
       final cStart = (nowSec ~/ cs) * cs;
       final expiry = cStart + selectedMinutes * cs;
-      final fallbackEntry = _tvPriceGetter?.call() ?? _currentPrice;
+      final fallbackEntry = _livePriceGetter?.call() ?? _currentPrice;
       _activeSignal = TradingSignal(
         pair: _activePair,
         direction: isCall ? 'CALL' : 'PUT',
@@ -6503,8 +6502,9 @@ class SignalEngine extends ChangeNotifier {
         // Update active candle (the last one)
         Candle activeCandle = _candles.last;
         activeCandle.close = _currentPrice;
-        if (_currentPrice > activeCandle.high)
+        if (_currentPrice > activeCandle.high) {
           activeCandle.high = _currentPrice;
+        }
         if (_currentPrice < activeCandle.low) activeCandle.low = _currentPrice;
         // Accumulate tick volume on active candle
         activeCandle.volume += 10.0 + _random.nextDouble() * 50.0;
@@ -7104,8 +7104,8 @@ class SignalEngine extends ChangeNotifier {
       selectedMinutes * cs + cs,
     );
 
-    // Use live chart price as entry — it's always correct for both sim and TV modes
-    final liveNow = _tvPriceGetter?.call() ?? 0;
+    // Use live chart price as entry — it's always correct for both sim and OTC modes
+    final liveNow = _livePriceGetter?.call() ?? 0;
     final entryP = liveNow > 0 ? liveNow : _currentPrice;
 
     _activeSignal = TradingSignal(
@@ -7250,7 +7250,7 @@ class SignalEngine extends ChangeNotifier {
     // guards against a null/stale getter or the Dart-internal fallback price,
     // which live on a different scale and would otherwise make the review dialog
     // show an entry and a close from two different worlds (the old bug).
-    final double live = _tvPriceGetter?.call() ?? 0.0;
+    final double live = _livePriceGetter?.call() ?? 0.0;
     final bool liveSane =
         live > 0 && (live - signal.entryPrice).abs() / signal.entryPrice < 0.01;
     double exitP = liveSane ? live : signal.entryPrice;
@@ -7279,7 +7279,7 @@ class SignalEngine extends ChangeNotifier {
     // Three outcomes: exit == entry → TIE (تعادل, stake refunded); otherwise
     // WIN/LOSS by direction. "Equal" is judged at real price precision (no
     // meaningful move ≈ half a tick), not exact float equality, so a flat close
-    // is correctly a tie. Applies to every mode (sim / TV / PO). Guaranteed-win
+    // is correctly a tie. Applies to every mode (sim / OTC). Guaranteed-win
     // forces a winning margin above this threshold, so it never ties.
     final double tieEps = signal.entryPrice.abs() * 5e-6 + 1e-12;
     String result;

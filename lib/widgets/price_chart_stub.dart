@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../constants.dart';
 
-class TradingViewChart extends StatelessWidget {
+class PriceChart extends StatelessWidget {
   final String  symbol;
   final String  interval;
   final String  mode;
@@ -12,7 +12,7 @@ class TradingViewChart extends StatelessWidget {
   final int?    signalSecondsRemaining;
   final void Function(double Function() priceGetter)? onReady;
 
-  const TradingViewChart({
+  const PriceChart({
     super.key,
     required this.symbol,
     this.interval               = '1m',

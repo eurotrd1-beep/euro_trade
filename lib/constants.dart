@@ -54,51 +54,41 @@ class AppConstants {
     end: Alignment.bottomRight,
   );
 
-  // --- Trading Pairs (Always populated locally, independent of Firestore) ---
-  // Pre-load fallback (TradingView source). Uses the unified 5-category taxonomy
+  // --- Trading Pairs (Always populated locally, independent of the backend) ---
+  // Pre-load fallback (Pocket Option / OTC). Uses the unified 5-category taxonomy
   // + source/enabled/is_otc keys; the Supabase `pairs` stream replaces this list
   // once it loads. Kept in sync with the admin's category names.
   static const List<Map<String, dynamic>> defaultCurrencyPairs = [
-    // --- CURRENCIES ---
-    {'symbol': 'EUR/USD', 'chartSymbol': 'OANDA:EURUSD', 'category': 'currencies', 'type': 'currencies', 'source': 'tv', 'is_otc': false, 'enabled': true},
-    {'symbol': 'GBP/USD', 'chartSymbol': 'OANDA:GBPUSD', 'category': 'currencies', 'type': 'currencies', 'source': 'tv', 'is_otc': false, 'enabled': true},
-    {'symbol': 'USD/JPY', 'chartSymbol': 'OANDA:USDJPY', 'category': 'currencies', 'type': 'currencies', 'source': 'tv', 'is_otc': false, 'enabled': true},
-    {'symbol': 'USD/CHF', 'chartSymbol': 'OANDA:USDCHF', 'category': 'currencies', 'type': 'currencies', 'source': 'tv', 'is_otc': false, 'enabled': true},
-    {'symbol': 'AUD/USD', 'chartSymbol': 'OANDA:AUDUSD', 'category': 'currencies', 'type': 'currencies', 'source': 'tv', 'is_otc': false, 'enabled': true},
-    {'symbol': 'USD/CAD', 'chartSymbol': 'OANDA:USDCAD', 'category': 'currencies', 'type': 'currencies', 'source': 'tv', 'is_otc': false, 'enabled': true},
-    {'symbol': 'NZD/USD', 'chartSymbol': 'OANDA:NZDUSD', 'category': 'currencies', 'type': 'currencies', 'source': 'tv', 'is_otc': false, 'enabled': true},
-    {'symbol': 'EUR/GBP', 'chartSymbol': 'OANDA:EURGBP', 'category': 'currencies', 'type': 'currencies', 'source': 'tv', 'is_otc': false, 'enabled': true},
-    {'symbol': 'EUR/JPY', 'chartSymbol': 'OANDA:EURJPY', 'category': 'currencies', 'type': 'currencies', 'source': 'tv', 'is_otc': false, 'enabled': true},
-    {'symbol': 'GBP/JPY', 'chartSymbol': 'OANDA:GBPJPY', 'category': 'currencies', 'type': 'currencies', 'source': 'tv', 'is_otc': false, 'enabled': true},
+    // --- CURRENCIES (Pocket Option OTC) ---
+    {'symbol': 'EUR/USD OTC', 'chartSymbol': 'EURUSD_otc', 'category': 'currencies', 'type': 'currencies', 'source': 'po', 'is_otc': true, 'enabled': true},
+    {'symbol': 'GBP/USD OTC', 'chartSymbol': 'GBPUSD_otc', 'category': 'currencies', 'type': 'currencies', 'source': 'po', 'is_otc': true, 'enabled': true},
+    {'symbol': 'USD/JPY OTC', 'chartSymbol': 'USDJPY_otc', 'category': 'currencies', 'type': 'currencies', 'source': 'po', 'is_otc': true, 'enabled': true},
+    {'symbol': 'AUD/USD OTC', 'chartSymbol': 'AUDUSD_otc', 'category': 'currencies', 'type': 'currencies', 'source': 'po', 'is_otc': true, 'enabled': true},
+    {'symbol': 'USD/CAD OTC', 'chartSymbol': 'USDCAD_otc', 'category': 'currencies', 'type': 'currencies', 'source': 'po', 'is_otc': true, 'enabled': true},
+    {'symbol': 'AUD/CAD OTC', 'chartSymbol': 'AUDCAD_otc', 'category': 'currencies', 'type': 'currencies', 'source': 'po', 'is_otc': true, 'enabled': true},
+    {'symbol': 'EUR/JPY OTC', 'chartSymbol': 'EURJPY_otc', 'category': 'currencies', 'type': 'currencies', 'source': 'po', 'is_otc': true, 'enabled': true},
+    {'symbol': 'CAD/JPY OTC', 'chartSymbol': 'CADJPY_otc', 'category': 'currencies', 'type': 'currencies', 'source': 'po', 'is_otc': true, 'enabled': true},
 
-    // --- COMMODITIES (metals + energy) ---
-    {'symbol': 'XAU/USD', 'chartSymbol': 'OANDA:XAUUSD', 'category': 'commodities', 'type': 'commodities', 'source': 'tv', 'is_otc': false, 'enabled': true},
-    {'symbol': 'XAG/USD', 'chartSymbol': 'OANDA:XAGUSD', 'category': 'commodities', 'type': 'commodities', 'source': 'tv', 'is_otc': false, 'enabled': true},
-    {'symbol': 'XPT/USD', 'chartSymbol': 'OANDA:XPTUSD', 'category': 'commodities', 'type': 'commodities', 'source': 'tv', 'is_otc': false, 'enabled': true},
-    {'symbol': 'XPD/USD', 'chartSymbol': 'OANDA:XPDUSD', 'category': 'commodities', 'type': 'commodities', 'source': 'tv', 'is_otc': false, 'enabled': true},
-    {'symbol': 'BRENT/USD', 'chartSymbol': 'OANDA:BRENTUSD', 'category': 'commodities', 'type': 'commodities', 'source': 'tv', 'is_otc': false, 'enabled': true},
-    {'symbol': 'WTI/USD', 'chartSymbol': 'OANDA:WTICOUSD', 'category': 'commodities', 'type': 'commodities', 'source': 'tv', 'is_otc': false, 'enabled': true},
-    {'symbol': 'NGAS/USD', 'chartSymbol': 'OANDA:NATGASUSD', 'category': 'commodities', 'type': 'commodities', 'source': 'tv', 'is_otc': false, 'enabled': true},
-    {'symbol': 'XCU/USD', 'chartSymbol': 'OANDA:XCUUSD', 'category': 'commodities', 'type': 'commodities', 'source': 'tv', 'is_otc': false, 'enabled': true},
-
-    // --- CRYPTO ---
-    {'symbol': 'BTC/USDT', 'chartSymbol': 'BINANCE:BTCUSDT', 'category': 'crypto', 'type': 'crypto', 'source': 'tv', 'is_otc': false, 'enabled': true},
-    {'symbol': 'ETH/USDT', 'chartSymbol': 'BINANCE:ETHUSDT', 'category': 'crypto', 'type': 'crypto', 'source': 'tv', 'is_otc': false, 'enabled': true},
-    {'symbol': 'BNB/USDT', 'chartSymbol': 'BINANCE:BNBUSDT', 'category': 'crypto', 'type': 'crypto', 'source': 'tv', 'is_otc': false, 'enabled': true},
-    {'symbol': 'SOL/USDT', 'chartSymbol': 'BINANCE:SOLUSDT', 'category': 'crypto', 'type': 'crypto', 'source': 'tv', 'is_otc': false, 'enabled': true},
-    {'symbol': 'XRP/USDT', 'chartSymbol': 'BINANCE:XRPUSDT', 'category': 'crypto', 'type': 'crypto', 'source': 'tv', 'is_otc': false, 'enabled': true},
-    {'symbol': 'ADA/USDT', 'chartSymbol': 'BINANCE:ADAUSDT', 'category': 'crypto', 'type': 'crypto', 'source': 'tv', 'is_otc': false, 'enabled': true},
+    // --- COMMODITIES (Pocket Option OTC) ---
+    {'symbol': 'Gold OTC', 'chartSymbol': 'XAUUSD_otc', 'category': 'commodities', 'type': 'commodities', 'source': 'po', 'is_otc': true, 'enabled': true},
+    {'symbol': 'Silver OTC', 'chartSymbol': 'XAGUSD_otc', 'category': 'commodities', 'type': 'commodities', 'source': 'po', 'is_otc': true, 'enabled': true},
   ];
 
   static List<Map<String, dynamic>> currencyPairs = List.from(defaultCurrencyPairs);
 
-  /// Maps a display pair name to its Finnhub symbol (e.g. "EUR/USD (OTC)" → "OANDA:EUR_USD").
+  /// Maps a display pair name to its Pocket Option chart symbol
+  /// (e.g. "EUR/USD" → "EURUSD", "Gold OTC" → "XAUUSD_otc").
   static String chartSymbolFor(String displaySymbol) {
     for (final p in currencyPairs) {
       if (p['symbol'] == displaySymbol) return p['chartSymbol'] as String;
     }
-    // Fallback: strip OTC suffix and convert to OANDA format
-    final base = displaySymbol.replaceAll(' (OTC)', '').replaceAll('/', '_');
-    return 'OANDA:$base';
+    // Fallback: drop the OTC marker + slash; re-append the PO "_otc" suffix if
+    // the display name carried it.
+    final isOtc = displaySymbol.toUpperCase().contains('OTC');
+    final base = displaySymbol
+        .replaceAll(RegExp(r'\s*\(?OTC\)?', caseSensitive: false), '')
+        .replaceAll('/', '')
+        .trim();
+    return isOtc ? '${base}_otc' : base;
   }
 }

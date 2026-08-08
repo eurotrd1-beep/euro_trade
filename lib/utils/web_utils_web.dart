@@ -22,7 +22,7 @@ void setUserBroker(String broker) {
   } catch (_) {}
 }
 
-/// Point the live candle chart (window.CandleChart) at a new TradingView proxy
+/// Point the live candle chart (window.CandleChart) at a new proxy
 /// base URL. Applied to subsequent candle fetches / websocket connections.
 void setChartProxy(String url) {
   try {

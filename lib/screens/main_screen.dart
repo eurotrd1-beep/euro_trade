@@ -14,7 +14,7 @@ import '../services/push_notifications.dart';
 import '../services/server_config.dart';
 import '../widgets/particles.dart';
 import '../widgets/trading_background.dart';
-import '../widgets/tradingview_chart.dart';
+import '../widgets/price_chart.dart';
 import 'notice_screen.dart';
 import 'maintenance_screen.dart';
 import 'language_screen.dart';
@@ -158,7 +158,7 @@ class _MainScreenState extends State<MainScreen> {
   bool _soundEnabled = true;
   String _selectedCategory = 'currencies';
   int _selectedMinutes = 1;
-  double Function()? _tvPriceGetter;
+  double Function()? _livePriceGetter;
   TradingSignal? _lastProcessedSignal;
   TradingSignal? _lastPushedSignal; // guards against duplicate push per signal
   String _searchQuery = '';
@@ -185,7 +185,7 @@ class _MainScreenState extends State<MainScreen> {
   // Admin System Settings (configs, live): price source + which source shows.
   String?
   _priceSystemRaw; // 'simulator' | 'scraping' (null = fall back to chart_settings)
-  String _displaySource = 'all'; // 'tv' | 'po' | 'all'
+  String _displaySource = 'all'; // 'po' | 'all'
   String _activeChartSymbol = '';
   String _brokerLogoUrl = '';
   bool _updateChecked = false;
@@ -239,13 +239,13 @@ class _MainScreenState extends State<MainScreen> {
     _loadUserData();
     _startMaintenanceListener();
 
-    // Apply the current TradingView proxy URL to the chart, and react live when
+    // Apply the current proxy URL to the chart, and react live when
     // the admin switches servers (Supabase realtime → ServerConfig).
-    setChartProxy(ServerConfig.tvServerUrl.value);
-    ServerConfig.tvServerUrl.addListener(_onProxyUrlChanged);
+    setChartProxy(ServerConfig.proxyServerUrl.value);
+    ServerConfig.proxyServerUrl.addListener(_onProxyUrlChanged);
 
     _selectedCategory = 'currencies';
-    // Do NOT default to a hardcoded TradingView pair (e.g. EUR/USD). The real
+    // Do NOT default to a hardcoded pair (e.g. EUR/USD). The real
     // pair list comes from the admin `pairs` table via _startPairsListener; until
     // it arrives (and if the admin enabled nothing) we show an empty state. This
     // starts empty so the first shown pair is the first ENABLED pair (PO or TV),
@@ -264,11 +264,11 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  // Admin switched the TradingView proxy server: point the live chart at it
+  // Admin switched the proxy server: point the live chart at it
   // (chart.js reconnects tv-mode charts itself) and re-check market status so
   // the new server's `marketOpen` is picked up immediately.
   void _onProxyUrlChanged() {
-    setChartProxy(ServerConfig.tvServerUrl.value);
+    setChartProxy(ServerConfig.proxyServerUrl.value);
     _pollMarketStatus();
   }
 
@@ -285,7 +285,7 @@ class _MainScreenState extends State<MainScreen> {
     if (sym.isEmpty) return;
     final iv = _signalEngine.chartTimeframe;
     try {
-      final proxyUrl = ServerConfig.tvServerUrl.value.replaceAll(RegExp(r'/$'), '');
+      final proxyUrl = ServerConfig.proxyServerUrl.value.replaceAll(RegExp(r'/$'), '');
       final res = await http.get(
         Uri.parse('$proxyUrl/api/otc/candles?symbol=$sym&interval=$iv'),
       ).timeout(const Duration(seconds: 8));
@@ -321,8 +321,8 @@ class _MainScreenState extends State<MainScreen> {
 
   // ── Market status polling ────────────────────────────────────────────────
 
-  /// Strips the exchange prefix and '/' to get the bare symbol the proxy expects
-  /// (e.g. "OANDA:EURUSD" -> "EURUSD", "BTC/USDT" -> "BTCUSDT").
+  /// Strips any exchange prefix and '/' to get the bare symbol the proxy expects
+  /// (e.g. "EURUSD_otc" -> "EURUSDOTC" style is kept as-is; "BTC/USDT" -> "BTCUSDT").
   String _bareSymbol() {
     var s = _activeChartSymbol.isNotEmpty
         ? _activeChartSymbol
@@ -342,8 +342,8 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   /// True when the active pair comes from Pocket Option (source 'po'). Its data
-  /// + market status come from Supabase (the PO scraper), not the TradingView
-  /// proxy — regardless of whether the asset itself is OTC or a real market.
+  /// + market status come from Supabase (the PO scraper) — the app is
+  /// Pocket-Option-only now.
   bool _isActiveOtc() {
     final cs = _activeChartSymbol.isNotEmpty
         ? _activeChartSymbol
@@ -352,7 +352,7 @@ class _MainScreenState extends State<MainScreen> {
       (e) => (e['chartSymbol'] as String? ?? '') == cs,
       orElse: () => const <String, dynamic>{},
     );
-    return (p['source'] as String? ?? 'tv') == 'po';
+    return (p['source'] as String? ?? 'po') == 'po';
   }
 
   // Look up a symbol in the otc_prices map tolerantly: PO keys keep their exact
@@ -386,9 +386,8 @@ class _MainScreenState extends State<MainScreen> {
     final info = _activePairInfo();
 
     // Startup guard: the pairs list is empty until the Supabase stream arrives,
-    // so _activePairInfo() returns {} and source would wrongly default to 'tv'
-    // → on a weekend the TV time-check reads CLOSED and pops the dialog on the
-    // default OTC pair. Until we actually know the pair, treat as OPEN (24/7 for
+    // so _activePairInfo() returns {} and the pair is unknown. Until we actually
+    // know the pair, treat as OPEN (24/7 for
     // the default OTC pair); the next poll re-decides once the info is loaded.
     if (info.isEmpty) {
       _otcUnhealthy = false;
@@ -397,52 +396,46 @@ class _MainScreenState extends State<MainScreen> {
       return;
     }
 
-    final category = _normCat(info['category'] as String?);
-    final source = info['source'] as String? ?? 'tv';
+    final source = info['source'] as String? ?? 'po';
 
-    // ═══ SYSTEM 1 — Pocket Option scraper (source == 'po', incl. OTC variants).
-    // Market-closed depends ONLY on PO's own N/A flag (`po`) — no time rules:
+    // All pairs are Pocket Option now. Market-closed depends ONLY on PO's own
+    // N/A flag (`po`) — no time rules:
     //   po === false → N/A → market CLOSED (chart shows closed + live room closes)
-    //   otherwise    → fully live (last 150 candles) + room open. ═══
-    if (source == 'po') {
-      bool open = true;
-      try {
-        final proxyUrl = ServerConfig.tvServerUrl.value.replaceAll(RegExp(r'/$'), '');
-        final res = await http.get(
-          Uri.parse('$proxyUrl/api/otc/status'),
-        ).timeout(const Duration(seconds: 8));
-        if (res.statusCode != 200) return;
-        final rows = jsonDecode(res.body) as List;
-        final row = rows.firstWhere((r) => r['id'] == 'otc_prices', orElse: () => null);
-        final prices = (row?['data'] as Map<String, dynamic>?) ?? {};
-        final entry = _otcEntry(prices, sym);
-        final t = (entry?['t'] as num?)?.toInt() ?? 0;
-        final nowSec = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
-        _otcUnhealthy = !(entry != null && (nowSec - t) < 20);
-        // ONLY the N/A flag closes the market. Missing flag/data ⇒ open.
-        open = entry?['po'] != false;
-        final no = (entry?['no'] as num?)?.toInt() ?? 0;
-        _nextOpenLabel = (!open && no > 1000000000)
-            ? MarketHours.nextOpenLabel(
-                DateTime.fromMillisecondsSinceEpoch(no * 1000, isUtc: true),
-              )
-            : '';
-      } catch (_) {
-        return; // couldn't read prices → keep previous state (never false-close)
-      }
-      if (!mounted) return;
-      _applyMarketStatus(open);
+    //   otherwise    → fully live (last 100 candles) + room open.
+    // Any non-'po' row (shouldn't happen) is treated as open.
+    if (source != 'po') {
+      _otcUnhealthy = false;
+      _nextOpenLabel = '';
+      if (mounted) _applyMarketStatus(true);
       return;
     }
-
-    // ═══ SYSTEM 2 — TradingView scraper (source == 'tv'). Market-closed depends
-    // ONLY on the TIME schedule, for every category: crypto is 24/7 open; forex,
-    // metals, commodities, indices & stocks follow their trading hours. ═══
-    _otcUnhealthy = false;
-    final mkt = MarketHours.statusFor(category, false);
-    _nextOpenLabel = mkt.open ? '' : MarketHours.nextOpenLabel(mkt.nextOpenUtc);
+    bool open = true;
+    try {
+      final proxyUrl = ServerConfig.proxyServerUrl.value.replaceAll(RegExp(r'/$'), '');
+      final res = await http.get(
+        Uri.parse('$proxyUrl/api/otc/status'),
+      ).timeout(const Duration(seconds: 8));
+      if (res.statusCode != 200) return;
+      final rows = jsonDecode(res.body) as List;
+      final row = rows.firstWhere((r) => r['id'] == 'otc_prices', orElse: () => null);
+      final prices = (row?['data'] as Map<String, dynamic>?) ?? {};
+      final entry = _otcEntry(prices, sym);
+      final t = (entry?['t'] as num?)?.toInt() ?? 0;
+      final nowSec = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
+      _otcUnhealthy = !(entry != null && (nowSec - t) < 20);
+      // ONLY the N/A flag closes the market. Missing flag/data ⇒ open.
+      open = entry?['po'] != false;
+      final no = (entry?['no'] as num?)?.toInt() ?? 0;
+      _nextOpenLabel = (!open && no > 1000000000)
+          ? MarketHours.nextOpenLabel(
+              DateTime.fromMillisecondsSinceEpoch(no * 1000, isUtc: true),
+            )
+          : '';
+    } catch (_) {
+      return; // couldn't read prices → keep previous state (never false-close)
+    }
     if (!mounted) return;
-    _applyMarketStatus(mkt.open);
+    _applyMarketStatus(open);
   }
 
   void _applyMarketStatus(bool open) {
@@ -2490,7 +2483,7 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   void dispose() {
-    ServerConfig.tvServerUrl.removeListener(_onProxyUrlChanged);
+    ServerConfig.proxyServerUrl.removeListener(_onProxyUrlChanged);
     _roleListener?.cancel();
     _maintenanceListener?.cancel();
     _stdStrategyListener?.cancel();
@@ -2549,7 +2542,7 @@ class _MainScreenState extends State<MainScreen> {
             if (rows.isEmpty || !mounted) return;
             final data = rows.first['data'] as Map<String, dynamic>? ?? {};
             final mode = data['mode'] as String? ?? 'sim';
-            final resolved = mode == 'tv' ? 'tv' : 'sim';
+            final resolved = mode == 'sim' ? 'sim' : 'scraping';
             if (resolved != _chartMode)
               setState(() {
                 _chartMode = resolved;
@@ -2619,8 +2612,7 @@ class _MainScreenState extends State<MainScreen> {
   List<Map<String, dynamic>> get _visiblePairs =>
       AppConstants.currencyPairs.where((p) {
         if (p['enabled'] == false) return false;
-        final src = (p['source'] as String? ?? 'tv');
-        if (_displaySource == 'tv' && src != 'tv') return false;
+        final src = (p['source'] as String? ?? 'po');
         if (_displaySource == 'po' && src != 'po') return false;
         return true;
       }).toList();
@@ -2645,7 +2637,7 @@ class _MainScreenState extends State<MainScreen> {
               'chartSymbol': d['chart_symbol'] as String? ?? '',
               'category': _normCat(d['category'] as String?),
               'type': d['type'] as String? ?? '',
-              'source': (d['source'] as String? ?? 'tv'),
+              'source': (d['source'] as String? ?? 'po'),
               'isOtc': d['is_otc'] == true,
               'enabled': d['enabled'] != false,
               'order': d['order'] as int? ?? 0,
@@ -2701,7 +2693,7 @@ class _MainScreenState extends State<MainScreen> {
             final wasPo = AppConstants.currencyPairs.any(
               (p) =>
                   p['symbol'] == oldActive &&
-                  (p['source'] as String? ?? 'tv') == 'po',
+                  (p['source'] as String? ?? 'po') == 'po',
             );
 
             // Only ENABLED pairs reach the app; both sources, 5-category taxonomy.
@@ -2714,7 +2706,7 @@ class _MainScreenState extends State<MainScreen> {
                         'chartSymbol': d['chart_symbol'] as String? ?? '',
                         'category': _normCat(d['category'] as String?),
                         'type': d['type'] as String? ?? '',
-                        'source': (d['source'] as String? ?? 'tv'),
+                        'source': (d['source'] as String? ?? 'po'),
                         'isOtc': d['is_otc'] == true,
                         'enabled': d['enabled'] != false,
                         'order': d['order'] as int? ?? 0,
@@ -3337,7 +3329,6 @@ class _MainScreenState extends State<MainScreen> {
                             (ap['symbol'] as String? ??
                                     _signalEngine.activePair)
                                 .replaceAll(' (OTC)', '');
-                        final isPo = (ap['source'] as String? ?? 'tv') == 'po';
                         return Row(
                           children: [
                             Text(
@@ -3350,10 +3341,10 @@ class _MainScreenState extends State<MainScreen> {
                               ),
                             ),
                             const SizedBox(width: 10),
-                            // Source badge: 📺 TradingView / 🎯 Pocket Option
-                            Text(
-                              isPo ? '🎯' : '📺',
-                              style: const TextStyle(fontSize: 16),
+                            // Source badge: 🎯 Pocket Option
+                            const Text(
+                              '🎯',
+                              style: TextStyle(fontSize: 16),
                             ),
                           ],
                         );
@@ -3605,14 +3596,10 @@ class _MainScreenState extends State<MainScreen> {
                                             // Source badge + symbol (no payout %)
                                             Row(
                                               children: [
-                                                // Source: 📺 TradingView / 🎯 Pocket Option
-                                                Text(
-                                                  (pair['source'] as String? ??
-                                                              'tv') ==
-                                                          'po'
-                                                      ? '🎯'
-                                                      : '📺',
-                                                  style: const TextStyle(
+                                                // Source: 🎯 Pocket Option
+                                                const Text(
+                                                  '🎯',
+                                                  style: TextStyle(
                                                     fontSize: 14,
                                                   ),
                                                 ),
@@ -3870,7 +3857,7 @@ class _MainScreenState extends State<MainScreen> {
     }
     _signalEngine.startMonitoring(
       _selectedMinutes,
-      tvPriceGetter: _tvPriceGetter,
+      livePriceGetter: _livePriceGetter,
     );
   }
 
@@ -4384,16 +4371,16 @@ class _MainScreenState extends State<MainScreen> {
         : AppConstants.chartSymbolFor(_signalEngine.activePair);
     // Chart data source resolution:
     //   • Simulator system → 'sim' (generated data) for every pair.
-    //   • Scraping system  → Pocket Option pairs (source 'po') use Supabase-fed
-    //     'otc' mode; TradingView pairs use 'tv' mode.
+    //   • Scraping system  → Pocket Option pairs (source 'po') use the
+    //     Supabase/proxy-fed 'otc' mode. (App is Pocket-Option-only.)
     final activePairData = AppConstants.currencyPairs.firstWhere(
       (p) => (p['chartSymbol'] as String? ?? '') == chartSymbol,
       orElse: () => const <String, dynamic>{},
     );
-    final bool isPo = (activePairData['source'] as String? ?? 'tv') == 'po';
+    final bool isPo = (activePairData['source'] as String? ?? 'po') == 'po';
     final String effectiveMode = _effectivePriceSystem == 'simulator'
         ? 'sim'
-        : (isPo ? 'otc' : 'tv');
+        : (isPo ? 'otc' : 'sim');
     final tf = _signalEngine.chartTimeframe;
     final signal = _signalEngine.activeSignal;
     final isActive = signal?.status == 'ACTIVE';
@@ -4474,7 +4461,7 @@ class _MainScreenState extends State<MainScreen> {
           ),
 
           // ── Chart ──
-          TradingViewChart(
+          PriceChart(
             symbol: chartSymbol,
             interval: tf,
             mode: effectiveMode,
@@ -4485,7 +4472,7 @@ class _MainScreenState extends State<MainScreen> {
             signalSecondsRemaining: isActive
                 ? _signalEngine.secondsRemaining
                 : null,
-            onReady: (getter) => _tvPriceGetter = getter,
+            onReady: (getter) => _livePriceGetter = getter,
           ),
 
           // ── Divider ──
@@ -5109,8 +5096,8 @@ class _MainScreenState extends State<MainScreen> {
                   }
                   _signalEngine.requestNextSignal(
                     _selectedMinutes,
-                    tvPriceGetter:
-                        _tvPriceGetter, // always pass — correct for both sim & TV
+                    livePriceGetter:
+                        _livePriceGetter, // always pass — correct for both sim & TV
                   );
                 }
               : null,

@@ -9,7 +9,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../constants.dart';
 import '../services/language_service.dart';
 
-class TradingViewChart extends StatefulWidget {
+class PriceChart extends StatefulWidget {
   final String  symbol;
   final String  interval;
   final String  mode;
@@ -19,10 +19,10 @@ class TradingViewChart extends StatefulWidget {
   final double? signalEntryPrice;
   final int?    signalDurationMin;
   final int?    signalSecondsRemaining; // live countdown from signal engine
-  // Called once after JS init; provides a closure to read the latest TV price
+  // Called once after JS init; provides a closure to read the latest price
   final void Function(double Function() priceGetter)? onReady;
 
-  const TradingViewChart({
+  const PriceChart({
     super.key,
     required this.symbol,
     this.interval              = '1m',
@@ -36,12 +36,12 @@ class TradingViewChart extends StatefulWidget {
   });
 
   @override
-  State<TradingViewChart> createState() => _TradingViewChartState();
+  State<PriceChart> createState() => _PriceChartState();
 }
 
 enum _TradeState { idle, active }
 
-class _TradingViewChartState extends State<TradingViewChart> {
+class _PriceChartState extends State<PriceChart> {
   late final String _id;
 
   _TradeState _tradeState  = _TradeState.idle;
@@ -83,7 +83,7 @@ class _TradingViewChartState extends State<TradingViewChart> {
   }
 
   @override
-  void didUpdateWidget(TradingViewChart old) {
+  void didUpdateWidget(PriceChart old) {
     super.didUpdateWidget(old);
 
     // Symbol / interval / mode changed → restart chart
@@ -151,7 +151,7 @@ class _TradingViewChartState extends State<TradingViewChart> {
         active ? _direction : '',
         active ? _entryPrice : 0.0,
         active ? _secondsLeft : 0,
-        active && widget.guaranteedWin, // gwin applies to both sim and TV
+        active && widget.guaranteedWin, // gwin applies to both sim and OTC
       ]);
     } catch (_) {}
   }
