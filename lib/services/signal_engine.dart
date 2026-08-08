@@ -2489,8 +2489,11 @@ class SignalEngine extends ChangeNotifier {
       return;
     }
 
-    // Detect static price in scraping mode — price never changed across all analysis stages
-    if (_livePriceGetter != null &&
+    // Detect static price in scraping mode — price never changed across all
+    // analysis stages. Skip for OTC (24/7): a quiet second ≠ closed market, so
+    // we proceed to generate a signal instead of falsely showing "السوق مغلق".
+    if (!_isOtcPair() &&
+        _livePriceGetter != null &&
         priceSamples.length <= 1 &&
         priceSamples.isNotEmpty) {
       _isAnalyzing = false;
@@ -2590,7 +2593,22 @@ class SignalEngine extends ChangeNotifier {
     notifyListeners();
   }
 
+  // OTC (Pocket Option) pairs trade 24/7 — detect via is_otc / source=='po' /
+  // an "otc" marker in the symbol. They never hit any time-based market closure.
+  bool _isOtcPair() {
+    final p = AppConstants.currencyPairs.firstWhere(
+      (x) => x['symbol'] == _activePair,
+      orElse: () => <String, dynamic>{},
+    );
+    return p['is_otc'] == true ||
+        (p['source'] as String? ?? '') == 'po' ||
+        _activePair.toLowerCase().contains('otc');
+  }
+
   bool _isForexPairType() {
+    // OTC pairs trade 24/7 (incl. weekends) — never a closeable "forex" market,
+    // else the weekend gate wrongly shows "السوق مغلق" on Sat/Sun.
+    if (_isOtcPair()) return false;
     final pair = AppConstants.currencyPairs.firstWhere(
       (p) => p['symbol'] == _activePair,
       orElse: () => <String, dynamic>{},
