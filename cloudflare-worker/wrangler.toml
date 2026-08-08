@@ -1,0 +1,10 @@
+name = "euro-trade-cache"
+main = "worker.js"
+compatibility_date = "2025-06-01"
+
+# The Render proxy this Worker sits in front of. Change it HERE (or via the
+# Cloudflare dashboard → Settings → Variables) — never hardcoded in worker.js.
+# To point the app back at Render directly, you don't touch this at all — you
+# change `configs.proxy_server_url` in Supabase (see README).
+[vars]
+ORIGIN_URL = "https://euro-trade-proxy-1.onrender.com"
