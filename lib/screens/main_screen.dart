@@ -151,7 +151,7 @@ class MainScreen extends StatefulWidget {
   State<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> {
+class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   late SignalEngine _signalEngine;
   String _userAccountId = '----';
   String _userBroker = 'Quotex';
@@ -207,6 +207,11 @@ class _MainScreenState extends State<MainScreen> {
   Map<String, bool> _closedPairs = {};
   Timer? _realCandlesTimer;
   Timer? _accountCheckTimer;
+  // ── Background realtime suspend (frees the Supabase connection slot when the
+  // tab/app is hidden). _rtBackgrounded guards against double subscribe/resume;
+  // _bgSuspendTimer debounces so a quick tab-flick never reconnects needlessly.
+  bool _rtBackgrounded = false;
+  Timer? _bgSuspendTimer;
   bool _marketOpen = true; // optimistic default until first poll
   // OTC data health: true while the OTC scraper is repairing/reconnecting/down,
   // so we block new-signal requests on stale/incomplete OTC data.
@@ -237,6 +242,7 @@ class _MainScreenState extends State<MainScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _signalEngine = SignalEngine();
     _signalEngine.addListener(_onSignalEngineUpdate);
     _loadUserData();
@@ -2518,8 +2524,83 @@ class _MainScreenState extends State<MainScreen> {
     });
   }
 
+  // ── App/tab lifecycle → suspend realtime in the background ────────────────
+  // Frees the Supabase concurrent-connection slot when the tab/app is hidden.
+  // On Flutter Web a tab switch fires `hidden` (then `paused`); returning fires
+  // `resumed`. Trading/strategy logic is NOT touched here — only the transport.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      _bgSuspendTimer?.cancel();
+      _bgSuspendTimer = null;
+      if (_rtBackgrounded) _resumeRealtime();
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.detached) {
+      // Debounce: only tear down if STILL hidden after a grace period, so a quick
+      // tab-flick (away & back) never causes a needless reconnect.
+      _bgSuspendTimer ??= Timer(const Duration(seconds: 8), () {
+        _bgSuspendTimer = null;
+        _suspendRealtime();
+      });
+    }
+  }
+
+  // Cancel every Realtime subscription + close the shared WebSocket (frees the
+  // connection slot) and stop the proxy-poll timers. Idempotent via _rtBackgrounded.
+  void _suspendRealtime() {
+    if (_rtBackgrounded || !mounted) return;
+    _rtBackgrounded = true;
+    _roleListener?.cancel();            _roleListener = null;
+    _maintenanceListener?.cancel();     _maintenanceListener = null;
+    _stdStrategyListener?.cancel();     _stdStrategyListener = null;
+    _vipStrategyListener?.cancel();     _vipStrategyListener = null;
+    _monStdStrategyListener?.cancel();  _monStdStrategyListener = null;
+    _monVipStrategyListener?.cancel();  _monVipStrategyListener = null;
+    _chartModeListener?.cancel();       _chartModeListener = null;
+    _priceSystemListener?.cancel();     _priceSystemListener = null;
+    _displaySourceListener?.cancel();   _displaySourceListener = null;
+    _pairsListener?.cancel();           _pairsListener = null;
+    _realCandlesTimer?.cancel();        _realCandlesTimer = null;
+    _marketStatusTimer?.cancel();       _marketStatusTimer = null;
+    // Close the one shared realtime socket → releases the concurrent-connection slot.
+    try { Supabase.instance.client.realtime.disconnect(); } catch (_) {}
+    debugPrint('[rt] backgrounded → realtime + poll timers suspended');
+  }
+
+  // Reopen the socket, re-subscribe every channel (each _start* method cancels-
+  // before-subscribe, so double calls are safe), restart the timers, and do one
+  // immediate fetch so the UI is fresh at once. Idempotent via _rtBackgrounded.
+  void _resumeRealtime() {
+    if (!_rtBackgrounded || !mounted) return;
+    _rtBackgrounded = false;
+    // No explicit realtime.connect() — re-subscribing any channel below reopens
+    // the shared socket automatically (connect() is package-internal).
+    ServerConfig.startRealtime();       // app-wide proxy_server_url channel
+    _startMaintenanceListener();
+    _startChartModeListener();
+    _startSettingsListeners();
+    _startPairsListener();
+    _startStrategyListeners();
+    if (_userAccountId.isNotEmpty && _userAccountId != '----') {
+      _startRoleListener(_userAccountId);
+    }
+    // Restart the proxy-poll timers (these hit the proxy, NOT Supabase).
+    _startMarketStatusPolling();        // immediate poll + 10s timer
+    _syncEngineCandles();               // immediate candle refresh
+    _realCandlesTimer?.cancel();
+    _realCandlesTimer = Timer.periodic(
+      const Duration(seconds: 10),
+      (_) => _syncEngineCandles(),
+    );
+    debugPrint('[rt] foregrounded → realtime + poll timers resumed');
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _bgSuspendTimer?.cancel();
     ServerConfig.proxyServerUrl.removeListener(_onProxyUrlChanged);
     _roleListener?.cancel();
     _maintenanceListener?.cancel();
