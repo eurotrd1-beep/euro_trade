@@ -460,7 +460,11 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       final entry = _otcEntry(prices, sym);
       final t = (entry?['t'] as num?)?.toInt() ?? 0;
       final nowSec = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
-      _otcUnhealthy = !(entry != null && (nowSec - t) < 20);
+      // Only flag "reconnecting" on a REAL stall. Prices refresh ~sub-second, but
+      // brief scraper reconnects / proxy redeploys / poll jitter can leave the
+      // last sample a few seconds old — a 20s window fired the banner constantly.
+      // 60s still blocks a genuine outage while ignoring normal blips.
+      _otcUnhealthy = !(entry != null && (nowSec - t) < 60);
       // ONLY the N/A flag closes the market. Missing flag/data ⇒ open.
       open = entry?['po'] != false;
       final no = (entry?['no'] as num?)?.toInt() ?? 0;
