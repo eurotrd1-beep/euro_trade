@@ -2740,13 +2740,18 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   /// One-shot REST load of pairs so the UI is never empty while waiting for
   /// the Realtime stream (which can be slow or blocked on the free tier).
   Future<void> _loadPairsOnce() async {
+    // Guard BEFORE the network call: if the realtime .stream() already delivered
+    // the pairs, skip the REST fetch entirely (kills the redundant ~46KB read).
+    if (AppConstants.currencyPairs.isNotEmpty) return;
     try {
       final data = await Supabase.instance.client
           .from('pairs')
-          .select()
+          // Project only the columns the app actually maps (drops the unused
+          // `created_at`) → ~37KB instead of ~46KB for the full row set.
+          .select('id,symbol,chart_symbol,category,type,source,is_otc,enabled,order')
           .timeout(const Duration(seconds: 8));
       if (!mounted || (data as List).isEmpty) return;
-      // Only apply if the stream hasn't already delivered data.
+      // Re-check after the await — the stream may have populated meanwhile.
       if (AppConstants.currencyPairs.isNotEmpty) return;
 
       final pairs =
@@ -2796,8 +2801,14 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   void _startPairsListener() {
-    // ── Immediate one-shot REST load so the UI never waits for Realtime ──
-    _loadPairsOnce();
+    // ── REST is now a DELAYED fallback, not an immediate second fetch ──
+    // The .stream() below already delivers the initial snapshot, so firing a
+    // REST load at the same time was a redundant ~46KB double-read. We only fall
+    // back to REST if the stream is still slow after 2s (it self-skips once the
+    // stream has populated the list).
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) _loadPairsOnce();
+    });
 
     try {
       _pairsListener?.cancel();
